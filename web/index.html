@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+
+    <base href="$FLUTTER_BASE_HREF">
+    <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+    <meta name="description" content="A new Flutter project.">
+    <!-- iOS meta tags & icons -->
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    <meta name="apple-mobile-web-app-title" content="capstone_app">
+    <link rel="apple-touch-icon" href="icons/Icon-192.png">
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="favicon.png">
+    <title>Tabuk</title>
+    <link rel="manifest" href="manifest.json">
+    
+    <!-- Google Maps JavaScript API -->
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCZ-Sc9QsAox-vIPU_q8l5XqGs1B4Ed01U"></script>
+    <!-- Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth-compat.js"></script>
+    
+    <!-- Google Identity Services -->
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script src="https://apis.google.com/js/platform.js" async defer></script>
+    
+    <!-- Google Sign-In Client ID -->
+    <meta name="google-signin-client_id" content="749213753046-95lfo93v5l656mkkujoobl2gfs5089a2.apps.googleusercontent.com">
+</head>
+<body>
+    <!-- This div is not needed for Flutter Google Maps, but keeping it for any custom JS maps -->
+    <div id="map" style="display: none;"></div>
+
+    <script>
+        // Firebase configuration
+        var firebaseConfig = {
+            apiKey: "AIzaSyBqUNC1h2O3pseeDYdRjfYCkSfGBwbnVis",
+            authDomain: "tabuk-ce16e.firebaseapp.com",
+            projectId: "tabuk-ce16e",
+            storageBucket: "tabuk-ce16e.appspot.com",
+            messagingSenderId: "749213753046",
+            appId: "1:749213753046:web:b4bd0646f11afb8963b377",
+            measurementId: "G-52GRD9NJDK"
+        };
+
+        // Initialize Firebase
+        if (window.firebase && firebase.apps && !firebase.apps.length) {
+            firebase.initializeApp(firebaseConfig);
+        }
+
+        // Google Sign-In initialization
+        window.gapi = window.gapi || {};
+        window.gapi.load = window.gapi.load || function(name, cb) { if (cb) cb(); };
+
+        function initGoogleSignIn() {
+            if (window.gapi && window.gapi.load) {
+                window.gapi.load('auth2', function() {
+                    if (window.gapi.auth2) {
+                        window.gapi.auth2.init({
+                            client_id: '749213753046-95lfo93v5l656mkkujoobl2gfs5089a2.apps.googleusercontent.com'
+                        });
+                    }
+                });
+            }
+        }
+
+        // Define initMap function to prevent callback errors
+        // This is called by Google Maps API but not used by Flutter
+        function initMap() {
+            console.log('Google Maps API loaded successfully');
+            // You can add any custom map initialization here if needed
+            // Flutter will handle its own map initialization
+        }
+
+        // Initialize when page loads
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', function() {
+                initGoogleSignIn();
+            });
+        } else {
+            initGoogleSignIn();
+        }
+    </script>
+    
+    <script src="flutter_bootstrap.js" defer></script>
+</body>
+</html>
