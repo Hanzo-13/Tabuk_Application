@@ -19,10 +19,12 @@ class AdminMediaAndLocationScreen extends StatefulWidget {
   const AdminMediaAndLocationScreen({super.key, required this.documentId});
 
   @override
-  State<AdminMediaAndLocationScreen> createState() => _AdminMediaAndLocationScreenState();
+  State<AdminMediaAndLocationScreen> createState() =>
+      _AdminMediaAndLocationScreenState();
 }
 
-class _AdminMediaAndLocationScreenState extends State<AdminMediaAndLocationScreen> {
+class _AdminMediaAndLocationScreenState
+    extends State<AdminMediaAndLocationScreen> {
   List<PlatformFile> _pickedFiles = [];
   bool _isUploading = false;
   LatLng? _location;
@@ -53,7 +55,10 @@ class _AdminMediaAndLocationScreenState extends State<AdminMediaAndLocationScree
   Future<void> _submit() async {
     if (_location == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please pin the Spot location.'), backgroundColor: Colors.orange),
+        const SnackBar(
+          content: Text('Please pin the Spot location.'),
+          backgroundColor: Colors.orange,
+        ),
       );
       return;
     }
@@ -72,9 +77,7 @@ class _AdminMediaAndLocationScreenState extends State<AdminMediaAndLocationScree
           url = await uploadImageToImgbb(File(file.path!));
         }
 
-        if (url != null) {
-          uploadedImageUrls.add(url);
-        }
+        uploadedImageUrls.add(url!);
       }
 
       final updateData = {
@@ -159,15 +162,17 @@ class _AdminMediaAndLocationScreenState extends State<AdminMediaAndLocationScree
             Row(
               children: [
                 Expanded(
-                  child: Text(_location == null
-                      ? 'No location selected'
-                      : 'Lat: ${_location!.latitude.toStringAsFixed(5)}, Lng: ${_location!.longitude.toStringAsFixed(5)}'),
+                  child: Text(
+                    _location == null
+                        ? 'No location selected'
+                        : 'Lat: ${_location!.latitude.toStringAsFixed(5)}, Lng: ${_location!.longitude.toStringAsFixed(5)}',
+                  ),
                 ),
                 TextButton.icon(
                   icon: const Icon(Icons.map),
                   label: const Text('Pin Location'),
                   onPressed: _pickLocation,
-                )
+                ),
               ],
             ),
             const SizedBox(height: 32),
@@ -182,9 +187,13 @@ class _AdminMediaAndLocationScreenState extends State<AdminMediaAndLocationScree
                     borderRadius: BorderRadius.circular(8),
                   ),
                 ),
-                child: _isUploading
-                    ? const CircularProgressIndicator(color: Colors.white)
-                    : const Text('Finish Registration', style: TextStyle(fontSize: 16, color: Colors.white)),
+                child:
+                    _isUploading
+                        ? const CircularProgressIndicator(color: Colors.white)
+                        : const Text(
+                          'Finish Registration',
+                          style: TextStyle(fontSize: 16, color: Colors.white),
+                        ),
               ),
             ),
           ],
@@ -227,15 +236,24 @@ class _LocationPickerState extends State<_LocationPicker> {
             target: widget.initialLocation ?? const LatLng(8.1500, 125.1000),
             zoom: 10,
           ),
-          markers: _selectedLocation != null
-              ? {Marker(markerId: const MarkerId('picked'), position: _selectedLocation!)}
-              : {},
+          markers:
+              _selectedLocation != null
+                  ? {
+                    Marker(
+                      markerId: const MarkerId('picked'),
+                      position: _selectedLocation!,
+                    ),
+                  }
+                  : {},
           onTap: (latLng) {
             if (_isInBounds(latLng)) {
               setState(() => _selectedLocation = latLng);
             } else {
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Select location within Bukidnon'), backgroundColor: Colors.red),
+                const SnackBar(
+                  content: Text('Select location within Bukidnon'),
+                  backgroundColor: Colors.red,
+                ),
               );
             }
           },
@@ -243,9 +261,15 @@ class _LocationPickerState extends State<_LocationPicker> {
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
         TextButton(
-          onPressed: _selectedLocation != null ? () => Navigator.pop(context, _selectedLocation) : null,
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        TextButton(
+          onPressed:
+              _selectedLocation != null
+                  ? () => Navigator.pop(context, _selectedLocation)
+                  : null,
           child: const Text('Confirm'),
         ),
       ],

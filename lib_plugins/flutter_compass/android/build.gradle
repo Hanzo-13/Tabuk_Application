@@ -1,39 +1,42 @@
-group 'com.hemanthraj.fluttercompass'
-version '1.0-SNAPSHOT'
+group = 'com.hemanthraj.fluttercompass'
+version = '1.0-SNAPSHOT'
 
 buildscript {
     repositories {
         google()
-        jcenter()
+        mavenCentral() // jcenter() is deprecated
     }
 
     dependencies {
-        classpath 'com.android.tools.build:gradle:4.1.1'
+        classpath 'com.android.tools.build:gradle:8.7.2'
     }
 }
 
 rootProject.allprojects {
     repositories {
         google()
-        jcenter()
+        mavenCentral() // jcenter() is deprecated
     }
 }
 
 apply plugin: 'com.android.library'
 
 android {
-
     namespace 'com.hemanthraj.fluttercompass'
-
-    compileSdkVersion 30
-
-    // namespace 'dev.fluttercommunity.plus.flutter_compass'
-
+    
+    compileSdk 35
+    
     defaultConfig {
-        minSdkVersion 23
+        minSdk 23 // Use minSdk instead of minSdkVersion
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
+    
     lintOptions {
         disable 'InvalidPackage'
+    }
+    
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
     }
 }

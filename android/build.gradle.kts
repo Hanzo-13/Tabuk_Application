@@ -1,21 +1,19 @@
 allprojects {
-    repositories {
-        google()
-        mavenCentral()
-    }
+	repositories {
+		google()
+		mavenCentral()
+	}
 }
 
-val newBuildDir: Directory = rootProject.layout.buildDirectory.dir("../../build").get()
-rootProject.layout.buildDirectory.value(newBuildDir)
+// Place all Android build outputs under the Flutter project's root build/ directory
+rootProject.layout.buildDirectory.set(file("../build"))
 
 subprojects {
-    val newSubprojectBuildDir: Directory = newBuildDir.dir(project.name)
-    project.layout.buildDirectory.value(newSubprojectBuildDir)
-}
-subprojects {
-    project.evaluationDependsOn(":app")
+	// Keep each module's build under the unified root build/ directory
+	layout.buildDirectory.set(file("${rootProject.layout.buildDirectory.get().asFile}/${project.name}"))
+	project.evaluationDependsOn(":app")
 }
 
 tasks.register<Delete>("clean") {
-    delete(rootProject.layout.buildDirectory)
+	delete(rootProject.layout.buildDirectory)
 }

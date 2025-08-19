@@ -19,10 +19,6 @@ import 'package:capstone_app/utils/navigation_helper.dart';
 import 'package:capstone_app/screens/login_screen.dart';
 import 'package:capstone_app/screens/splash_screen.dart';
 import 'package:capstone_app/screens/tourist/main_tourist_screen.dart';
-import 'package:capstone_app/screens/admin/admin_registration_form.dart';
-import 'package:capstone_app/screens/business/businessowner_registration_form.dart';
-import 'package:capstone_app/screens/tourist/preferences/tourist_registration_flow.dart';
-import 'package:capstone_app/widgets/role_selection_dialog.dart';
 import 'firebase_options.dart';
 
 void main() async {
@@ -40,10 +36,11 @@ void main() async {
   // final hotspots = fetched.docs.map((doc) => Hotspot.fromMap(doc.data(), doc.id)).toList();
   // await DestinationCacheService.cacheDestinations(hotspots);
 
-
   await Hive.initFlutter(appDir.path);
-  await Hive.openBox<List<int>>('imageCacheBox');
-  await ImageCacheService.init();
+  // Defer heavy image cache initialization until after first frame to reduce jank
+  WidgetsBinding.instance.addPostFrameCallback((_) {
+    ImageCacheService.init();
+  });
 
   runApp(const TabukRoot());
 }
@@ -75,7 +72,9 @@ class _TabukRootState extends State<TabukRoot> with WidgetsBindingObserver {
   }
 
   void _handleConnectivityChange(ConnectivityInfo info) {
-    if (!_isAppInForeground || info.status == ConnectionStatus.connected) return;
+    if (!_isAppInForeground || info.status == ConnectionStatus.connected) {
+      return;
+    }
     Navigator.of(context).pushAndRemoveUntil(
       MaterialPageRoute(builder: (_) => const SplashScreen()),
       (route) => false,
@@ -126,19 +125,28 @@ class AuthChecker extends StatelessWidget {
         if (!user.emailVerified) return const LoginScreen();
 
         return FutureBuilder<DocumentSnapshot>(
-          future: FirebaseFirestore.instance.collection('Users').doc(user.uid).get(),
+          future:
+              FirebaseFirestore.instance
+                  .collection('Users')
+                  .doc(user.uid)
+                  .get(),
           builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) return const LoadingScreen();
-            if (snapshot.hasError || !snapshot.hasData || !snapshot.data!.exists) {
-              return RoleSelectionScreen(user: user); // First-time user
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const LoadingScreen();
+            }
+            if (snapshot.hasError ||
+                !snapshot.hasData ||
+                !snapshot.data!.exists) {
+              // If user doc missing or error, redirect to LoginScreen or another default screen
+              return const LoginScreen();
             }
 
             final data = snapshot.data!.data() as Map<String, dynamic>;
             final role = data['role']?.toString() ?? '';
             final formCompleted = data['form_completed'] == true;
 
-            if (role.isEmpty) return RoleSelectionScreen(user: user);
-            if (!formCompleted) return RoleSelectionScreen(user: user);
+            if (role.isEmpty) return const LoginScreen();
+            if (!formCompleted) return const LoginScreen();
 
             return _RedirectByRole(role: role);
           },
@@ -146,110 +154,6 @@ class AuthChecker extends StatelessWidget {
       },
     );
   }
-}
-
-class RoleSelectionScreen extends StatefulWidget {
-  final User user;
-  const RoleSelectionScreen({super.key, required this.user});
-
-  @override
-  State<RoleSelectionScreen> createState() => _RoleSelectionScreenState();
-}
-
-class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
-  bool _dialogShown = false;
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    if (!_dialogShown) {
-      _dialogShown = true;
-      _handleUserRoleLogic();
-    }
-  }
-
-  Future<void> _handleUserRoleLogic() async {
-    final uid = widget.user.uid;
-    final email = widget.user.email ?? '';
-    try {
-      final userDoc = await FirebaseFirestore.instance.collection('Users').doc(uid).get();
-      final data = userDoc.data();
-      final role = data?['role']?.toString();
-      final formCompleted = data?['form_completed'] == true;
-
-      if (role != null && role.isNotEmpty) {
-        if (formCompleted) {
-          NavigationHelper.navigateBasedOnRole(context, role);
-          return;
-        } else {
-          _navigateToForm(role);
-          return;
-        }
-      }
-    } catch (e) {
-      debugPrint('[RoleSelection] Error loading user data: $e');
-    }
-
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (_) => RoleSelectionDialog(
-          roles: ['Tourist', 'Business Owner', 'Administrator'],
-          onRoleSelected: (selectedRole) async {
-            try {
-              await FirebaseFirestore.instance.collection('Users').doc(uid).set({
-                'email': email,
-                'role': selectedRole,
-                'form_completed': false,
-                'createdAt': FieldValue.serverTimestamp(),
-              }, SetOptions(merge: true));
-              await AuthService.setAppEmailVerified(uid);
-
-              if (context.mounted) Navigator.of(context).pop();
-              _navigateToForm(selectedRole);
-            } catch (e) {
-              debugPrint('[RoleSelection] Failed to assign role: $e');
-            }
-          },
-        ),
-      );
-    });
-  }
-
-  void _navigateToForm(String role) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!context.mounted) return;
-      switch (role) {
-        case 'Tourist':
-          Navigator.pushAndRemoveUntil(
-            context,
-            MaterialPageRoute(builder: (_) => const TouristRegistrationFlow()),
-            (route) => false,
-          );
-          break;
-        case 'Administrator':
-          Navigator.pushAndRemoveUntil(
-            context,
-            MaterialPageRoute(builder: (_) => const AdminSurveyScreen()),
-            (route) => false,
-          );
-          break;
-        case 'Business Owner':
-          Navigator.pushAndRemoveUntil(
-            context,
-            MaterialPageRoute(builder: (_) => const BusinessOwnerRegistrationForm()),
-            (route) => false,
-          );
-          break;
-        default:
-          NavigationHelper.navigateBasedOnRole(context, role);
-      }
-    });
-  }
-
-  @override
-  Widget build(BuildContext context) => const LoadingScreen();
 }
 
 class _RedirectByRole extends StatefulWidget {
@@ -272,7 +176,7 @@ class _RedirectByRoleState extends State<_RedirectByRole> {
       });
     }
   }
-
+  
   @override
   Widget build(BuildContext context) => const LoadingScreen();
 }

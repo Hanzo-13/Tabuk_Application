@@ -183,8 +183,16 @@ class _TouristEventCalendarScreenState extends State<TouristEventCalendarScreen>
 
   @override
   Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+    final bool isSmallDevice = size.width < 360;
+    final double rowHeightVar = isSmallDevice ? 36 : 44;
+    final double markerSizeVar = isSmallDevice ? 5 : 7;
+    final double headerFontSize = isSmallDevice ? 16 : 18;
+    final double dayFontSize = isSmallDevice ? AppConstants.calendarDayFontSize - 1 : AppConstants.calendarDayFontSize;
+
     return Scaffold(
       appBar: AppBar(
+        automaticallyImplyLeading: false,
         title: const Text(
           "Event Calendar",
           style: TextStyle(color: Colors.white),
@@ -253,37 +261,37 @@ class _TouristEventCalendarScreenState extends State<TouristEventCalendarScreen>
                   rangeStartDay: _rangeStart,
                   rangeEndDay: _rangeEnd,
                   onRangeSelected: _onRangeSelected,
-                  calendarStyle: const CalendarStyle(
+                  calendarStyle: CalendarStyle(
                     markersMaxCount: 3,
-                    markerSize: 6,
-                    cellMargin: EdgeInsets.symmetric(vertical: 10),
-                    markerMargin: EdgeInsets.symmetric(horizontal: 1),
-                    todayDecoration: BoxDecoration(
+                    markerSize: markerSizeVar,
+                    cellMargin: EdgeInsets.symmetric(vertical: isSmallDevice ? 6 : 10),
+                    markerMargin: const EdgeInsets.symmetric(horizontal: 1),
+                    todayDecoration: const BoxDecoration(
                       color: AppColors.homeTrendingColor,
                       shape: BoxShape.circle,
                     ),
-                    selectedDecoration: BoxDecoration(
+                    selectedDecoration: const BoxDecoration(
                       color: AppColors.primaryTeal,
                       shape: BoxShape.circle,
                     ),
                     weekendTextStyle: TextStyle(
-                      fontSize: AppConstants.calendarDayFontSize,
+                      fontSize: dayFontSize,
                       color: AppColors.primaryOrange,
                     ),
                     outsideTextStyle: TextStyle(
-                      fontSize: AppConstants.calendarDayFontSize,
+                      fontSize: dayFontSize,
                       color: AppColors.textLight,
                     ),
                     outsideDaysVisible: false,
                   ),
-                  headerStyle: const HeaderStyle(
+                  headerStyle: HeaderStyle(
                     titleCentered: true,
                     formatButtonVisible: false,
-                    titleTextStyle: TextStyle(color: Colors.black, fontSize: 18),
-                    leftChevronIcon: Icon(Icons.chevron_left, color: Colors.grey, size: 25),
-                    rightChevronIcon: Icon(Icons.chevron_right, color: Colors.grey, size: 25),
+                    titleTextStyle: TextStyle(color: Colors.black, fontSize: headerFontSize),
+                    leftChevronIcon: const Icon(Icons.chevron_left, color: Colors.grey, size: 24),
+                    rightChevronIcon: const Icon(Icons.chevron_right, color: Colors.grey, size: 24),
                   ),
-                  rowHeight: 40,
+                  rowHeight: rowHeightVar,
                   calendarBuilders: CalendarBuilders(
                     markerBuilder: (context, date, events) {
                       final roles = events.map((e) => e.role).toSet().toList();
@@ -308,8 +316,8 @@ class _TouristEventCalendarScreenState extends State<TouristEventCalendarScreen>
                                 children: bars.map((color) {
                                   return Container(
                                     margin: const EdgeInsets.symmetric(vertical: 1),
-                                    height: 2.5,
-                                    width: 30,
+                                    height: isSmallDevice ? 2.0 : 2.5,
+                                    width: isSmallDevice ? 22 : 30,
                                     decoration: BoxDecoration(
                                       color: color,
                                       borderRadius: BorderRadius.circular(2),
@@ -372,26 +380,33 @@ class _TouristEventCalendarScreenState extends State<TouristEventCalendarScreen>
                                   Tab(
                                     child: Row(
                                       mainAxisAlignment: MainAxisAlignment.center,
+                                      mainAxisSize: MainAxisSize.min,
                                       children: [
                                         const Icon(Icons.event, size: 18),
-                                        const SizedBox(width: 6),
-                                        const Text('Events'),
+                                        const SizedBox(width: 4),
+                                        Flexible(
+                                          child: Text(
+                                            'Events',
+                                            overflow: TextOverflow.ellipsis,
+                                            style: const TextStyle(fontSize: 13),
+                                          ),
+                                        ),
                                         if (_newEvents.isNotEmpty) ...[
-                                          const SizedBox(width: 6),
+                                          const SizedBox(width: 4),
                                           Container(
                                             padding: const EdgeInsets.symmetric(
-                                              horizontal: 8,
-                                              vertical: 3,
+                                              horizontal: 6,
+                                              vertical: 2,
                                             ),
                                             decoration: BoxDecoration(
                                               color: AppColors.primaryOrange,
-                                              borderRadius: BorderRadius.circular(12),
+                                              borderRadius: BorderRadius.circular(10),
                                             ),
                                             child: Text(
                                               '${_newEvents.length}',
                                               style: const TextStyle(
                                                 color: AppColors.white,
-                                                fontSize: 12,
+                                                fontSize: 10,
                                                 fontWeight: FontWeight.bold,
                                               ),
                                             ),
@@ -403,26 +418,33 @@ class _TouristEventCalendarScreenState extends State<TouristEventCalendarScreen>
                                   Tab(
                                     child: Row(
                                       mainAxisAlignment: MainAxisAlignment.center,
+                                      mainAxisSize: MainAxisSize.min,
                                       children: [
                                         const Icon(Icons.archive_rounded, size: 18),
-                                        const SizedBox(width: 6),
-                                        const Text('Ended Events'),
+                                        const SizedBox(width: 4),
+                                        Flexible(
+                                          child: Text(
+                                            'Ended Events',
+                                            overflow: TextOverflow.ellipsis,
+                                            style: const TextStyle(fontSize: 13),
+                                          ),
+                                        ),
                                         if (_pastEvents.isNotEmpty) ...[
-                                          const SizedBox(width: 6),
+                                          const SizedBox(width: 4),
                                           Container(
                                             padding: const EdgeInsets.symmetric(
-                                              horizontal: 8,
-                                              vertical: 3,
+                                              horizontal: 6,
+                                              vertical: 2,
                                             ),
                                             decoration: BoxDecoration(
                                               color: AppColors.textLight,
-                                              borderRadius: BorderRadius.circular(12),
+                                              borderRadius: BorderRadius.circular(10),
                                             ),
                                             child: Text(
                                               '${_pastEvents.length}',
                                               style: const TextStyle(
                                                 color: AppColors.white,
-                                                fontSize: 12,
+                                                fontSize: 10,
                                                 fontWeight: FontWeight.bold,
                                               ),
                                             ),

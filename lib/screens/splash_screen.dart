@@ -2,17 +2,19 @@
 // lib/screens/splash_screen.dart
 // ===========================================
 
+// ignore_for_file: use_build_context_synchronously
+
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 
-import 'package:capstone_app/main.dart';
 import 'package:capstone_app/models/connectivity_info.dart';
 import 'package:capstone_app/services/auth_service.dart';
 import 'package:capstone_app/services/connectivity_service.dart';
 import 'package:capstone_app/services/session_services.dart';
 import 'package:capstone_app/utils/colors.dart';
 import 'package:capstone_app/utils/constants.dart';
+import 'package:capstone_app/utils/navigation_helper.dart';
 import 'package:capstone_app/widgets/app_logo_widget.dart';
 import 'package:capstone_app/widgets/connectivity_widget.dart';
 
@@ -94,14 +96,13 @@ class _SplashScreenState extends State<SplashScreen> {
 
       if (session != null && isAuthenticated) {
         debugPrint('[SplashScreen] Authenticated. Redirecting to home...');
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (_) => const AuthChecker()),
-        );
+        // Use NavigationHelper to route based on user role
+        final userRole = session['role'] ?? 'tourist';
+        NavigationHelper.navigateBasedOnRole(context, userRole);
       } else {
         debugPrint('[SplashScreen] No session or auth. Redirecting to login...');
         await SessionService.clearSession();
-        Navigator.pushReplacementNamed(context, AppConstants.loginRoute!);
+        Navigator.pushReplacementNamed(context, AppConstants.loginRoute);
       }
     } catch (e) {
       debugPrint('[SplashScreen] ERROR during splash logic: $e');
@@ -109,7 +110,7 @@ class _SplashScreenState extends State<SplashScreen> {
 
       // Fallback: force to login on any error
       await SessionService.clearSession();
-      Navigator.pushReplacementNamed(context, AppConstants.loginRoute!);
+      Navigator.pushReplacementNamed(context, AppConstants.loginRoute);
     }
   }
 

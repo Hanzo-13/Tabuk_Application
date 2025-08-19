@@ -19,25 +19,28 @@ class HotspotDetailsScreen extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (hotspot.images.isNotEmpty)
-              SizedBox(
-                height: 220,
-                width: double.infinity,
-                child: PageView(
-                  children: hotspot.images
-                      .map((img) =>CachedImage(
-                        imageUrl: hotspot.images.first,
-                        width: 60,
-                        height: 60,
-                        placeholder: SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: const CircularProgressIndicator(
+              AspectRatio(
+                aspectRatio: 16 / 9,
+                child: PageView.builder(
+                  itemCount: hotspot.images.length,
+                  itemBuilder: (context, index) {
+                    final img = hotspot.images[index];
+                    return CachedImage(
+                      imageUrl: img,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                      placeholder: const Center(
+                        child: SizedBox(
+                          width: 24,
+                          height: 24,
+                          child: CircularProgressIndicator(
                             strokeWidth: 2,
                             valueColor: AlwaysStoppedAnimation<Color>(Colors.teal),
                           ),
                         ),
-                      ))
-                      .toList(),
+                      ),
+                    );
+                  },
                 ),
               ),
             Padding(
