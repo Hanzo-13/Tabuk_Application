@@ -24,7 +24,9 @@ class ImageCacheService {
         return box.get(url);
       }
 
-      final response = await http.get(Uri.parse(url));
+      final response = await http
+          .get(Uri.parse(url))
+          .timeout(const Duration(seconds: 6));
       if (response.statusCode == 200) {
         final bytes = response.bodyBytes;
         await box.put(url, bytes);

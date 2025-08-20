@@ -40,11 +40,14 @@ class ExploreScreen extends StatelessWidget {
 
               return GestureDetector(
                 onTap: () {
+                  final dataWithId = Map<String, dynamic>.from(data)
+                    ..putIfAbsent('hotspot_id', () => doc.id);
                   BusinessDetailsModal.show(
                     context: context,
-                    businessData: data,
+                    businessData: dataWithId,
                     role: 'Tourist',
                     currentUserId: user?.uid,
+                    showInteractions: false,
                   );
                 },
                 child: Card(

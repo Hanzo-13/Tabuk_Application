@@ -5,9 +5,7 @@
 import 'package:capstone_app/screens/admin/provincial_admin/events/prov_events_screen.dart';
 import 'package:capstone_app/screens/admin/provincial_admin/notification/prov_notification_screen.dart';
 import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:capstone_app/services/auth_service.dart';
 import 'package:capstone_app/utils/colors.dart';
 import 'provincial_admin/prov_home/prov_home_screen.dart';
 import 'provincial_admin/hotspots/prov_spot_screen.dart';
@@ -35,20 +33,8 @@ class _MainAdminScreenState extends State<MainAdminScreen> {
     final prefs = await SharedPreferences.getInstance();
     String? cachedType = prefs.getString('admin_type');
 
-    if (cachedType != null) {
-      setState(() => _adminType = cachedType);
-    } else {
-      final user = AuthService.currentUser;
-      if (user == null) return;
-      final doc = await FirebaseFirestore.instance.collection('Users').doc(user.uid).get();
-      final type = doc.data()?['admin_type'];
-      if (type != null) {
-        await prefs.setString('admin_type', type);
-        if (!mounted) return;
-        setState(() => _adminType = type);
-      }
+    setState(() => _adminType = cachedType);
     }
-  }
 
   void _onItemTapped(int index) {
     if (_adminType == 'municipal' && index > 2) {

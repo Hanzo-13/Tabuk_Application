@@ -384,6 +384,7 @@ class _TripsScreenState extends State<TripsScreen>
           length: _tabCount,
           child: Scaffold(
             appBar: AppBar(
+              automaticallyImplyLeading: false,
               title: Row(
                 children: [
                   Container(
@@ -445,23 +446,30 @@ class _TripsScreenState extends State<TripsScreen>
                       Tab(
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
+                          mainAxisSize: MainAxisSize.min,
                           children: [
                             const Icon(Icons.explore_rounded, size: 18),
-                            const SizedBox(width: 6),
-                            const Text(_activeTabLabel),
+                            const SizedBox(width: 4),
+                            Flexible(
+                              child: Text(
+                                _activeTabLabel,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(fontSize: 13),
+                              ),
+                            ),
                             if (myTrips.isNotEmpty) ...[
-                              const SizedBox(width: 8),
+                              const SizedBox(width: 4),
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                 decoration: BoxDecoration(
                                   color: AppColors.primaryOrange,
-                                  borderRadius: BorderRadius.circular(12),
+                                  borderRadius: BorderRadius.circular(10),
                                 ),
                                 child: Text(
                                   '${myTrips.length}',
                                   style: const TextStyle(
                                     color: AppColors.white,
-                                    fontSize: 12,
+                                    fontSize: 10,
                                     fontWeight: FontWeight.bold,
                                   ),
                                 ),
@@ -473,23 +481,30 @@ class _TripsScreenState extends State<TripsScreen>
                       Tab(
                         child: Row(
                           mainAxisAlignment: MainAxisAlignment.center,
+                          mainAxisSize: MainAxisSize.min,
                           children: [
                             const Icon(Icons.archive_rounded, size: 18),
-                            const SizedBox(width: 6),
-                            const Text(_archivedTabLabel),
+                            const SizedBox(width: 4),
+                            Flexible(
+                              child: Text(
+                                _archivedTabLabel,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(fontSize: 13),
+                              ),
+                            ),
                             if (archivedTrips.isNotEmpty) ...[
-                              const SizedBox(width: 8),
+                              const SizedBox(width: 4),
                               Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                 decoration: BoxDecoration(
                                   color: AppColors.textLight,
-                                  borderRadius: BorderRadius.circular(12),
+                                  borderRadius: BorderRadius.circular(10),
                                 ),
                                 child: Text(
                                   '${archivedTrips.length}',
                                   style: const TextStyle(
                                     color: AppColors.white,
-                                    fontSize: 12,
+                                    fontSize: 10,
                                     fontWeight: FontWeight.bold,
                                   ),
                                 ),

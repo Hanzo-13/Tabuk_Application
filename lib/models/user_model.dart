@@ -1,129 +1,173 @@
 // ===========================================
-// lib/models/user_profile_model.dart
+// lib/models/user_model.dart
 // ===========================================
-// Model for user profile data.
+// Model for user data in the Users collection.
 
-/// Represents a user profile in the system.
-class UserProfile {
-  /// Unique user ID.
-  final String userId;
-  /// User's role (e.g., admin, tourist).
-  final String role;
-  /// name of the user.
-  final String name;
-  /// Email address of the user.
+/// Represents a user in the system.
+class User {
+  /// Unique user ID (Firestore document ID).
+  final String id;
+  /// User's email address.
   final String email;
-  /// Password (should be securely stored/hashed in production).
-  final String password;
+  /// User's display name.
+  final String name;
+  /// User's role in the system.
+  final String role;
   /// Profile photo URL.
   final String profilePhoto;
-  /// Date and time when the profile was created.
+  /// Username (if applicable).
+  final String username;
+  /// Contact information.
+  final String contact;
+  /// Country/nationality.
+  final String country;
+  /// Gender.
+  final String gender;
+  /// Date of birth.
+  final String dob;
+  /// Whether the user has completed their profile form.
+  final bool formCompleted;
+  /// Timestamp when the user was created.
   final DateTime createdAt;
-  /// Creates a [UserProfile] instance.
-  const UserProfile({
-    required this.userId,
-    required this.role,
-    required this.name,
-    required this.email,
-    required this.password,
-  
-    required this.profilePhoto,
-    required this.createdAt,
+  /// Timestamp when the user was last updated.
+  final DateTime? updatedAt;
 
+  /// Creates a [User] instance.
+  const User({
+    required this.id,
+    required this.email,
+    required this.name,
+    required this.role,
+    required this.profilePhoto,
+    required this.username,
+    required this.contact,
+    required this.country,
+    required this.gender,
+    required this.dob,
+    required this.formCompleted,
+    required this.createdAt,
+    this.updatedAt,
   });
 
-  /// Creates a [UserProfile] from a map (e.g., from Firestore).
-  factory UserProfile.fromMap(Map<String, dynamic> map, String documentId) {
-
-    
-    // Handle name - check multiple possible field names (future-proof, but only one is needed)
-    String name = '';
-    if (map['name'] != null && (map['name'] as String).trim().isNotEmpty) {
-      name = map['name'];
-    }
-
-    // Handle profile photo - prefer 'profilePhoto' (camelCase), fallback to others
+  /// Creates a [User] from a Firestore document.
+  factory User.fromFirestore(Map<String, dynamic> data, String documentId) {
+    // Handle profile photo with fallbacks
     String profilePhoto = '';
-    if (map['profilePhoto'] != null && (map['profilePhoto'] as String).trim().isNotEmpty) {
-      profilePhoto = map['profilePhoto'];
-    } else if (map['profile_photo'] != null && (map['profile_photo'] as String).trim().isNotEmpty) {
-      profilePhoto = map['profile_photo'];
-    } else if (map['profileImageUrl'] != null && (map['profileImageUrl'] as String).trim().isNotEmpty) {
-      profilePhoto = map['profileImageUrl'];
+    if (data['profilePhoto'] != null && (data['profilePhoto'] as String).trim().isNotEmpty) {
+      profilePhoto = data['profilePhoto'];
+    } else if (data['profile_photo'] != null && (data['profile_photo'] as String).trim().isNotEmpty) {
+      profilePhoto = data['profile_photo'];
+    } else if (data['profileImageUrl'] != null && (data['profileImageUrl'] as String).trim().isNotEmpty) {
+      profilePhoto = data['profileImageUrl'];
     }
-    // Only use valid URLs, never local file paths
+    
+    // Only use valid URLs
     if (profilePhoto.isNotEmpty && !profilePhoto.startsWith('http')) {
       profilePhoto = '';
     }
-    
-    // Handle created_at field
+
+    // Handle timestamps
     DateTime createdAt;
-    if (map['created_at'] != null) {
-      if (map['created_at'] is DateTime) {
-        createdAt = map['created_at'];
-      } else if (map['created_at'] is String) {
-        createdAt = DateTime.tryParse(map['created_at']) ?? DateTime.now();
-      } else {
-        createdAt = DateTime.now();
-      }
-    } else if (map['createdAt'] != null) {
-      // Handle alternative field name
-      if (map['createdAt'] is DateTime) {
-        createdAt = map['createdAt'];
-      } else if (map['createdAt'] is String) {
-        createdAt = DateTime.tryParse(map['createdAt']) ?? DateTime.now();
+    if (data['created_at'] != null) {
+      if (data['created_at'] is DateTime) {
+        createdAt = data['created_at'];
+      } else if (data['created_at'] is String) {
+        createdAt = DateTime.tryParse(data['created_at']) ?? DateTime.now();
       } else {
         createdAt = DateTime.now();
       }
     } else {
       createdAt = DateTime.now();
     }
-  
-    return UserProfile(
-      userId: documentId, // Use the document ID as the user ID
-      role: map['role']?.toString() ?? '',
-      name: name,
-      email: map['email']?.toString() ?? '',
-      password: map['password']?.toString() ?? '',
+
+    DateTime? updatedAt;
+    if (data['updated_at'] != null) {
+      if (data['updated_at'] is DateTime) {
+        updatedAt = data['updated_at'];
+      } else if (data['updated_at'] is String) {
+        updatedAt = DateTime.tryParse(data['updated_at']);
+      }
+    }
+
+    return User(
+      id: documentId,
+      email: data['email']?.toString() ?? '',
+      name: data['name']?.toString() ?? '',
+      role: data['role']?.toString() ?? '',
       profilePhoto: profilePhoto,
+      username: data['username']?.toString() ?? '',
+      contact: data['contact']?.toString() ?? '',
+      country: data['country']?.toString() ?? '',
+      gender: data['gender']?.toString() ?? '',
+      dob: data['dob']?.toString() ?? '',
+      formCompleted: data['form_completed'] ?? false,
       createdAt: createdAt,
-      
+      updatedAt: updatedAt,
     );
   }
 
-  /// Converts the [UserProfile] to a map for storage.
-  Map<String, dynamic> toMap() {
+  /// Converts the [User] to a map for Firestore storage.
+  Map<String, dynamic> toFirestore() {
     return {
-      'user_id': userId,
-      'role': role,
-      'name': name,
       'email': email,
-      'password': password,
-      'profilePhoto': profilePhoto, // always camelCase
+      'name': name,
+      'role': role,
+      'profilePhoto': profilePhoto,
+      'username': username,
+      'contact': contact,
+      'country': country,
+      'gender': gender,
+      'dob': dob,
+      'form_completed': formCompleted,
       'created_at': createdAt.toIso8601String(),
+      'updated_at': updatedAt?.toIso8601String(),
     };
   }
-  
-  /// Creates a copy of this UserProfile with updated fields
-  UserProfile copyWith({
-    String? userId,
-    String? role,
-    String? name,
-    String? email,
-    String? password,
-    String? profilePhoto,
-    DateTime? createdAt,
 
+  /// Creates a copy of this User with updated fields.
+  User copyWith({
+    String? id,
+    String? email,
+    String? name,
+    String? role,
+    String? profilePhoto,
+    String? username,
+    String? contact,
+    String? country,
+    String? gender,
+    String? dob,
+    bool? formCompleted,
+    DateTime? createdAt,
+    DateTime? updatedAt,
   }) {
-    return UserProfile(
-      userId: userId ?? this.userId,
-      role: role ?? this.role,
-      name: name ?? this.name,
+    return User(
+      id: id ?? this.id,
       email: email ?? this.email,
-      password: password ?? this.password,
- 
+      name: name ?? this.name,
+      role: role ?? this.role,
       profilePhoto: profilePhoto ?? this.profilePhoto,
+      username: username ?? this.username,
+      contact: contact ?? this.contact,
+      country: country ?? this.country,
+      gender: gender ?? this.gender,
+      dob: dob ?? this.dob,
+      formCompleted: formCompleted ?? this.formCompleted,
       createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
     );
   }
+
+  @override
+  String toString() {
+    return 'User(id: $id, email: $email, name: $name, role: $role, profilePhoto: $profilePhoto)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    return other is User && other.id == id;
+  }
+
+  @override
+  int get hashCode => id.hashCode;
 }

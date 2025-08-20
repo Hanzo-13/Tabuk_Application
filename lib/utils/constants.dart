@@ -225,6 +225,7 @@ class AppConstants {
   // App-wide constants
   static const String rootRoute = '/';
   static const String splashRoute = '/splash';
+  static const String loginRoute = '/login';
 
   // Connectivity messages and settings
   static const String connectivityChecking = 'Checking connection...';
@@ -381,10 +382,12 @@ class AppConstants {
   static const double signUpFormHorizontalPadding = 24.0;
   static const int snackBarDurationSeconds = 3;
   // Home screen limits
-  static const int homeForYouLimit = 5;
-  static const int homeTrendingLimit = 5;
-  static const int homeNearbyLimit = 5;
-  static const int homeSeasonalLimit = 5;
+  static const int homeForYouLimit = 6;
+  static const int homeTrendingLimit = 6;
+  static const int homeNearbyLimit = 6;
+  static const int homeSeasonalLimit = 6;
+  static const int homeDiscoverLimit = 6;
+  static const int homePopularLimit = 6;
   // Home screen spacings and sizes
   static const double homeTopSpacing = 24.0;
   static const double homeHorizontalPadding = 16.0;
@@ -457,8 +460,6 @@ class AppConstants {
   static const double searchSectionTitleFontSize = 16.0;
   static const double searchSectionSpacing = 12.0;
   static const double searchResultsSpacing = 16.0;
-
-  static String? loginRoute;
 
   // // ignore: prefer_typing_uninitialized_variables
   // static var errorLoadingTouristPreferences;

@@ -82,7 +82,7 @@ class _MainTouristScreenState extends State<MainTouristScreen> {
       ];
     } else {
       return [
-        const HomeScreen(),
+        const TouristHomeScreen(),
         const MapScreen(),
         const TripsScreen(),
         const TouristEventCalendarScreen(),
