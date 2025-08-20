@@ -1,11 +1,11 @@
 // ignore_for_file: unnecessary_underscores
 
-import 'package:capstone_app/screens/admin/hotspots/admin_spot_registration_screen.dart';
+import 'package:capstone_app/screens/admin/provincial_admin/hotspots/prov_spot_registration_screen.dart';
 import 'package:capstone_app/utils/colors.dart';
+import 'package:capstone_app/widgets/business_details_modal.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:capstone_app/widgets/business_details_modal.dart';
 
 class AdminBusinessesScreen extends StatefulWidget {
   const AdminBusinessesScreen({super.key});
@@ -27,7 +27,8 @@ class _AdminBusinessesScreenState extends State<AdminBusinessesScreen> {
   }
 
   Future<void> _fetchAdminInfo() async {
-    final doc = await FirebaseFirestore.instance.collection('Users').doc(uid).get();
+    final doc =
+        await FirebaseFirestore.instance.collection('Users').doc(uid).get();
     final data = doc.data();
     if (data != null) {
       setState(() {
@@ -41,7 +42,9 @@ class _AdminBusinessesScreenState extends State<AdminBusinessesScreen> {
   Stream<QuerySnapshot> _getDestinationStream() {
     final collection = FirebaseFirestore.instance.collection('destination');
     if (adminRole == 'Municipal Administrator' && municipality != null) {
-      return collection.where('municipality', isEqualTo: municipality).snapshots();
+      return collection
+          .where('municipality', isEqualTo: municipality)
+          .snapshots();
     }
     return collection.snapshots(); // Provincial Admin sees all
   }
@@ -49,15 +52,11 @@ class _AdminBusinessesScreenState extends State<AdminBusinessesScreen> {
   @override
   Widget build(BuildContext context) {
     if (uid == null) {
-      return const Scaffold(
-        body: Center(child: Text('User not logged in.')),
-      );
+      return const Scaffold(body: Center(child: Text('User not logged in.')));
     }
 
     if (_isLoading) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
     return Scaffold(
@@ -75,9 +74,7 @@ class _AdminBusinessesScreenState extends State<AdminBusinessesScreen> {
           }
 
           if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
-            return const Center(
-              child: Text('No destinations available.'),
-            );
+            return const Center(child: Text('No destinations available.'));
           }
 
           final destination = snapshot.data!.docs;
@@ -98,11 +95,12 @@ class _AdminBusinessesScreenState extends State<AdminBusinessesScreen> {
                       context: context,
                       isScrollControlled: true,
                       backgroundColor: Colors.transparent,
-                      builder: (_) => BusinessDetailsModal(
-                        businessData: data,
-                        role: 'Administrator',
-                        currentUserId: uid,
-                      ),
+                      builder:
+                          (_) => BusinessDetailsModal(
+                            businessData: data,
+                            role: 'Administrator',
+                            currentUserId: uid,
+                          ),
                     );
                   },
                   child: Row(
@@ -113,26 +111,34 @@ class _AdminBusinessesScreenState extends State<AdminBusinessesScreen> {
                           topLeft: Radius.circular(12),
                           bottomLeft: Radius.circular(12),
                         ),
-                        child: images != null && images.isNotEmpty
-                            ? Image.network(
-                                images[0],
-                                height: 90,
-                                width: 90,
-                                fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => const Icon(Icons.image, size: 48),
-                              )
-                            : Container(
-                                height: 90,
-                                width: 90,
-                                color: Colors.grey[300],
-                                child: const Icon(Icons.image_not_supported, size: 40),
-                              ),
+                        child:
+                            images != null && images.isNotEmpty
+                                ? Image.network(
+                                  images[0],
+                                  height: 90,
+                                  width: 90,
+                                  fit: BoxFit.cover,
+                                  errorBuilder:
+                                      (_, __, ___) =>
+                                          const Icon(Icons.image, size: 48),
+                                )
+                                : Container(
+                                  height: 90,
+                                  width: 90,
+                                  color: Colors.grey[300],
+                                  child: const Icon(
+                                    Icons.image_not_supported,
+                                    size: 40,
+                                  ),
+                                ),
                       ),
                       const SizedBox(width: 12),
                       // ✅ Title & Subtitle
                       Expanded(
                         child: ListTile(
-                          title: Text(data['business_name'] ?? 'Unnamed Destination'),
+                          title: Text(
+                            data['business_name'] ?? 'Unnamed Destination',
+                          ),
                           subtitle: Text(data['category'] ?? 'No category'),
                           trailing: const Icon(Icons.chevron_right),
                         ),
@@ -151,7 +157,13 @@ class _AdminBusinessesScreenState extends State<AdminBusinessesScreen> {
         onPressed: () {
           Navigator.push(
             context,
-            MaterialPageRoute(builder: (context) => const AdminBusinessRegistrationScreen(adminRole: '', municipality: '',)),
+            MaterialPageRoute(
+              builder:
+                  (context) => const AdminBusinessRegistrationScreen(
+                    adminRole: '',
+                    municipality: '',
+                  ),
+            ),
           );
         },
         icon: const Icon(Icons.add_location_alt),

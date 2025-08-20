@@ -1,7 +1,7 @@
 // ignore_for_file: unnecessary_const, unnecessary_cast, prefer_final_fields, unnecessary_string_interpolations
 
 import 'package:capstone_app/models/event_model.dart';
-import 'package:capstone_app/screens/admin/events/event_creation_admin.dart';
+import 'package:capstone_app/screens/admin/provincial_admin/events/event_creation_prov.dart';
 import 'package:capstone_app/services/event_service.dart';
 import 'package:capstone_app/utils/colors.dart';
 import 'package:capstone_app/utils/constants.dart';
@@ -26,6 +26,8 @@ class _EventCalendarAdminScreenState extends State<EventCalendarAdminScreen>
   List<Event> _events = [];
   bool _isLoading = true;
   Map<DateTime, List<Event>> _eventMarkers = {};
+  String _userRole = 'Administrator'; // Default role, can be updated based on user session
+  String? _adminType; // Will be set based on user session
 
   late TabController _tabController;
   CalendarFormat _calendarFormat = CalendarFormat.month;
@@ -167,7 +169,7 @@ class _EventCalendarAdminScreenState extends State<EventCalendarAdminScreen>
                             builder: (_) => EventDetailModal(
                               event: event,
                               currentUserId: FirebaseAuth.instance.currentUser?.uid ?? '',
-                              userRole: 'BusinessOwner',
+                              userRole: 'BusinessOwner', status: '',
                             ),
                           );
                         },
@@ -289,10 +291,10 @@ class _EventCalendarAdminScreenState extends State<EventCalendarAdminScreen>
                       final roles = events.map((e) => e.role).toSet().toList();
                       List<Color> bars = [];
 
-                      if (roles.contains('provincial admin')) {
+                      if (roles.contains('Provincial Administrator')) {
                         bars.add(Colors.blue.shade700);
                       }
-                      if (roles.contains('municipal admin')) {
+                      if (roles.contains('Municipal Administrator')) {
                         bars.add(Colors.green);
                       }
                       if (roles.contains('business owner')) {
@@ -597,7 +599,7 @@ class _EventCalendarAdminScreenState extends State<EventCalendarAdminScreen>
                 builder: (_) => EventDetailModal(
                   event: event,
                   currentUserId: currentUserId,
-                  userRole: 'Administrator',
+                  userRole: 'Administrator', status: '',
                 ),
               );
             },
@@ -635,36 +637,74 @@ class _EventCalendarAdminScreenState extends State<EventCalendarAdminScreen>
 }
 
   Widget _buildNewEventsList() {
+    // Safely get the current user's ID
+    final String currentUserId = FirebaseAuth.instance.currentUser?.uid ?? '';
+
     if (_newEvents.isEmpty) {
       return const Center(
         child: Text("No New Events, create now!", style: TextStyle(color: Colors.black)),
       );
     }
-    return SingleChildScrollView(
-    padding: const EdgeInsets.all(16),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Padding(
-          padding: EdgeInsets.only(bottom: 12.0),
-          child: Text(
-            " All Events (view only).",
-            style: TextStyle(
-              fontSize: 18,
-              fontStyle: FontStyle.italic,
-              color: Colors.grey,
-            ),
-          ),
-        ),
-        ..._newEvents.map((event) => Padding(
-              padding: const EdgeInsets.only(bottom: 12.0),
-              child: _buildEventCard(event),
-            )),
-      ],
-    ),
-  );
-  }
 
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: _newEvents.length,
+      itemBuilder: (context, index) {
+        final event = _newEvents[index];
+
+        // Condition to check if the current user is a Provincial Administrator
+        final bool canDelete = _userRole == 'Administrator' && _adminType == 'Provincial Administrator';
+
+        return Card(
+          margin: const EdgeInsets.only(bottom: 12),
+          color: Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          child: ListTile(
+            leading: event.thumbnailUrl != null
+                ? ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.network(
+                      event.thumbnailUrl!,
+                      width: 50,
+                      height: 50,
+                      fit: BoxFit.cover,
+                    ),
+                  )
+                : const Icon(Icons.event, color: Colors.blue),
+            title: Text(event.title),
+            subtitle: Text(
+              '${_formatDate(event.startDate)} - ${_formatDate(event.endDate)}\n ${event.location}, ${event.municipality}',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+            // Conditionally display the delete button
+            trailing: canDelete
+                ? IconButton(
+                    icon: const Icon(Icons.delete, color: Colors.red),
+                    tooltip: "Delete Event",
+                    onPressed: () => _confirmDeleteEvent(event),
+                  )
+                : null, // If the condition is false, no widget is displayed
+            onTap: () {
+              showModalBottomSheet(
+                context: context,
+                isScrollControlled: true,
+                backgroundColor: Colors.transparent,
+                builder: (_) => EventDetailModal(
+                  event: event,
+                  currentUserId: currentUserId,
+                  // Pass the actual role and adminType of the logged-in user
+                  userRole: _userRole,
+                  adminType: _adminType,
+                  status: '',
+                ),
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
   Widget _buildPastEventsList() {
     if (_pastEvents.isEmpty) {
       return const Center(
@@ -701,11 +741,11 @@ Widget _buildEventCard(Event event) {
   Color labelColor = Colors.grey;
 
   switch (event.role) {
-    case 'provincial admin':
+    case 'Provincial Administrator':
       creatorLabel = 'Provincial';
       labelColor = Colors.blue.shade700;
       break;
-    case 'municipal admin':
+    case 'Municipal Administrator':
       creatorLabel = 'Municipal';
       labelColor = Colors.green;
       break;
@@ -782,7 +822,7 @@ Widget _buildEventCard(Event event) {
           builder: (_) => EventDetailModal(
             event: event,
             currentUserId: '',
-            userRole: 'Administrator',
+            userRole: 'Administrator', status: '',
           ),
         );
       },

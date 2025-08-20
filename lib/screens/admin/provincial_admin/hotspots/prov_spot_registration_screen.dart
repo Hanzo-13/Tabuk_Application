@@ -1,7 +1,7 @@
 // ignore_for_file: prefer_final_fields
 
-import 'package:capstone_app/screens/admin/hotspots/admin_spot_screen.dart';
-import 'package:capstone_app/screens/admin/hotspots/admin_media_location_form_screen.dart';
+import 'package:capstone_app/screens/admin/provincial_admin/hotspots/prov_spot_screen.dart';
+import 'package:capstone_app/screens/admin/provincial_admin/hotspots/prov_media_location_form_screen.dart';
 import 'package:capstone_app/utils/colors.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';

@@ -2,16 +2,16 @@
 // lib/screens/admin_module/main_admin_screen.dart
 // ===========================================
 
-import 'package:capstone_app/screens/admin/events/admin_events_screen.dart';
-import 'package:capstone_app/screens/admin/notification/notification_screen.dart';
+import 'package:capstone_app/screens/admin/provincial_admin/events/prov_events_screen.dart';
+import 'package:capstone_app/screens/admin/provincial_admin/notification/prov_notification_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:capstone_app/services/auth_service.dart';
 import 'package:capstone_app/utils/colors.dart';
-import 'admin_home/admin_home_screen.dart';
-import 'hotspots/admin_spot_screen.dart';
-import 'profile/admin_profile_screen.dart';
+import 'provincial_admin/prov_home/prov_home_screen.dart';
+import 'provincial_admin/hotspots/prov_spot_screen.dart';
+import 'provincial_admin/profile/prov_profile_screen.dart';
 
 class MainAdminScreen extends StatefulWidget {
   final bool isProvincial;
@@ -68,7 +68,7 @@ class _MainAdminScreenState extends State<MainAdminScreen> {
         const AdminHomeScreen(),
         const AdminBusinessesScreen(),
         const EventCalendarAdminScreen(),
-        AdminNotificationScreen(),
+        const AdminNotificationsScreen(),
         const AdminProfileScreen(),
       ];
   }

@@ -11,6 +11,7 @@ class EventDetailModal extends StatelessWidget {
   final String currentUserId;
   final String userRole; // 'Administrator', 'BusinessOwner', etc.
   final String? adminType; // e.g. 'Provincial Administrator'
+  final String status;
 
   const EventDetailModal({
     super.key,
@@ -18,11 +19,17 @@ class EventDetailModal extends StatelessWidget {
     required this.currentUserId,
     required this.userRole,
     this.adminType,
+    required this.status,
   });
 
   bool get isCreator => event.createdBy == currentUserId;
 
   bool get canEditOrManage => isCreator;
+
+  bool get isProvincialAdmin {
+    return userRole == 'Administrator' &&
+      adminType == 'Provincial Administrator';
+  }
 
   bool get shouldShowCreatorInfo {
     // Admins can view creator info IF they are not the creator
@@ -53,45 +60,51 @@ class EventDetailModal extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               if (event.thumbnailUrl != null && event.thumbnailUrl!.isNotEmpty)
-              ClipRRect(
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-                child: Image.network(
-                  event.thumbnailUrl!,
+                ClipRRect(
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(16),
+                  ),
+                  child: Image.network(
+                    event.thumbnailUrl!,
+                    width: double.infinity,
+                    fit: BoxFit.contain,
+                    alignment: Alignment.topCenter,
+                    loadingBuilder: (context, child, loadingProgress) {
+                      if (loadingProgress == null) return child;
+                      return Container(
+                        width: double.infinity,
+                        height: 300,
+                        alignment: Alignment.center,
+                        child: const CircularProgressIndicator(),
+                      );
+                    },
+                    errorBuilder: (context, error, stackTrace) {
+                      return Container(
+                        height: 300,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: Colors.grey[300],
+                          borderRadius: const BorderRadius.vertical(
+                            top: Radius.circular(16),
+                          ),
+                        ),
+                        child: const Icon(Icons.broken_image, size: 48),
+                      );
+                    },
+                  ),
+                )
+              else
+                Container(
+                  height: 300,
                   width: double.infinity,
-                  fit: BoxFit.contain,
-                  alignment: Alignment.topCenter,
-                  loadingBuilder: (context, child, loadingProgress) {
-                    if (loadingProgress == null) return child;
-                    return Container(
-                      width: double.infinity,
-                      height: 300,
-                      alignment: Alignment.center,
-                      child: const CircularProgressIndicator(),
-                    );
-                  },
-                  errorBuilder: (context, error, stackTrace) {
-                    return Container(
-                      height: 300,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: Colors.grey[300],
-                        borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-                      ),
-                      child: const Icon(Icons.broken_image, size: 48),
-                    );
-                  },
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(16),
+                    ),
+                  ),
+                  child: const Icon(Icons.image, size: 64),
                 ),
-              )
-            else
-              Container(
-                height: 300,
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  color: Colors.grey[300],
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
-                ),
-                child: const Icon(Icons.image, size: 64),
-              ),
               Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(
@@ -116,7 +129,10 @@ class EventDetailModal extends StatelessWidget {
                     ),
                     const SizedBox(height: 6),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 4,
+                      ),
                       decoration: BoxDecoration(
                         color: _getStatusColor(event.status),
                         borderRadius: BorderRadius.circular(5),
@@ -149,8 +165,8 @@ class EventDetailModal extends StatelessWidget {
 
                     const SizedBox(height: 24),
 
-                    // ✅ Show action buttons only if current user is the creator
-                    if (canEditOrManage) _buildActionButtons(context, event),
+                    if (isCreator || isProvincialAdmin) _buildActionButtons(context, event),
+
                   ],
                 ),
               ),
@@ -170,7 +186,14 @@ class EventDetailModal extends StatelessWidget {
           style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
         ),
         const SizedBox(height: 8),
-        Text('Role: ${event.role}', style: TextStyle(color: AppColors.primaryTeal, fontStyle: FontStyle.italic, fontSize: 15)),
+        Text(
+          'Role: ${event.role}',
+          style: TextStyle(
+            color: AppColors.primaryTeal,
+            fontStyle: FontStyle.italic,
+            fontSize: 15,
+          ),
+        ),
         Text('Name: ${event.creatorName}'),
         Text('Email: ${event.creatorEmail}'),
         Text('Contact: ${event.creatorContact}'),
@@ -178,73 +201,85 @@ class EventDetailModal extends StatelessWidget {
     );
   }
 
-Widget _buildActionButtons(BuildContext context, Event event) {
-  return Column(
-    crossAxisAlignment: CrossAxisAlignment.stretch,
-    children: [
-      ElevatedButton.icon(
-        onPressed: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => EditEventScreen(event: event, eventId: '',),
-            ),
-          );
-        },
-        icon: const Icon(Icons.edit),
-        label: const Text('Edit Event'),
-        style: ElevatedButton.styleFrom(
-          foregroundColor: Colors.white,
-          backgroundColor: Theme.of(context).primaryColor,
+  Widget _buildActionButtons(BuildContext context, Event event) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        ElevatedButton.icon(
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder:
+                    (context) => EditEventScreen(event: event, eventId: ''),
+              ),
+            );
+          },
+          icon: const Icon(Icons.edit),
+          label: const Text('Edit Event'),
+          style: ElevatedButton.styleFrom(
+            foregroundColor: Colors.white,
+            backgroundColor: Theme.of(context).primaryColor,
+          ),
         ),
-      ),
-      ElevatedButton.icon(
-        onPressed: () {
-          showDialog(
-            context: context,
-            builder: (context) => AlertDialog(
-              title: const Text("Confirm Removal"),
-              content: const Text("Are you sure you want to remove this event permanently?"),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text("Cancel"),
-                ),
-                TextButton(
-                  onPressed: () async {
-                    Navigator.pop(context); // Close dialog first
-                    try {
-                      await FirebaseFirestore.instance
-                          .collection('events')
-                          .doc(event.eventId)
-                          .delete();
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text("Event removed successfully")),
-                      );
-                      Navigator.pop(context); // Close the modal bottom sheet
-                    } catch (e) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text("Failed to delete event: $e")),
-                      );
-                    }
-                  },
-                  child: const Text("Remove", style: TextStyle(color: Colors.red)),
-                ),
-              ],
-            ),
-          );
-        },
-        icon: const Icon(Icons.stop_circle_outlined),
-        label: const Text('Remove Event'),
-        style: ElevatedButton.styleFrom(
-          foregroundColor: Colors.white,
-          backgroundColor: Colors.red,
+        ElevatedButton.icon(
+          onPressed: () {
+            showDialog(
+              context: context,
+              builder:
+                  (context) => AlertDialog(
+                    title: const Text("Confirm Removal"),
+                    content: const Text(
+                      "Are you sure you want to remove this event permanently?",
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(context),
+                        child: const Text("Cancel"),
+                      ),
+                      TextButton(
+                        onPressed: () async {
+                          Navigator.pop(context); // Close dialog first
+                          try {
+                            await FirebaseFirestore.instance
+                                .collection('events')
+                                .doc(event.eventId)
+                                .delete();
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(
+                                content: Text("Event removed successfully"),
+                              ),
+                            );
+                            Navigator.pop(
+                              context,
+                            ); // Close the modal bottom sheet
+                          } catch (e) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text("Failed to delete event: $e"),
+                              ),
+                            );
+                          }
+                        },
+                        child: const Text(
+                          "Remove",
+                          style: TextStyle(color: Colors.red),
+                        ),
+                      ),
+                    ],
+                  ),
+            );
+          },
+          icon: const Icon(Icons.stop_circle_outlined),
+          label: const Text('Remove Event'),
+          style: ElevatedButton.styleFrom(
+            foregroundColor: Colors.white,
+            backgroundColor: Colors.red,
+          ),
         ),
-      ),
-    ],
-  );
-}
-
+      ],
+    );
+  }
 
   String _formatDate(DateTime date) {
     return '${date.month.toString().padLeft(2, '0')}/'

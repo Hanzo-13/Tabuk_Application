@@ -1,7 +1,7 @@
 // ignore_for_file: unnecessary_const, unnecessary_cast, prefer_final_fields, unnecessary_string_interpolations
 
 import 'package:capstone_app/models/event_model.dart';
-import 'package:capstone_app/screens/business/promotions/event_creation_business.dart';
+import 'package:capstone_app/screens/admin/municipal_admin/events/event_creation_muni.dart';
 import 'package:capstone_app/services/event_service.dart';
 import 'package:capstone_app/utils/colors.dart';
 import 'package:capstone_app/utils/constants.dart';
@@ -11,22 +11,23 @@ import 'package:flutter/material.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:intl/intl.dart';
 
-class EventCalendarBusinessOwnerScreen extends StatefulWidget {
-  const EventCalendarBusinessOwnerScreen({super.key});
-
+class EventCalendarAdminScreen extends StatefulWidget {
+  const EventCalendarAdminScreen({super.key});
 
   @override
-  State<EventCalendarBusinessOwnerScreen> createState() =>
-      _EventCalendarBusinessOwnerScreenState();
+  State<EventCalendarAdminScreen> createState() =>
+      _EventCalendarAdminScreenState();
 }
 
-class _EventCalendarBusinessOwnerScreenState extends State<EventCalendarBusinessOwnerScreen>
+class _EventCalendarAdminScreenState extends State<EventCalendarAdminScreen>
     with TickerProviderStateMixin {
   DateTime _focusedDay = DateTime.now();
   DateTime? _selectedDay;
   List<Event> _events = [];
   bool _isLoading = true;
   Map<DateTime, List<Event>> _eventMarkers = {};
+  String _userRole = 'Administrator'; // Default role, can be updated based on user session
+  String? _adminType; // Will be set based on user session
 
   late TabController _tabController;
   CalendarFormat _calendarFormat = CalendarFormat.month;
@@ -232,7 +233,7 @@ class _EventCalendarBusinessOwnerScreenState extends State<EventCalendarBusiness
                   firstDay: DateTime.utc(2020, 1, 1),
                   lastDay: DateTime.utc(2030, 12, 31),
                   focusedDay: _focusedDay,
-                  selectedDayPredicate: (day) => isSameDay(_selectedDay, day),
+                  selectedDayPredicate: (day) => isSameDay(day, _selectedDay),
                   onDaySelected: (selected, focusedDay) {
                     setState(() {
                       _selectedDay = selected;
@@ -581,7 +582,7 @@ class _EventCalendarBusinessOwnerScreenState extends State<EventCalendarBusiness
                 : const Icon(Icons.event, color: Colors.blue),
             title: Text(event.title),
             subtitle: Text(
-              '${_formatDate(event.startDate)} - ${_formatDate(event.endDate)}\n${event.municipality}',
+              '${_formatDate(event.startDate)} - ${_formatDate(event.endDate)}\n ${event.location}, ${event.municipality}',
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
             ),
@@ -598,7 +599,7 @@ class _EventCalendarBusinessOwnerScreenState extends State<EventCalendarBusiness
                 builder: (_) => EventDetailModal(
                   event: event,
                   currentUserId: currentUserId,
-                  userRole: 'business owner', status: '',
+                  userRole: 'Administrator', status: '',
                 ),
               );
             },
@@ -636,40 +637,78 @@ class _EventCalendarBusinessOwnerScreenState extends State<EventCalendarBusiness
 }
 
   Widget _buildNewEventsList() {
+    // Safely get the current user's ID
+    final String currentUserId = FirebaseAuth.instance.currentUser?.uid ?? '';
+
     if (_newEvents.isEmpty) {
       return const Center(
-        child: Text("No New Events", style: TextStyle(color: Colors.black)),
+        child: Text("No New Events, create now!", style: TextStyle(color: Colors.black)),
       );
     }
-    return SingleChildScrollView(
-    padding: const EdgeInsets.all(16),
-    child: Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Padding(
-          padding: EdgeInsets.only(bottom: 12.0),
-          child: Text(
-            " All Events (view only).",
-            style: TextStyle(
-              fontSize: 18,
-              fontStyle: FontStyle.italic,
-              color: Colors.grey,
-            ),
-          ),
-        ),
-        ..._newEvents.map((event) => Padding(
-              padding: const EdgeInsets.only(bottom: 12.0),
-              child: _buildEventCard(event),
-            )),
-      ],
-    ),
-  );
-  }
 
+    return ListView.builder(
+      padding: const EdgeInsets.all(16),
+      itemCount: _newEvents.length,
+      itemBuilder: (context, index) {
+        final event = _newEvents[index];
+
+        // Condition to check if the current user is a Municipal Administrator
+        final bool canDelete = _userRole == 'Administrator' && _adminType == 'Municipal Administrator';
+
+        return Card(
+          margin: const EdgeInsets.only(bottom: 12),
+          color: Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          child: ListTile(
+            leading: event.thumbnailUrl != null
+                ? ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Image.network(
+                      event.thumbnailUrl!,
+                      width: 50,
+                      height: 50,
+                      fit: BoxFit.cover,
+                    ),
+                  )
+                : const Icon(Icons.event, color: Colors.blue),
+            title: Text(event.title),
+            subtitle: Text(
+              '${_formatDate(event.startDate)} - ${_formatDate(event.endDate)}\n ${event.location}, ${event.municipality}',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+            // Conditionally display the delete button
+            trailing: canDelete
+                ? IconButton(
+                    icon: const Icon(Icons.delete, color: Colors.red),
+                    tooltip: "Delete Event",
+                    onPressed: () => _confirmDeleteEvent(event),
+                  )
+                : null, // If the condition is false, no widget is displayed
+            onTap: () {
+              showModalBottomSheet(
+                context: context,
+                isScrollControlled: true,
+                backgroundColor: Colors.transparent,
+                builder: (_) => EventDetailModal(
+                  event: event,
+                  currentUserId: currentUserId,
+                  // Pass the actual role and adminType of the logged-in user
+                  userRole: _userRole,
+                  adminType: _adminType,
+                  status: '',
+                ),
+              );
+            },
+          ),
+        );
+      },
+    );
+  }
   Widget _buildPastEventsList() {
     if (_pastEvents.isEmpty) {
       return const Center(
-        child: Text("No ended events", style: TextStyle(color: Colors.black)),
+        child: Text("No Ended Events", style: TextStyle(color: Colors.black)),
       );
     }
     return SingleChildScrollView(
@@ -720,11 +759,11 @@ Widget _buildEventCard(Event event) {
   }
 
   return Card(
-    margin: const EdgeInsets.only(bottom: 12),
+    margin: const EdgeInsets.only(bottom: 10),
     color: Colors.white,
     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
     child: ListTile(
-      contentPadding: const EdgeInsets.all(12),
+      contentPadding: const EdgeInsets.all(10),
       leading: event.thumbnailUrl != null
           ? ClipRRect(
               borderRadius: BorderRadius.circular(8),
@@ -736,11 +775,12 @@ Widget _buildEventCard(Event event) {
               ),
             )
           : const Icon(Icons.event, color: Colors.blue),
-      title: Text(event.title),
+      title: Text(event.title, style: TextStyle(fontStyle: FontStyle.italic, fontWeight: FontWeight.bold),),
+
       subtitle: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const SizedBox(height: 4),
+          const SizedBox(height: 2),
           Text(
             '${_formatDate(event.startDate)} - ${_formatDate(event.endDate)}',
             style: const TextStyle(fontSize: 13),
@@ -749,7 +789,7 @@ Widget _buildEventCard(Event event) {
             '${event.location}, ${event.municipality}',
             style: const TextStyle(fontSize: 13),
           ),
-          const SizedBox(height: 4),
+          const SizedBox(height: 2),
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
             decoration: BoxDecoration(
@@ -782,7 +822,7 @@ Widget _buildEventCard(Event event) {
           builder: (_) => EventDetailModal(
             event: event,
             currentUserId: '',
-            userRole: 'BusinessOwner', status: '',
+            userRole: 'Administrator', status: '',
           ),
         );
       },

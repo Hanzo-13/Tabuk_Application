@@ -93,9 +93,9 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
       } else if (baseRole == 'Administrator') {
         final adminType = userData['admin_type'] ?? '';
         if (adminType == 'Provincial Administrator') {
-          role = 'provincial admin';
+          role = 'Provincial Administrator';
         } else if (adminType == 'Municipal Administrator') {
-          role = 'municipal admin';
+          role = 'Municipal Administrator';
         }
       }
 
@@ -163,7 +163,7 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                   onSaved: (val) => description = val!,
                 ),
                 TextFormField(
-                  decoration: const InputDecoration(labelText: 'Location'),
+                  decoration: const InputDecoration(labelText: 'Barangay/Location'),
                   validator: (val) => val!.isEmpty ? 'Enter location' : null,
                   onSaved: (val) => location = val!,
                 ),

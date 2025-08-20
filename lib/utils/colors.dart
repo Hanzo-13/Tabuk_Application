@@ -19,7 +19,7 @@ class AppColors {
   static const Color backgroundColor = Color(0xFFF5F5DC);
   static const Color textDark = Color(0xFF333333);
   static const Color textLight = Color(0xFF666666);
-  static const Color grey = Color.fromARGB(255, 136, 136, 136);
+  static const Color grey = Color.fromARGB(255, 12, 1, 1);
   static const Color white = Color(0xFFFFFFFF);
   static const Color googleBlue = Color(0xFF4285F4);
   static const Color facebookBlue = Color(0xFF1877F2);

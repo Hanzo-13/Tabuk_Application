@@ -166,7 +166,7 @@ class _TouristEventCalendarScreenState extends State<TouristEventCalendarScreen>
                             builder: (_) => EventDetailModal(
                               event: event,
                               currentUserId: FirebaseAuth.instance.currentUser?.uid ?? '',
-                              userRole: 'BusinessOwner',
+                              userRole: 'BusinessOwner', status: '',
                             ),
                           );
                         },
@@ -289,10 +289,10 @@ class _TouristEventCalendarScreenState extends State<TouristEventCalendarScreen>
                       final roles = events.map((e) => e.role).toSet().toList();
                       List<Color> bars = [];
 
-                      if (roles.contains('provincial admin')) {
+                      if (roles.contains('Provincial Administrator')) {
                         bars.add(Colors.blue.shade700);
                       }
-                      if (roles.contains('municipal admin')) {
+                      if (roles.contains('Municipal Administrator')) {
                         bars.add(Colors.green);
                       }
                       if (roles.contains('business owner')) {
@@ -511,11 +511,11 @@ class _TouristEventCalendarScreenState extends State<TouristEventCalendarScreen>
     Color labelColor = Colors.grey;
 
     switch (event.role) {
-      case 'provincial admin':
+      case 'Provincial Administrator':
         creatorLabel = 'Provincial';
         labelColor = Colors.blue.shade700;
         break;
-      case 'municipal admin':
+      case 'Municipal Administrator':
         creatorLabel = 'Municipal';
         labelColor = Colors.green;
         break;
@@ -592,7 +592,7 @@ class _TouristEventCalendarScreenState extends State<TouristEventCalendarScreen>
             builder: (_) => EventDetailModal(
               event: event,
               currentUserId: '',
-              userRole: 'Tourist',
+              userRole: 'Tourist', status: '',
             ),
           );
         },

@@ -240,7 +240,7 @@ class _BusinessDetailsModalState extends State<BusinessDetailsModal> {
   
   @override
   Widget build(BuildContext context) {
-    final String normalizedRole = role.toLowerCase();
+    role.toLowerCase();
 
     return Stack(
       children: [
@@ -338,20 +338,6 @@ class _BusinessDetailsModalState extends State<BusinessDetailsModal> {
             );
           },
         ),
-
-        if (normalizedRole == 'administrator' ||
-            normalizedRole == 'business owner')
-          Positioned(
-            bottom: 24,
-            right: 16,
-            child: FloatingActionButton.extended(
-              onPressed: () {
-                Navigator.pushNamed(context, '/business-registration');
-              },
-              icon: const Icon(Icons.add_location_alt),
-              label: const Text('Add Spot'),
-            ),
-          ),
       ],
     );
   }

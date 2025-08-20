@@ -1,10 +1,9 @@
 // lib/screens/business/business_media_and_location_screen.dart
 
-// ignore_for_file: unnecessary_underscores
-
 import 'dart:convert';
 import 'dart:io';
-import 'package:capstone_app/screens/admin/main_admin_screen.dart';
+
+import 'package:capstone_app/screens/admin/municipal_admin/hotspots/muni_spot_screen.dart';
 import 'package:capstone_app/utils/colors.dart';
 import 'package:capstone_app/utils/images_imgbb.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -53,7 +52,7 @@ class _AdminMediaAndLocationScreenState extends State<AdminMediaAndLocationScree
   Future<void> _submit() async {
     if (_location == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please pin the Spot location.'), backgroundColor: Colors.orange),
+        const SnackBar(content: Text('Please pin your business location.'), backgroundColor: Colors.orange),
       );
       return;
     }
@@ -91,11 +90,11 @@ class _AdminMediaAndLocationScreenState extends State<AdminMediaAndLocationScree
 
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Spot Photo and location added!')),
+        const SnackBar(content: Text('Business Photo and location added!')),
       );
 
       Navigator.of(context).pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const MainAdminScreen()),
+        MaterialPageRoute(builder: (_) => const AdminBusinessesScreen()), // or MainAdminScreen
         (route) => false,
       );
     } catch (e) {
@@ -142,7 +141,7 @@ class _AdminMediaAndLocationScreenState extends State<AdminMediaAndLocationScree
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            const Text('Spot Photos'),
+            const Text('Business Photos'),
             const SizedBox(height: 8),
             GestureDetector(
               onTap: _pickImage,

@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:capstone_app/services/auth_service.dart';
 import 'package:capstone_app/utils/colors.dart';
-import 'package:capstone_app/screens/login_screen.dart';
+import '../../../login_screen.dart';
 
 class AdminProfileScreen extends StatefulWidget {
   const AdminProfileScreen({super.key});

@@ -127,7 +127,7 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
         const SnackBar(
           content: Text('Event created successfully!', style: TextStyle(color: AppColors.white),),
           backgroundColor: AppColors.primaryTeal,
-        ),
+          ),
       );
     } catch (e) {
       debugPrint('Create Event Error: $e');
@@ -142,7 +142,7 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Create Event or Promotion for your Business')),
+      appBar: AppBar(title: const Text('Create an Event')),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: AbsorbPointer(
@@ -163,7 +163,7 @@ class _EventCreationScreenState extends State<EventCreationScreen> {
                   onSaved: (val) => description = val!,
                 ),
                 TextFormField(
-                  decoration: const InputDecoration(labelText: 'Location'),
+                  decoration: const InputDecoration(labelText: 'Barangay/Location'),
                   validator: (val) => val!.isEmpty ? 'Enter location' : null,
                   onSaved: (val) => location = val!,
                 ),
