@@ -1,4 +1,4 @@
-import 'package:capstone_app/screens/admin/main_admin_screen.dart';
+import 'package:capstone_app/screens/admin/admin_main_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:capstone_app/screens/tourist/main_tourist_screen.dart';
 // import 'package:capstone_app/screens/admin/admin_registration_form.dart'; // ✅ this is correct

@@ -3,7 +3,7 @@
 // ===========================================
 
 import 'package:capstone_app/screens/business/business_home/business_home_screen.dart';
-import 'package:capstone_app/screens/business/promotions/business_events_screen.dart';
+import 'package:capstone_app/screens/business/events/business_events_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:capstone_app/utils/colors.dart';
 import 'package:capstone_app/screens/business/profile/businessowner_profile_screen.dart';

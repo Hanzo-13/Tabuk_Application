@@ -1,6 +1,6 @@
 // ignore_for_file: use_build_context_synchronously
 
-import 'package:capstone_app/screens/business/promotions/edit_event_screen.dart';
+import 'package:capstone_app/screens/business/events/edit_event_screen.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import '../models/event_model.dart';
@@ -29,6 +29,11 @@ class EventDetailModal extends StatelessWidget {
   bool get isProvincialAdmin {
     return userRole == 'Administrator' &&
       adminType == 'Provincial Administrator';
+  }
+
+  bool get isMunicipalAdmin {
+    return userRole == 'Administrator' &&
+      adminType == 'Municipal Administrator';
   }
 
   bool get shouldShowCreatorInfo {
@@ -166,6 +171,8 @@ class EventDetailModal extends StatelessWidget {
                     const SizedBox(height: 24),
 
                     if (isCreator || isProvincialAdmin) _buildActionButtons(context, event),
+
+                    
 
                   ],
                 ),

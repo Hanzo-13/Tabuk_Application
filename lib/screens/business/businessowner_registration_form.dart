@@ -1,3 +1,5 @@
+// ignore_for_file: no_leading_underscores_for_local_identifiers
+
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -24,6 +26,8 @@ class _BusinessOwnerRegistrationFormState
   final _passwordController = TextEditingController();
   final _contactController = TextEditingController();
   final _countryController = TextEditingController();
+  final _municipalityController = TextEditingController();
+  String _status = 'Active';
 
   String? _gender;
   DateTime? _dob;
@@ -67,6 +71,8 @@ class _BusinessOwnerRegistrationFormState
         'role': 'BusinessOwner',
         'form_completed': true,
         'app_email_verified': user.emailVerified,
+        'location': _municipalityController.text.trim(),
+        'status': _status,
       };
 
       if (!_isExisting) {
@@ -105,10 +111,12 @@ class _BusinessOwnerRegistrationFormState
 
     final data = doc.data()!;
     setState(() {
+      _status = data['status'] ?? 'Active';
       _nameController.text = data['name'] ?? '';
       _usernameController.text = data['username'] ?? '';
       _passwordController.text = data['password'] ?? '';
       _contactController.text = data['contact'] ?? '';
+      _municipalityController.text = data['location'] ?? '';
       _gender = data['gender'];
       _dob = data['dob'] != null ? DateTime.tryParse(data['dob']) : null;
       _countryController.text = data['country'] ?? '';
@@ -129,6 +137,31 @@ class _BusinessOwnerRegistrationFormState
 
   @override
   Widget build(BuildContext context) {
+    final List<String> _municipalities = [
+      'Malaybalay City',
+      'Valencia City',
+      'Maramag',
+      'Quezon',
+      'Don Carlos',
+      'Kitaotao',
+      'Dangcagan',
+      'Kadingilan',
+      'Pangantucan',
+      'Talakag',
+      'Lantapan',
+      'Baungon',
+      'Impasug-ong',
+      'Sumilao',
+      'Manolo Fortich',
+      'Libona',
+      'Cabanglasan',
+      'San Fernando',
+      'Malitbog',
+      'Kalilangan',
+      'Kibawe',
+      'Damulog',
+      'Cabanglasan',
+    ];
     return Scaffold(
       backgroundColor: AppColors.white,
       appBar: AppBar(
@@ -180,6 +213,40 @@ class _BusinessOwnerRegistrationFormState
                 hintText: 'Contact Number',
               ),
               const SizedBox(height: 12),
+              SizedBox(
+                width: 350, // Adjust width as needed
+                child: DropdownButtonFormField<String>(
+                  value: _municipalityController.text.isEmpty ? 'Select Municipality' : _municipalityController.text,
+                  decoration: InputDecoration(
+                    labelText: 'Municipality',
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  items: [
+                    const DropdownMenuItem<String>(
+                      value: 'Select Municipality',
+                      child: Text('Select Municipality',style: TextStyle(fontSize: 14, color: Colors.grey),
+                      ),
+                    ),
+                    ..._municipalities.map(
+                      (mun) => DropdownMenuItem<String>(
+                        value: mun,
+                        child: Text(mun, style: const TextStyle(fontSize: 14)),
+                      ),
+                    ),
+                  ],
+                  onChanged: (value) {
+                    if (value != null && value != 'Select Municipality') {
+                      setState(() {
+                        _municipalityController.text = value;});
+                    }
+                  },
+                  validator: (value) =>
+                    value == null || value == 'Select Municipality'
+                      ? 'Please select a municipality': null,
+                ),
+              ),
+              const SizedBox(height: 12),
               DropdownButtonFormField<String>(
                 value: _gender,
                 decoration: const InputDecoration(labelText: 'Gender'),
@@ -194,6 +261,21 @@ class _BusinessOwnerRegistrationFormState
                 onChanged: (val) => setState(() => _gender = val),
               ),
               const SizedBox(height: 12),
+              SizedBox(
+                width: MediaQuery.of(context).size.width * 0.9,
+                child: DropdownButtonFormField<String>(
+                  value: _status,
+                  decoration: InputDecoration(labelText: 'Status',
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
+                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8),),
+                  ),
+                  items: const [
+                    DropdownMenuItem(value: 'Active', child: Text('Active')),
+                    DropdownMenuItem(value: 'Not Active',child: Text('Not Active'),),
+                  ],
+                  onChanged:(value) => setState(() => _status = value ?? _status),)
+              ),
+              const SizedBox(height: 15),
               TextFormField(
                 readOnly: true,
                 decoration: const InputDecoration(labelText: 'Date of Birth'),

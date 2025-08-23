@@ -73,9 +73,7 @@ class _UniversalSearchBarState extends State<UniversalSearchBar> {
       ),
     );
   }
-<<<<<<< HEAD
-}
-=======
+
 
   @override
   void dispose() {
@@ -83,4 +81,3 @@ class _UniversalSearchBarState extends State<UniversalSearchBar> {
     super.dispose();
   }
 }
->>>>>>> drkxzz/main

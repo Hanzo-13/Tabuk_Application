@@ -16,7 +16,7 @@ import 'package:capstone_app/screens/tourist/profile/visited_destinations_screen
 import 'package:capstone_app/screens/tourist/profile/favorites_screen.dart';
 import 'package:capstone_app/screens/tourist/profile/reviews_screen.dart';
 import 'package:capstone_app/screens/tourist/profile/faq_screen.dart';
-import 'package:capstone_app/screens/tourist/preferences/tourist_registration_flow.dart';
+import 'package:capstone_app/screens/tourist/tourist_registration_flow.dart';
 
 class EditTouristProfileScreen extends StatefulWidget {
   const EditTouristProfileScreen({super.key});

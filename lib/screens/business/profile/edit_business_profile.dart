@@ -25,6 +25,7 @@ class _EditBusinessProfileScreenState extends State<EditBusinessProfileScreen> {
   String country = '';
   String email = '';
   String role = '';
+  String municipality = '';
 
   bool isLoading = true;
 
@@ -50,6 +51,7 @@ class _EditBusinessProfileScreenState extends State<EditBusinessProfileScreen> {
       gender = data['gender'] ?? '';
       country = data['country'] ?? '';
       role = data['role'] ?? '';
+      municipality = data['location'] ?? '';
       isLoading = false;
     });
   }
@@ -121,7 +123,7 @@ class _EditBusinessProfileScreenState extends State<EditBusinessProfileScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text("Edit Business Profile", style: TextStyle(color: Colors.white)),
-        backgroundColor: AppColors.primaryOrange,
+        backgroundColor: AppColors.primaryTeal,
         iconTheme: const IconThemeData(color: Colors.white),
       ),
       body: isLoading
@@ -156,12 +158,21 @@ class _EditBusinessProfileScreenState extends State<EditBusinessProfileScreen> {
                       ),
                     ),
                     const SizedBox(height: 16),
+                    TextFormField(
+                      initialValue: municipality,
+                      readOnly: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Municipality',
+                        border: UnderlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
                     _buildEditableField('Nationality', country, (val) => country = val),
                     const SizedBox(height: 24),
                     ElevatedButton(
                       onPressed: _saveChanges,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.primaryOrange,
+                        backgroundColor: AppColors.primaryTeal,
                         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                       ),
                       child: const Text('Save Changes', style: TextStyle(color: Colors.white)),

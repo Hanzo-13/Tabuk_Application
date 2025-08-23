@@ -95,4 +95,6 @@ class Event {
       'email': creatorEmail,
     };
   }
+
+  static fromFirestore(QueryDocumentSnapshot<Map<String, dynamic>> doc) {}
 }

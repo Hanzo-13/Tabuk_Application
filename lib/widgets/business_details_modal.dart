@@ -167,18 +167,11 @@ class _BusinessDetailsModalState extends State<BusinessDetailsModal> {
       }
     }
   }
-<<<<<<< HEAD
-  
-  @override
-  Widget build(BuildContext context) {
-    role.toLowerCase();
-=======
 
   Widget _buildRoleBasedButtons(BuildContext context) {
     final String creatorId = businessData['owner_uid'] ?? '';
     final bool isCreator = creatorId == currentUserId;
     final String normalizedRole = role.toLowerCase();
->>>>>>> drkxzz/main
 
     if (normalizedRole == 'tourist') {
       return Column(
