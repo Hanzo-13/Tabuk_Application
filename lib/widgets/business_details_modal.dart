@@ -171,6 +171,7 @@ class _BusinessDetailsModalState extends State<BusinessDetailsModal> {
   Widget _buildRoleBasedButtons(BuildContext context) {
     final String creatorId = businessData['owner_uid'] ?? '';
     final bool isCreator = creatorId == currentUserId;
+    final String adminType = _creatorData?['admin_type'] ?? businessData['admin_type'] ?? '';
     final String normalizedRole = role.toLowerCase();
 
     if (normalizedRole == 'tourist') {
@@ -297,7 +298,7 @@ class _BusinessDetailsModalState extends State<BusinessDetailsModal> {
       );
     }
 
-    if (normalizedRole == 'business owner' && isCreator) {
+    if (normalizedRole == 'businessowner' && isCreator) {
       return Row(
         mainAxisAlignment: MainAxisAlignment.spaceEvenly,
         children: [
@@ -320,25 +321,78 @@ class _BusinessDetailsModalState extends State<BusinessDetailsModal> {
     }
 
     if (normalizedRole == 'administrator' && isCreator) {
-      return Row(
-        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+
+      final String creatorRole = _creatorData?['role'] ?? 'Unknown';
+      final String creatorName = _creatorData?['name'] ?? 'Unknown';
+      final String creatorEmail = _creatorData?['email'] ?? 'Unknown';
+      final String creatorContact = businessData['contact_info'] ?? 'Unknown';
+      final String creatorMunicipality = businessData['municipality'] ?? 'Unknown';
+      final String adminType = _creatorData?['admin_type'] ?? businessData['admin_type'] ?? '';
+
+      // The Column is now the single widget being returned, containing everything inside.
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Expanded(
-            child: ElevatedButton.icon(
-              onPressed: () {},
-              icon: const Icon(Icons.edit),
-              label: const Text('Edit'),
+          // --- Creator Details Section ---
+          const Text(
+            'Created By:',
+            style: TextStyle(fontWeight: FontWeight.bold),
+          ),
+          Text(
+            'Role: $creatorRole',
+            style: TextStyle(
+              color: AppColors.primaryTeal,
+              fontStyle: FontStyle.italic,
+              fontSize: 15,
             ),
           ),
-          Expanded(
-            child: OutlinedButton.icon(
-              onPressed: () => _confirmArchive(context),
-              icon: const Icon(Icons.archive, color: Colors.red),
-              label: const Text('Archive', style: TextStyle(color: Colors.red)),
+          if (creatorRole.toLowerCase() == 'administrator' && adminType.isNotEmpty)
+            Text(
+              'Admin Type: $adminType',
+              style: const TextStyle(
+                color: Colors.deepPurple,
+                fontStyle: FontStyle.italic,
+                fontSize: 15,
+              ),
             ),
+          Text('Name: $creatorName'),
+          Text('Email: $creatorEmail'),
+          Text('Contact: $creatorContact'),
+          Text('Municipality: $creatorMunicipality'),
+          const SizedBox(height: 16), // Added more space for better UI separation
+
+          // --- Action Buttons Section (Moved Inside the Column) ---
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    // TODO: Add your edit logic here
+                  },
+                  icon: const Icon(Icons.edit, size: 18),
+                  label: const Text('Edit'),
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8), // Added space between buttons
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => _confirmArchive(context),
+                  icon: const Icon(Icons.archive, color: Colors.red, size: 18),
+                  label: const Text('Archive', style: TextStyle(color: Colors.red)),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Colors.red),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
-      );
+        ], // End of Column's children
+      ); // End of return statement
     }
 
     if (normalizedRole == 'administrator' && !isCreator) {
@@ -347,6 +401,7 @@ class _BusinessDetailsModalState extends State<BusinessDetailsModal> {
       final String creatorEmail = _creatorData?['email'] ?? 'Unknown';
       final String creatorContact = businessData['contact_info'] ?? 'Unknown';
       final String creatorMunicipality = businessData['municipality'] ?? 'Unknown';
+      final String adminType = _creatorData?['admin_type'] ?? 'Municipal Administrator';
 
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -363,6 +418,15 @@ class _BusinessDetailsModalState extends State<BusinessDetailsModal> {
               fontSize: 15,
             ),
           ),
+          if (creatorRole.toLowerCase() == 'administrator' && adminType.isNotEmpty)
+            Text(
+              'Admin Type: $adminType',
+              style: const TextStyle(
+                color: Colors.deepPurple,
+                fontStyle: FontStyle.italic,
+                fontSize: 15,
+              ),
+            ),
           Text('Name: $creatorName'),
           Text('Email: $creatorEmail'),
           Text('Contact: $creatorContact'),
@@ -371,6 +435,82 @@ class _BusinessDetailsModalState extends State<BusinessDetailsModal> {
         ],
       );
     }
+
+    if (normalizedRole == 'administrator' && adminType.toLowerCase() == 'provincial administrator') {
+
+    final String creatorRole = _creatorData?['role'] ?? 'Unknown';
+    final String creatorName = _creatorData?['name'] ?? 'Unknown';
+    final String creatorEmail = _creatorData?['email'] ?? 'Unknown';
+    final String creatorContact = businessData['contact_info'] ?? 'Unknown';
+    final String creatorMunicipality = businessData['municipality'] ?? 'Unknown';
+    final String adminType = _creatorData?['admin_type'] ?? businessData['admin_type'] ?? 'Provincial Administrator';
+
+    // The Column is now the single widget being returned, containing everything inside.
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // --- Creator Details Section ---
+        const Text(
+          'Created By:',
+          style: TextStyle(fontWeight: FontWeight.bold),
+        ),
+        Text(
+          'Role: $creatorRole',
+          style: TextStyle(
+            color: AppColors.primaryTeal,
+            fontStyle: FontStyle.italic,
+            fontSize: 15,
+          ),
+        ),
+        
+        if (creatorRole.toLowerCase() == 'administrator' && adminType.isNotEmpty)
+          Text(
+            'Admin Type: $adminType',
+            style: const TextStyle(
+              color: Colors.deepPurple,
+              fontStyle: FontStyle.italic,
+              fontSize: 15,
+            ),
+          ),
+        Text('Name: $creatorName'),
+        Text('Email: $creatorEmail'),
+        Text('Contact: $creatorContact'),
+        Text('Municipality: $creatorMunicipality'),
+        const SizedBox(height: 16), // Added more space for better UI separation
+
+        // --- Action Buttons Section (Moved Inside the Column) ---
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: [
+            Expanded(
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  // TODO: Add your edit logic here
+                },
+                icon: const Icon(Icons.edit, size: 18),
+                label: const Text('Edit'),
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8), // Added space between buttons
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: () => _confirmArchive(context),
+                icon: const Icon(Icons.archive, color: Colors.red, size: 18),
+                label: const Text('Archive', style: TextStyle(color: Colors.red)),
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: Colors.red),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ], // End of Column's children
+    ); // End of return statement
+  }
 
     return const SizedBox();
   }

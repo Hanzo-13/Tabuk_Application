@@ -2,6 +2,8 @@
 // lib/screens/admin/admin_main_screen.dart
 // ===========================================
 
+// ignore_for_file: non_constant_identifier_names, avoid_types_as_parameter_names
+
 import 'package:capstone_app/screens/admin/admin_approval_screen.dart';
 import 'package:capstone_app/screens/admin/municipal_admin/events/event_screen.dart';
 import 'package:capstone_app/screens/admin/municipal_admin/home/home_screen.dart';
@@ -19,7 +21,6 @@ import 'package:capstone_app/utils/colors.dart';
 import 'provincial_admin/home/home_screen.dart';
 import 'provincial_admin/hotspots/spot_screen.dart';
 import 'provincial_admin/events/event_screen.dart';
-import 'provincial_admin/notification/notification_screen.dart';
 import 'provincial_admin/profile/profile_screen.dart';
 import 'provincial_admin/users/users_screen.dart';
 
@@ -74,7 +75,6 @@ class _MainAdminScreenState extends State<MainAdminScreen> {
         _NavItem("Destinations", Icons.pin_drop, const SpotsScreen()),
         _NavItem("Events", Icons.event, const EventCalendarProvScreen()),
         _NavItem("Users", Icons.group, const ProvUsersScreen()),
-        _NavItem("Notifications", Icons.notifications, const NotificationsScreen()),
         _NavItem("Profile", Icons.person, const AdminProfileScreen()),
       ];
     } else if (_adminType == "municipal administrator") {

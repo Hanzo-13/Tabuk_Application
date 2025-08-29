@@ -1,106 +1,194 @@
-import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:capstone_app/models/notification_model.dart';
-import 'package:capstone_app/widgets/notification_card.dart';
-import 'package:badges/badges.dart' as badges;
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
-class NotificationsScreen extends StatefulWidget {
-  const NotificationsScreen({Key? key}) : super(key: key);
+class ProvNotificationScreen extends StatefulWidget {
+  final List<Map<String, dynamic>> notifications;
+  final Function(Map<String, dynamic>) onNotificationTap;
+
+  const ProvNotificationScreen({
+    super.key,
+    required this.notifications,
+    required this.onNotificationTap,
+  });
 
   @override
-  State<NotificationsScreen> createState() => _NotificationsScreenState();
+  State<ProvNotificationScreen> createState() => _ProvNotificationScreenState();
 }
 
-class _NotificationsScreenState extends State<NotificationsScreen>
-    with SingleTickerProviderStateMixin {
-  late TabController _tabController;
-  final List<String> _tabs = ["Events", "Reviews", "New Users", "Businesses", "General"];
+class _ProvNotificationScreenState extends State<ProvNotificationScreen> {
+  // A helper map to define the icon and color for each notification type
+  final Map<String, Map<String, dynamic>> _notificationStyles = {
+    'users': {'icon': Icons.person_add_alt_1, 'color': Colors.blue},
+    'businesses': {'icon': Icons.business_center, 'color': Colors.green},
+    'reviews': {'icon': Icons.rate_review, 'color': Colors.orange},
+    'events': {'icon': Icons.event, 'color': Colors.purple},
+    'default': {'icon': Icons.notifications, 'color': Colors.grey},
+  };
 
-  @override
-  void initState() {
-    super.initState();
-    _tabController = TabController(length: _tabs.length, vsync: this);
-  }
-
-  Stream<List<NotificationItem>> _getNotifications(String type) {
-    return FirebaseFirestore.instance
+  // When a notification is tapped, navigate to the appropriate detail screen
+  void _handleNotificationTap(NotificationItem notification) {
+    // 1. Mark the notification as read in Firestore for better UX
+    FirebaseFirestore.instance
         .collection('notifications')
-        .where("role", isEqualTo: "admin")
-        .where("type", isEqualTo: type.toLowerCase().replaceAll(" ", ""))
-        .orderBy("timestamp", descending: true)
-        .snapshots()
-        .map((snapshot) =>
-            snapshot.docs.map((doc) => NotificationItem.fromMap(doc.data(), doc.id)).toList());
-  }
+        .doc(notification.id)
+        .update({'read': true});
 
-  Stream<int> _getUnreadCount(String type) {
-    return FirebaseFirestore.instance
-        .collection('notifications')
-        .where("role", isEqualTo: "admin")
-        .where("type", isEqualTo: type.toLowerCase().replaceAll(" ", ""))
-        .where("read", isEqualTo: false)
-        .snapshots()
-        .map((snapshot) => snapshot.size);
+    // 2. Navigate based on the notification type
+    // if (notification.relatedDocId == null) {
+    //   ScaffoldMessenger.of(context).showSnackBar(
+    //     const SnackBar(content: Text('This notification has no associated action.')),
+    //   );
+    //   return;
+    // }
+
+    // switch (notification.type) {
+    //   case 'users':
+    //     print('Navigating to user details for ID: ${notification.relatedDocId}');
+    //     // TODO: Replace with your actual user detail/approval screen
+    //     Navigator.push(
+    //       context,
+    //       MaterialPageRoute(
+    //         builder: (context) => AdminUserApprovalScreen(userId: notification.relatedDocId!),
+    //       ),
+    //     );
+    //     break;
+    //   case 'businesses':
+    //     print('Navigating to business details for ID: ${notification.relatedDocId}');
+    //     // TODO: Replace with your actual business detail/approval screen
+    //     // Navigator.push(context, MaterialPageRoute(builder: (context) => AdminBusinessApprovalScreen(businessId: notification.relatedDocId!)));
+    //     break;
+    //   // Add cases for 'reviews' and 'events' if they have detail pages
+    //   default:
+    //     print('No navigation defined for type: ${notification.type}');
+    //     break;
+    // }
   }
 
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: _tabs.length,
+      length: 4,
       child: Scaffold(
         appBar: AppBar(
-          title: const Text("Administrator Notifications"),
-          bottom: TabBar(
-            controller: _tabController,
-            isScrollable: true,
-            tabs: _tabs.map((tab) {
-              return StreamBuilder<int>(
-                stream: _getUnreadCount(tab),
-                builder: (context, snapshot) {
-                  final count = snapshot.data ?? 0;
-                  return badges.Badge(
-                    showBadge: count > 0,
-                    badgeContent: Text(count.toString(),
-                        style: const TextStyle(color: Colors.white, fontSize: 10)),
-                    child: Text(tab),
-                  );
-                },
-              );
-            }).toList(),
+          title: const Text('Admin Notifications'),
+          bottom: const TabBar(
+            tabs: [
+              Tab(text: 'New Users'),
+              Tab(text: 'Businesses'),
+              Tab(text: 'Reviews'),
+              Tab(text: 'Events'),
+            ],
           ),
         ),
         body: TabBarView(
-          controller: _tabController,
-          children: _tabs.map((tab) {
-            return StreamBuilder<List<NotificationItem>>(
-              stream: _getNotifications(tab),
-              builder: (context, snapshot) {
-                if (!snapshot.hasData) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                final notifications = snapshot.data!;
-                if (notifications.isEmpty) {
-                  return const Center(child: Text("No notifications found"));
-                }
-                return ListView.builder(
-                  itemCount: notifications.length,
-                  itemBuilder: (context, index) {
-                    return NotificationCard(item: notifications[index]);
-                  },
-                );
-              },
-            );
-          }).toList(),
-        ),
-        bottomNavigationBar: BottomNavigationBar(
-          currentIndex: 3, // Notifications tab active
-          items: const [
-            BottomNavigationBarItem(icon: Icon(Icons.home), label: "Home"),
-            BottomNavigationBarItem(icon: Icon(Icons.location_on), label: "Map"),
-            BottomNavigationBarItem(icon: Icon(Icons.event), label: "Events"),
-            BottomNavigationBarItem(icon: Icon(Icons.notifications), label: "Notifications"),
-            BottomNavigationBarItem(icon: Icon(Icons.person), label: "Profile"),
+          children: [
+            _buildNotificationList(type: 'users'),
+            _buildNotificationList(type: 'businesses'),
+            _buildNotificationList(type: 'reviews'),
+            _buildNotificationList(type: 'events'),
           ],
+        ),
+      ),
+    );
+  }
+
+  // A reusable widget to build a list for a specific notification type
+  Widget _buildNotificationList({required String type}) {
+    return StreamBuilder<QuerySnapshot>(
+      stream: FirebaseFirestore.instance
+          .collection('notifications')
+          .where('type', isEqualTo: type)
+          .orderBy('timestamp', descending: true)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError) {
+          return const Center(child: Text('Error loading notifications.'));
+        }
+        if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Icon(Icons.notifications_off_outlined, size: 48, color: Colors.grey[400]),
+                const SizedBox(height: 8),
+                Text('No new notifications for $type', style: TextStyle(color: Colors.grey[600])),
+              ],
+            ),
+          );
+        }
+
+        final notifications = snapshot.data!.docs.map((doc) {
+          return NotificationItem.fromMap(doc.data() as Map<String, dynamic>, doc.id);
+        }).toList();
+
+        return ListView.separated(
+          padding: const EdgeInsets.all(16),
+          itemCount: notifications.length,
+          separatorBuilder: (context, index) => const SizedBox(height: 12),
+          itemBuilder: (context, index) {
+            return _buildNotificationItem(notifications[index]);
+          },
+        );
+      },
+    );
+  }
+  
+  // This widget builds a single notification item, styled like your recent activity list
+  Widget _buildNotificationItem(NotificationItem notification) {
+    final style = _notificationStyles[notification.type] ?? _notificationStyles['default']!;
+    final Color iconColor = style['color'];
+    final IconData iconData = style['icon'];
+
+    return Card(
+      elevation: 2,
+      shadowColor: Colors.black.withOpacity(0.1),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () => _handleNotificationTap(notification),
+        child: ListTile(
+          contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+          leading: Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: iconColor.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(iconData, color: iconColor),
+          ),
+          title: Text(
+            notification.title,
+            style: TextStyle(
+              fontWeight: notification.read ? FontWeight.normal : FontWeight.bold,
+            ),
+          ),
+          subtitle: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const SizedBox(height: 2),
+              Text(notification.message),
+              const SizedBox(height: 4),
+              Text(
+                DateFormat('MMM dd, hh:mm a').format(notification.timestamp),
+                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+              ),
+            ],
+          ),
+          trailing: !notification.read
+              ? Container(
+                  width: 10,
+                  height: 10,
+                  decoration: const BoxDecoration(
+                    color: Colors.blueAccent,
+                    shape: BoxShape.circle,
+                  ),
+                )
+              : null,
         ),
       ),
     );

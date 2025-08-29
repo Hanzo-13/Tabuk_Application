@@ -1,10 +1,11 @@
+import 'package:capstone_app/screens/admin/provincial_admin/map/map_screen.dart';
+import 'package:capstone_app/screens/admin/provincial_admin/notification/notification_screen.dart';
 import 'package:capstone_app/screens/admin/provincial_admin/users/users_screen.dart';
 import 'package:capstone_app/utils/colors.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-
 
 class ProvHomeScreen extends StatefulWidget {
   const ProvHomeScreen({super.key});
@@ -33,6 +34,7 @@ class _ProvHomeScreenState extends State<ProvHomeScreen>
   int activeTourists = 0;
   int businessOwners = 0;
   int pendingApprovals = 0;
+  int admins = 0;
 
   // Recent activities
   List<Map<String, dynamic>> recentActivities = [];
@@ -96,11 +98,11 @@ class _ProvHomeScreenState extends State<ProvHomeScreen>
       totalSpots = destinationsSnapshot.docs.length;
       activeSpots =
           destinationsSnapshot.docs
-              .where((doc) => (doc.data())['status'] == 'Active')
+              .where((doc) => (doc.data())['status'] == 'Open')
               .length;
       pendingSpots =
           destinationsSnapshot.docs
-              .where((doc) => (doc.data())['status'] == 'Pending')
+              .where((doc) => (doc.data())['status'] == 'Temporary Close' && (doc.data())['status'] == 'Permanently Close')
               .length;
 
       // Events
@@ -135,6 +137,10 @@ class _ProvHomeScreenState extends State<ProvHomeScreen>
       businessOwners =
           usersSnapshot.docs
               .where((doc) => (doc.data())['role'] == 'BusinessOwner')
+              .length;
+      admins =
+          usersSnapshot.docs
+              .where((doc) => (doc.data())['role'] == 'Administrator' && (doc.data())['admin_type'] == 'Provincial Administrator' && (doc.data())['admin_type'] == 'Municipal Administrator')
               .length;
 
       // Pending approvals (spots + events with pending status)
@@ -274,7 +280,7 @@ class _ProvHomeScreenState extends State<ProvHomeScreen>
               _buildRecentActivities(),
 
               // System Status
-              _buildSystemStatus(),
+              // _buildSystemStatus(),
 
               const SizedBox(height: 20),
             ],
@@ -381,7 +387,11 @@ class _ProvHomeScreenState extends State<ProvHomeScreen>
                 // Notification Bell
                 IconButton(
                   onPressed: () {
-                    // TODO: Navigate to notifications
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (context) => ProvNotificationScreen(notifications: const [], onNotificationTap: (Map<String, dynamic> notification) { },),
+                      ),
+                    );
                   },
                   icon: Stack(
                     children: [
@@ -478,7 +488,7 @@ class _ProvHomeScreenState extends State<ProvHomeScreen>
                   child: _buildMainStatCard(
                     'Total Users',
                     totalUsers,
-                    '$activeTourists Tourists',
+                    '$activeTourists Tourists', // Provide an empty subtitle or a suitable string
                     Icons.people,
                     Colors.blue,
                   ),
@@ -566,8 +576,8 @@ class _ProvHomeScreenState extends State<ProvHomeScreen>
         'label': 'Map View',
         'color': Colors.teal,
         'onTap': () {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Map view coming soon!')),
+          Navigator.of(context).push(
+            MaterialPageRoute(builder: (context) => const ProvMapScreen()),
           );
         },
       },
@@ -731,133 +741,128 @@ class _ProvHomeScreenState extends State<ProvHomeScreen>
                 ),
               ],
             ),
-            child:
-                recentActivities.isEmpty
-                    ? Padding(
-                      padding: const EdgeInsets.all(40),
-                      child: Center(
-                        child: Column(
-                          children: [
-                            Icon(
-                              Icons.history,
-                              size: 48,
-                              color: Colors.grey[400],
+            child: recentActivities.isEmpty
+                ? Padding(
+                    padding: const EdgeInsets.all(40),
+                    child: Center(
+                      child: Column(
+                        children: [
+                          Icon(
+                            Icons.history,
+                            size: 48,
+                            color: Colors.grey[400],
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'No recent activities',
+                            style: TextStyle(
+                              color: Colors.grey[600],
+                              fontSize: 16,
                             ),
-                            const SizedBox(height: 8),
+                          ),
+                        ],
+                      ),
+                    ),
+                  )
+                : ListView.separated(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    itemCount: recentActivities.length,
+                    separatorBuilder: (context, index) =>
+                        Divider(height: 1, color: Colors.grey[200]),
+                    itemBuilder: (context, index) {
+                      final activity = recentActivities[index];
+                      return ListTile(
+                        leading: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: (activity['color'] as Color).withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Icon(
+                            activity['icon'] as IconData,
+                            color: activity['color'] as Color,
+                            size: 20,
+                          ),
+                        ),
+                        title: Text(
+                          activity['title'] as String,
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(activity['subtitle'] as String),
                             Text(
-                              'No recent activities',
+                              DateFormat('MMM dd, hh:mm a')
+                                  .format(activity['time'] as DateTime),
                               style: TextStyle(
-                                color: Colors.grey[600],
-                                fontSize: 16,
+                                fontSize: 12,
+                                color: Colors.grey[500],
                               ),
                             ),
                           ],
                         ),
-                      ),
-                    )
-                    : ListView.separated(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      itemCount: recentActivities.length,
-                      separatorBuilder:
-                          (context, index) =>
-                              Divider(height: 1, color: Colors.grey[200]),
-                      itemBuilder: (context, index) {
-                        final activity = recentActivities[index];
-                        return ListTile(
-                          leading: Container(
-                            padding: const EdgeInsets.all(8),
-                            decoration: BoxDecoration(
-                              color: (activity['color'] as Color).withOpacity(
-                                0.1,
-                              ),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Icon(
-                              activity['icon'] as IconData,
-                              color: activity['color'] as Color,
-                              size: 20,
-                            ),
-                          ),
-                          title: Text(
-                            activity['title'] as String,
-                            style: const TextStyle(fontWeight: FontWeight.w600),
-                          ),
-                          subtitle: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(activity['subtitle'] as String),
-                              Text(
-                                DateFormat(
-                                  'MMM dd, hh:mm a',
-                                ).format(activity['time'] as DateTime),
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: Colors.grey[500],
-                                ),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
+                      );
+                    },
+                  ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildSystemStatus() {
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'System Status',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              _buildStatusIndicator('Database', true),
-              const SizedBox(width: 20),
-              _buildStatusIndicator('Storage', true),
-              const SizedBox(width: 20),
-              _buildStatusIndicator('Authentication', true),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
+//   Widget _buildSystemStatus() {
+//     return Container(
+//       margin: const EdgeInsets.symmetric(horizontal: 16),
+//       padding: const EdgeInsets.all(20),
+//       decoration: BoxDecoration(
+//         color: Colors.white,
+//         borderRadius: BorderRadius.circular(16),
+//         boxShadow: [
+//           BoxShadow(
+//             color: Colors.black.withOpacity(0.05),
+//             blurRadius: 10,
+//             offset: const Offset(0, 2),
+//           ),
+//         ],
+//       ),
+//       child: Column(
+//         crossAxisAlignment: CrossAxisAlignment.start,
+//         children: [
+//           const Text(
+//             'System Status',
+//             style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+//           ),
+//           const SizedBox(height: 16),
+//           Row(
+//             children: [
+//               _buildStatusIndicator('Database', true),
+//               const SizedBox(width: 20),
+//               _buildStatusIndicator('Storage', true),
+//               const SizedBox(width: 20),
+//               _buildStatusIndicator('Authentication', true),
+//             ],
+//           ),
+//         ],
+//       ),
+//     );
+//   }
 
-  Widget _buildStatusIndicator(String service, bool isOnline) {
-    return Row(
-      children: [
-        Container(
-          width: 8,
-          height: 8,
-          decoration: BoxDecoration(
-            color: isOnline ? Colors.green : Colors.red,
-            shape: BoxShape.circle,
-          ),
-        ),
-        const SizedBox(width: 6),
-        Text(service, style: const TextStyle(fontSize: 14)),
-      ],
-    );
-  }
+//   Widget _buildStatusIndicator(String service, bool isOnline) {
+//     return Row(
+//       children: [
+//         Container(
+//           width: 8,
+//           height: 8,
+//           decoration: BoxDecoration(
+//             color: isOnline ? Colors.green : Colors.red,
+//             shape: BoxShape.circle,
+//           ),
+//         ),
+//         const SizedBox(width: 6),
+//         Text(service, style: const TextStyle(fontSize: 14)),
+//       ],
+//     );
+//   }
 }

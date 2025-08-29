@@ -1,7 +1,8 @@
 // ignore_for_file: prefer_final_fields
 
+import 'package:capstone_app/screens/admin/municipal_admin/hotspots/media_location_form.dart';
 import 'package:capstone_app/screens/admin/provincial_admin/hotspots/spot_screen.dart';
-import 'package:capstone_app/screens/admin/provincial_admin/hotspots/media_location_form.dart';
+
 import 'package:capstone_app/utils/colors.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -34,6 +35,7 @@ class _MuniSpotRegistrationScreenState extends State<MuniSpotRegistrationScreen>
   final _addressController = TextEditingController();
   final _distanceFromHighwayController = TextEditingController();
   final _suggestedItemsController = TextEditingController();
+  
   String _status = 'Open';
   String? _category;
   String? _type;

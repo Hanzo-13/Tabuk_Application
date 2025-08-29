@@ -575,6 +575,7 @@ class _SpotsScreenState extends State<SpotsScreen> {
 
   /// Show quick actions modal
   void _showQuickActions(Map<String, dynamic> data, String docId) {
+    final String status = (data['status'] ?? 'Pending').toString();
     showModalBottomSheet(
       context: context,
       builder: (context) {
@@ -613,22 +614,38 @@ class _SpotsScreenState extends State<SpotsScreen> {
                   );
                 },
               ),
-              ListTile(
-                leading: Icon(
-                  data['status'] == 'Active'
-                      ? Icons.pause_circle
-                      : Icons.play_circle,
-                  color:
-                      data['status'] == 'Active' ? Colors.orange : Colors.green,
+              // Status toggle condition
+              if (status == 'Active')
+                ListTile(
+                  leading: const Icon(Icons.pause_circle, color: Colors.orange),
+                  title: const Text('Temporarily Close'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _toggleDestinationStatus(docId, status);
+                  },
+                )
+              else if (status == 'Inactive')
+                ListTile(
+                  leading: const Icon(Icons.play_circle, color: Colors.green),
+                  title: const Text('Reopen Destination'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _toggleDestinationStatus(docId, status);
+                  },
+                )
+              else if (status == 'Suspended')
+                ListTile(
+                  leading: const Icon(Icons.block, color: Colors.red),
+                  title: const Text('Permanently Closed'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Destination is permanently closed.'),
+                      ),
+                    );
+                  },
                 ),
-                title: Text(
-                  data['status'] == 'Active' ? 'Deactivate' : 'Activate',
-                ),
-                onTap: () {
-                  Navigator.pop(context);
-                  _toggleDestinationStatus(docId, data['status']);
-                },
-              ),
               ListTile(
                 leading: const Icon(Icons.delete, color: Colors.red),
                 title: const Text('Delete Destination'),
@@ -747,7 +764,7 @@ class _SpotsScreenState extends State<SpotsScreen> {
         backgroundColor: AppColors.primaryTeal,
         foregroundColor: Colors.white,
         title: const Text(
-          'Tourist Destinations',
+          'Provincial Destinations Listing',
           style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
         actions: [

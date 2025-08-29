@@ -326,18 +326,18 @@ class _MunicipalHomeScreenState extends State<MunicipalHomeScreen> with TickerPr
                       color: color.withOpacity(0.1),
                       borderRadius: BorderRadius.circular(16),
                     ),
-                    child: Icon(icon, size: 32, color: color),
+                    child: Icon(icon, size: 20, color: color),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 8),
                   Text(
                     count.toString(),
                     style: TextStyle(
-                      fontSize: 28,
+                      fontSize: 20,
                       fontWeight: FontWeight.bold,
                       color: color,
                     ),
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 4),
                   Text(
                     title,
                     textAlign: TextAlign.center,

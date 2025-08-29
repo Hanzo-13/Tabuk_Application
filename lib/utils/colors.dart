@@ -19,7 +19,7 @@ class AppColors {
   static const Color backgroundColor = Color(0xFFF5F5DC);
   static const Color textDark = Color(0xFF333333);
   static const Color textLight = Color(0xFF666666);
-  static const Color grey = Color.fromARGB(255, 12, 1, 1);
+  static const Color grey = Color.fromARGB(255, 89, 88, 88);
   static const Color white = Color(0xFFFFFFFF);
   static const Color googleBlue = Color(0xFF4285F4);
   static const Color facebookBlue = Color(0xFF1877F2);
@@ -29,6 +29,9 @@ class AppColors {
   static const Color buttonText = Colors.black;
   static const Color black = Colors.black;
   static const Color green = Colors.green;
+  static const Color darkBlue = Color.fromARGB(255, 2, 115, 160);
+  static const Color darkTeal = Color.fromARGB(255, 19, 110, 106);
+  static const Color lightTeal = Color.fromARGB(255, 20, 197, 188);
 
   // Add missing color and property getters for compatibility
   static const Color errorRed = Color(0xFFD32F2F);
@@ -56,5 +59,12 @@ class AppColors {
     end: Alignment.bottomCenter,
     colors: [gradientStart, gradientEnd],
     stops: [0.0, 1.0],
+  );
+
+  static const LinearGradient tealbackground = LinearGradient(
+    begin: Alignment.topCenter,
+    end: Alignment.bottomCenter,
+    colors: [darkBlue, darkTeal, lightTeal],
+    stops: [0.0, 0.5, 1.0],
   );
 }

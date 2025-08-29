@@ -72,8 +72,8 @@ class _ProvUsersScreenState extends State<ProvUsersScreen>
       final location = (user['location'] ?? '').toString().toLowerCase();
       
       return name.contains(_searchQuery.toLowerCase()) ||
-             email.contains(_searchQuery.toLowerCase()) ||
-             location.contains(_searchQuery.toLowerCase());
+            email.contains(_searchQuery.toLowerCase()) ||
+            location.contains(_searchQuery.toLowerCase());
     }).toList();
   }
 
@@ -608,17 +608,17 @@ class _ProvUsersScreenState extends State<ProvUsersScreen>
                   );
                 },
               ),
-              ListTile(
-                leading: const Icon(Icons.message, color: Colors.blue),
-                title: const Text("Send Message"),
-                onTap: () {
-                  Navigator.pop(context);
-                  // TODO: Implement messaging
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text("Messaging feature coming soon!")),
-                  );
-                },
-              ),
+              // ListTile(
+              //   leading: const Icon(Icons.message, color: Colors.blue),
+              //   title: const Text("Send Message"),
+              //   onTap: () {
+              //     Navigator.pop(context);
+              //     // TODO: Implement messaging
+              //     ScaffoldMessenger.of(context).showSnackBar(
+              //       const SnackBar(content: Text("Messaging feature coming soon!")),
+              //     );
+              //   },
+              // ),
             ],
           ),
           actions: [
@@ -641,14 +641,14 @@ class _ProvUsersScreenState extends State<ProvUsersScreen>
         backgroundColor: AppColors.primaryTeal,
         foregroundColor: Colors.white,
         title: const Text(
-          "User Management",
+          "Provincial User Management",
           style: TextStyle(
             color: Colors.white,
             fontWeight: FontWeight.bold,
           ),
         ),
         bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(50),
+          preferredSize: const Size.fromHeight(70),
           child: Container(
             color: Colors.white,
             child: TabBar(
@@ -660,22 +660,22 @@ class _ProvUsersScreenState extends State<ProvUsersScreen>
                 fontWeight: FontWeight.bold,
               ),
               indicatorColor: AppColors.primaryTeal,
-              indicatorWeight: 3,
+              indicatorWeight: 2,
               tabs: const [
                 Tab(
-                  icon: Icon(Icons.explore, size: 20),
+                  icon: Icon(Icons.explore, size: 15),
                   text: "Tourists",
                 ),
                 Tab(
-                  icon: Icon(Icons.business, size: 20),
+                  icon: Icon(Icons.business, size: 15),
                   text: "Business Owners",
                 ),
                 Tab(
-                  icon: Icon(Icons.location_city, size: 20),
+                  icon: Icon(Icons.location_city, size: 15),
                   text: "Municipal Admin",
                 ),
                 Tab(
-                  icon: Icon(Icons.account_balance, size: 20),
+                  icon: Icon(Icons.account_balance, size: 15),
                   text: "Provincial Admin",
                 ),
               ],
