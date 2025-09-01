@@ -4,7 +4,7 @@ import 'package:capstone_app/models/notification_model.dart';
 class NotificationCard extends StatelessWidget {
   final NotificationItem item;
 
-  const NotificationCard({Key? key, required this.item}) : super(key: key);
+  const NotificationCard({super.key, required this.item});
 
   Color _getPriorityColor(String priority) {
     switch (priority.toLowerCase()) {

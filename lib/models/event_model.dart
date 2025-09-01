@@ -96,5 +96,5 @@ class Event {
     };
   }
 
-  static fromFirestore(QueryDocumentSnapshot<Map<String, dynamic>> doc) {}
+  static void fromFirestore(QueryDocumentSnapshot<Map<String, dynamic>> doc) {}
 }

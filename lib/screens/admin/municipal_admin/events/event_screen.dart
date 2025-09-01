@@ -1531,6 +1531,7 @@ String _getRoleShortName(String role) {
               Navigator.of(context).pop();
               await EventService.deleteEvent(event.eventId);
               _loadEvents();
+              // ignore: use_build_context_synchronously
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
                   content: Text("Event '${event.title}' deleted by admin override"),
@@ -2180,7 +2181,7 @@ String _getRoleShortName(String role) {
                 ],
               ),
             );
-          }).toList(),
+          }),
           
           const SizedBox(height: 24),
           

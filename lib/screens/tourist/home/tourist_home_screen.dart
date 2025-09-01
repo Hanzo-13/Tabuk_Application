@@ -1,8 +1,11 @@
 // ignore_for_file: unused_element, avoid_print, unused_local_variable, unnecessary_underscores
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../../../models/destination_model.dart';
 import '../../../services/content_recommender_service.dart';
 import '../../../services/location_service.dart';
@@ -26,9 +29,8 @@ class _TouristHomeScreenState extends State<TouristHomeScreen> with TickerProvid
 
   final _recommendations = <String, List<Hotspot>>{};
   String _greeting = '';
-  IconData _greetingIcon = Icons.wb_sunny;
-
-
+  String _userName = '';
+  bool _isUserLoggedIn = false;
 
   // Location service
   final LocationService _locationService = LocationService();
@@ -37,7 +39,7 @@ class _TouristHomeScreenState extends State<TouristHomeScreen> with TickerProvid
   void initState() {
     super.initState();
     _initializeAnimations();
-    _setGreeting();
+    _checkUserLoginStatus();
     _fetchLocationAndRecommendations();
   }
 
@@ -61,17 +63,114 @@ class _TouristHomeScreenState extends State<TouristHomeScreen> with TickerProvid
     _animationController.forward();
   }
 
+  Future<void> _checkUserLoginStatus() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        final userDoc = await FirebaseFirestore.instance
+            .collection('Users')
+            .doc(user.uid)
+            .get();
+        
+        if (userDoc.exists) {
+          final userData = userDoc.data()!;
+          setState(() {
+            _userName = userData['username'] ?? userData['display_name'] ?? 'Explorer';
+            _isUserLoggedIn = true;
+          });
+          // Set personalized greeting after user data is loaded
+          _setGreeting();
+        } else {
+          // User exists but no document, set generic greeting
+          setState(() {
+            _isUserLoggedIn = false;
+            _userName = '';
+          });
+          _setGreeting();
+        }
+      } else {
+        // No user logged in, set generic greeting
+        setState(() {
+          _isUserLoggedIn = false;
+          _userName = '';
+        });
+        _setGreeting();
+      }
+    } catch (e) {
+      if (kDebugMode) print('Error checking user status: $e');
+      // Set generic greeting on error
+      setState(() {
+        _isUserLoggedIn = false;
+        _userName = '';
+      });
+      _setGreeting();
+    }
+  }
+
   void _setGreeting() {
     final hour = DateTime.now().hour;
-    if (hour < 12) {
-      _greeting = 'Good Morning! ☀️';
-      _greetingIcon = Icons.wb_sunny;
-    } else if (hour < 18) {
-      _greeting = 'Good Afternoon! 🌤️';
-      _greetingIcon = Icons.wb_cloudy;
+    final random = math.Random();
+    
+    if (_isUserLoggedIn && _userName.isNotEmpty) {
+      // Personalized greetings for logged-in users
+      if (hour >= 18) {
+        final eveningGreetings = [
+          'Good Evening, $_userName 🌙',
+          'Evening, $_userName 🌆',
+          'Hello $_userName 🌙',
+          'Good Evening, $_userName 🌆',
+          'Hi $_userName 🌙',
+        ];
+        _greeting = eveningGreetings[random.nextInt(eveningGreetings.length)];
+      } else if (hour < 12) {
+        final morningGreetings = [
+          'Good Morning, $_userName ☀️',
+          'Rise and shine, $_userName 🌅',
+          'Morning, $_userName 🌞',
+          'Good Morning, $_userName 🚀',
+          'Hello $_userName 🌅',
+        ];
+        _greeting = morningGreetings[random.nextInt(morningGreetings.length)];
+      } else {
+        final afternoonGreetings = [
+          'Good Afternoon, $_userName 🌤️',
+          'Afternoon, $_userName 🌅',
+          'Hello $_userName 🌤️',
+          'Good Afternoon, $_userName?🚶‍♂️',
+          'Hi $_userName 🌤️',
+        ];
+        _greeting = afternoonGreetings[random.nextInt(afternoonGreetings.length)];
+      }
     } else {
-      _greeting = 'Good Evening! 🌙';
-      _greetingIcon = Icons.nightlight_round;
+      // Generic greetings for guests
+      if (hour >= 18) {
+        final eveningGreetings = [
+          'Good Evening 🌙',
+          'Evening 🌆',
+          'Hello 🌙',
+          'Good Evening 🌆',
+          'Hi 🌙',
+        ];
+        _greeting = eveningGreetings[random.nextInt(eveningGreetings.length)];
+      } else if (hour < 12) {
+        final morningGreetings = [
+          'Good Morning ☀️',
+          'Rise and shine 🌅',
+          'Morning 🌞',
+          'Good Morning 🚀',
+          'Hello 🌅',
+        ];
+        _greeting = morningGreetings[random.nextInt(morningGreetings.length)];
+      } else {
+        final afternoonGreetings = [
+          'Good Afternoon 🌤️',
+          'Afternoon 🌅',
+          'Hello 🌤️',
+          'Good Afternoon 🚶‍♂️',
+          'Hi 🌤️',
+        ];
+        _greeting = afternoonGreetings[random.nextInt(afternoonGreetings.length)];
+      }
     }
   }
 
@@ -111,8 +210,6 @@ class _TouristHomeScreenState extends State<TouristHomeScreen> with TickerProvid
     }
   }
 
-
-
   void _navigateToViewAll(String categoryKey, String title, Color accentColor) {
     final hotspots = _recommendations[categoryKey] ?? [];
     Navigator.push(
@@ -127,8 +224,6 @@ class _TouristHomeScreenState extends State<TouristHomeScreen> with TickerProvid
       ),
     );
   }
-
-
 
   @override
   void dispose() {
@@ -192,22 +287,20 @@ class _TouristHomeScreenState extends State<TouristHomeScreen> with TickerProvid
                             children: [
                               Row(
                                 children: [
-                                  Icon(
-                                    _greetingIcon,
-                                    color: Colors.white,
-                                    size: 28,
-                                  ),
+                                 
                                   const SizedBox(width: 12),
-                                  ConstrainedBox(
-                                    constraints: BoxConstraints(maxWidth: maxTextWidth),
-                                    child: Text(
-                                      _greeting,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
-                                        fontSize: 24,
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.white,
+                                  Expanded(
+                                    child: ConstrainedBox(
+                                      constraints: BoxConstraints(maxWidth: maxTextWidth),
+                                      child: Text(
+                                        _greeting,
+                                        maxLines: 2,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: const TextStyle(
+                                          fontSize: 24,
+                                          fontWeight: FontWeight.bold,
+                                          color: Colors.white,
+                                        ),
                                       ),
                                     ),
                                   ),
@@ -216,11 +309,13 @@ class _TouristHomeScreenState extends State<TouristHomeScreen> with TickerProvid
                               const SizedBox(height: 8),
                               ConstrainedBox(
                                 constraints: BoxConstraints(maxWidth: maxTextWidth + 48),
-                                child: const Text(
-                                  'Discover amazing places around you',
+                                child: Text(
+                                  _isUserLoggedIn 
+                                      ? 'Discover amazing places around you'
+                                      : 'Discover amazing places around you',
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
+                                  style: const TextStyle(
                                     fontSize: 16,
                                     color: Colors.white70,
                                   ),
@@ -241,8 +336,6 @@ class _TouristHomeScreenState extends State<TouristHomeScreen> with TickerProvid
     );
   }
 
-
-
   SliverToBoxAdapter _buildRecommendations() {
     if (_recommendations.isEmpty) {
       return const SliverToBoxAdapter(child: SizedBox.shrink());
@@ -250,8 +343,6 @@ class _TouristHomeScreenState extends State<TouristHomeScreen> with TickerProvid
 
     // Build sections based on available data
     final sections = <Widget>[];
-
-
 
     // Add recommendation sections
     final sectionConfigs = [

@@ -4,6 +4,8 @@ import 'dart:async';
 import 'package:capstone_app/widgets/common_search_bar.dart';
 import 'package:capstone_app/widgets/custom_map_marker.dart';
 import 'package:capstone_app/widgets/business_details_modal.dart';
+import 'package:capstone_app/widgets/navigation_overlay.dart';
+import 'package:capstone_app/widgets/navigation_map_controller.dart';
 import 'package:capstone_app/api/api.dart';
 import 'package:capstone_app/utils/constants.dart';
 import 'package:capstone_app/models/destination_model.dart';
@@ -12,7 +14,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:flutter_compass/flutter_compass.dart';
+// Removed unused compass import
 import 'dart:math' as math;
 import 'dart:convert';
 import 'dart:ui' as ui;
@@ -21,29 +23,33 @@ import 'package:flutter_polyline_points/flutter_polyline_points.dart';
 import 'package:http/http.dart' as http;
 import 'package:capstone_app/utils/colors.dart';
 import 'package:capstone_app/services/arrival_service.dart';
+import 'package:capstone_app/services/navigation_service.dart';
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
 
   @override
   State<MapScreen> createState() => _MapScreenState();
+  
 }
 
 class _MapScreenState extends State<MapScreen> {
   final Completer<GoogleMapController> _controller = Completer();
   GoogleMapController? _mapController;
   StreamSubscription<Position>? _positionStream;
+  Map<String, Map<String, dynamic>> _destinationData = {};
   LatLng? _currentLatLng;
-  double _heading = 0;
-  StreamSubscription<CompassEvent>? _headingStream;
-  double _smoothedHeading = 0;
-  final smoothingFactor = 0.1; // smaller = smoother
+  // Removed compass-related variables
 
   Set<Marker> _markers = {};
   Set<Marker> _allMarkers = {}; // ✅ Store all markers here
   bool _isLoading = false;
   final Set<Polyline> _polylines = {};
   bool _isLoadingDirections = false;
+  
+  // Navigation service
+  final NavigationService _navigationService = NavigationService();
+  bool _isNavigating = false;
 
   String _searchQuery = '';
   String _role = 'Tourist';
@@ -79,12 +85,22 @@ class _MapScreenState extends State<MapScreen> {
     super.initState();
     _initializeCategoryMarkerIcons().then((_) => _fetchDestinationPins());
     _startLocationStream(); // Start streaming location
-    _headingStream = FlutterCompass.events!.listen((CompassEvent event) {
-      if (event.heading != null) {
+    
+    // Listen to navigation state changes
+    _navigationService.navigationStateStream.listen((isNavigating) {
+      if (mounted) {
         setState(() {
-          _smoothedHeading =
-              _smoothedHeading +
-              smoothingFactor * (event.heading! - _smoothedHeading);
+          _isNavigating = isNavigating;
+        });
+      }
+    });
+
+    // Listen to navigation polylines
+    _navigationService.polylineStream.listen((polylines) {
+      if (mounted) {
+        setState(() {
+          _polylines.clear();
+          _polylines.addAll(polylines);
         });
       }
     });
@@ -93,7 +109,7 @@ class _MapScreenState extends State<MapScreen> {
   @override
   void dispose() {
     _positionStream?.cancel();
-    _headingStream?.cancel();
+    _navigationService.dispose();
     super.dispose();
   }
 
@@ -118,6 +134,14 @@ class _MapScreenState extends State<MapScreen> {
   void _checkProximityAndSaveArrival(Position userPosition) async {
     // Only check if markers are loaded
     if (_allMarkers.isEmpty) return;
+    
+    // Check location permissions first
+    final permission = await Geolocator.checkPermission();
+    if (permission == LocationPermission.denied || 
+        permission == LocationPermission.deniedForever) {
+      return; // Skip proximity checking if no permission
+    }
+    
     final userLatLng = LatLng(userPosition.latitude, userPosition.longitude);
     for (final marker in _allMarkers) {
       final markerLatLng = marker.position;
@@ -128,10 +152,19 @@ class _MapScreenState extends State<MapScreen> {
         // Check if already arrived today
         final hasArrived = await ArrivalService.hasArrivedToday(hotspotId);
         if (!hasArrived) {
+          // Get enhanced destination data
+          final destinationInfo = _destinationData[hotspotId];
           await ArrivalService.saveArrival(
             hotspotId: hotspotId,
             latitude: markerLatLng.latitude,
             longitude: markerLatLng.longitude,
+            destinationName: destinationInfo?['destinationName'],
+            destinationCategory: destinationInfo?['destinationCategory'],
+            destinationType: destinationInfo?['destinationType'],
+            destinationDistrict: destinationInfo?['destinationDistrict'],
+            destinationMunicipality: destinationInfo?['destinationMunicipality'],
+            destinationImages: destinationInfo?['destinationImages']?.cast<String>(),
+            destinationDescription: destinationInfo?['destinationDescription'],
           );
         }
       }
@@ -216,14 +249,19 @@ class _MapScreenState extends State<MapScreen> {
             infoWindow: InfoWindow(title: name),
             onTap: () {
               final dataWithId = Map<String, dynamic>.from(data)
-                ..putIfAbsent('hotspot_id', () => hotspot.hotspotId.isNotEmpty ? hotspot.hotspotId : doc.id);
+                ..putIfAbsent('hotspot_id', () => hotspot.hotspotId.isNotEmpty ? hotspot.hotspotId : doc.id)
+                ..putIfAbsent('destinationName', () => name)
+                ..putIfAbsent('destinationCategory', () => hotspot.category)
+                ..putIfAbsent('destinationType', () => hotspot.type)
+                ..putIfAbsent('destinationDistrict', () => hotspot.district)
+                ..putIfAbsent('destinationMunicipality', () => hotspot.municipality);
               BusinessDetailsModal.show(
                 context: context,
                 businessData: dataWithId,
                 role: _role,
                 currentUserId: FirebaseAuth.instance.currentUser?.uid,
                 onNavigate: (lat, lng) {
-                  _getDirectionsTo(LatLng(lat, lng));
+                  _showNavigationPreview(LatLng(lat, lng), dataWithId);
                 },
               );
             },
@@ -260,9 +298,91 @@ class _MapScreenState extends State<MapScreen> {
 
   Future<void> _getDirectionsTo(LatLng destination) async {
     try {
+      setState(() {
+        _isLoadingDirections = true;
+      });
+
+      // Start navigation using the navigation service
+      final success = await _navigationService.startNavigation(destination);
+      
+      if (success) {
+        // Clear existing polylines when starting navigation
+        setState(() {
+          _polylines.clear();
+        });
+      } else {
+        // Fallback to old method if navigation service fails
+        await _getDirectionsToLegacy(destination);
+      }
+    } catch (e) {
+      debugPrint('Error starting navigation: $e');
+      // Fallback to old method
+      await _getDirectionsToLegacy(destination);
+    } finally {
+      if (mounted) {
+        setState(() => _isLoadingDirections = false);
+      }
+    }
+  }
+
+  Future<void> _getDirectionsToWithDestinationInfo(LatLng destination, Map<String, dynamic> destinationData) async {
+    try {
+      setState(() {
+        _isLoadingDirections = true;
+      });
+
+      // Start navigation using the navigation service with destination information
+      final success = await _navigationService.startNavigation(
+        destination,
+        destinationId: destinationData['hotspot_id'] ?? destinationData['hotspotId'],
+        destinationName: destinationData['destinationName'] ?? destinationData['businessName'] ?? destinationData['name'],
+        destinationCategory: destinationData['destinationCategory'] ?? destinationData['category'],
+        destinationType: destinationData['destinationType'] ?? destinationData['type'],
+        destinationDistrict: destinationData['destinationDistrict'] ?? destinationData['district'],
+        destinationMunicipality: destinationData['destinationMunicipality'] ?? destinationData['municipality'],
+        destinationImages: destinationData['destinationImages']?.cast<String>() ?? destinationData['images']?.cast<String>(),
+        destinationDescription: destinationData['destinationDescription'] ?? destinationData['description'],
+      );
+      
+      if (success) {
+        // Clear existing polylines when starting navigation
+        setState(() {
+          _polylines.clear();
+        });
+      } else {
+        // Fallback to old method if navigation service fails
+        await _getDirectionsToLegacy(destination);
+      }
+    } catch (e) {
+      debugPrint('Error starting navigation: $e');
+      // Fallback to old method
+      await _getDirectionsToLegacy(destination);
+    } finally {
+      if (mounted) {
+        setState(() => _isLoadingDirections = false);
+      }
+    }
+  }
+
+  // Legacy directions method (fallback)
+  Future<void> _getDirectionsToLegacy(LatLng destination) async {
+    try {
+      // Check location permissions first
       final permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
-        await Geolocator.requestPermission();
+        final requestedPermission = await Geolocator.requestPermission();
+        if (requestedPermission == LocationPermission.denied || 
+            requestedPermission == LocationPermission.deniedForever) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Location permission required for directions'),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+          return;
+        }
       }
 
       final position = await Geolocator.getCurrentPosition();
@@ -291,12 +411,28 @@ class _MapScreenState extends State<MapScreen> {
 
       final response = await http.get(Uri.parse(url));
       if (response.statusCode != 200) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to get directions: HTTP ${response.statusCode}'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
         setState(() => _isLoadingDirections = false);
         return;
       }
 
       final body = json.decode(response.body);
-      if (body['status'] != 'OK' || body['routes'].isEmpty) {
+      if (body['status'] != 'OK' || body['routes'] == null || body['routes'].isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('No route found: ${body['status'] ?? 'Unknown error'}'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
         setState(() => _isLoadingDirections = false);
         return;
       }
@@ -306,16 +442,16 @@ class _MapScreenState extends State<MapScreen> {
       final routes = body['routes'] as List<dynamic>;
       if (routes.isNotEmpty) {
         final route = routes[0] as Map<String, dynamic>;
-        final legs = (route['legs'] as List<dynamic>?);
+        final legs = (route['legs'] as List<dynamic>?) ?? [];
         final decoder = PolylinePoints();
-        if (legs != null && legs.isNotEmpty) {
+        if (legs.isNotEmpty) {
           for (final leg in legs) {
-            final steps = (leg['steps'] as List<dynamic>?);
-            if (steps != null && steps.isNotEmpty) {
+            final steps = (leg['steps'] as List<dynamic>?) ?? [];
+            if (steps.isNotEmpty) {
               for (final step in steps) {
                 final polyline = (step as Map<String, dynamic>)['polyline']?['points'];
-                if (polyline is String && polyline.isNotEmpty) {
-                  final decoded = decoder.decodePolyline(polyline);
+                if (polyline != null && polyline.toString().isNotEmpty) {
+                  final decoded = decoder.decodePolyline(polyline.toString());
                   coords.addAll(decoded.map((p) => LatLng(p.latitude, p.longitude)));
                 }
               }
@@ -325,7 +461,7 @@ class _MapScreenState extends State<MapScreen> {
         // Fallback to overview polyline if step-level not present
         if (coords.isEmpty && route['overview_polyline']?['points'] != null) {
           final points = route['overview_polyline']['points'];
-          final decoded = decoder.decodePolyline(points);
+          final decoded = decoder.decodePolyline(points.toString());
           coords = decoded.map((p) => LatLng(p.latitude, p.longitude)).toList(growable: false);
         }
       }
@@ -382,6 +518,152 @@ class _MapScreenState extends State<MapScreen> {
         setState(() => _isLoadingDirections = false);
       }
     }
+  }
+
+  // Exit navigation
+  void _exitNavigation() {
+    _navigationService.stopNavigation();
+    setState(() {
+      _polylines.clear();
+    });
+  }
+
+  // Re-center map on user location
+  void _recenterMap() {
+    if (_currentLatLng != null) {
+      if (_isNavigating) {
+        // During navigation, re-center with bearing calculation
+        final currentStep = _navigationService.getCurrentStep();
+        if (currentStep != null) {
+          final bearing = _calculateBearing(_currentLatLng!, currentStep.endLocation);
+          _mapController?.moveCamera(
+            CameraUpdate.newCameraPosition(
+              CameraPosition(
+                target: _currentLatLng!,
+                zoom: 18.0,
+                bearing: bearing,
+                tilt: 45.0,
+              ),
+            ),
+          );
+        }
+      } else {
+        // Normal re-center
+        _mapController?.moveCamera(
+          CameraUpdate.newCameraPosition(
+            CameraPosition(
+              target: _currentLatLng!,
+              zoom: 18.0,
+              tilt: 45.0,
+            ),
+          ),
+        );
+      }
+    }
+  }
+
+  // Calculate bearing between two points
+  double _calculateBearing(LatLng start, LatLng end) {
+    final lat1 = start.latitude * (math.pi / 180);
+    final lat2 = end.latitude * (math.pi / 180);
+    final dLon = (end.longitude - start.longitude) * (math.pi / 180);
+
+    final y = math.sin(dLon) * math.cos(lat2);
+    final x = math.cos(lat1) * math.sin(lat2) - math.sin(lat1) * math.cos(lat2) * math.cos(dLon);
+    
+    double bearing = math.atan2(y, x) * (180 / math.pi);
+    bearing = (bearing + 360) % 360;
+    
+    return bearing;
+  }
+
+  // Update polylines when navigation changes
+  void _onPolylinesChanged(Set<Polyline> newPolylines) {
+    setState(() {
+      _polylines.clear();
+      _polylines.addAll(newPolylines);
+    });
+  }
+
+  // Show navigation preview and start navigation
+  void _showNavigationPreview(LatLng destination, [Map<String, dynamic>? destinationData]) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (context) {
+        return Container(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Drag handle
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              
+              Text(
+                'Start Navigation',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textDark,
+                ),
+              ),
+              const SizedBox(height: 16),
+              
+              Text(
+                'Get turn-by-turn directions to this destination',
+                style: TextStyle(
+                  fontSize: 16,
+                  color: Colors.grey[600],
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 24),
+              
+              // Start Navigation Button
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    if (destinationData != null) {
+                      _getDirectionsToWithDestinationInfo(destination, destinationData);
+                    } else {
+                      _getDirectionsTo(destination);
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primaryTeal,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  child: const Text(
+                    'Start Navigation',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   // Simple Haversine distance utility
@@ -538,6 +820,15 @@ class _MapScreenState extends State<MapScreen> {
             padding: EdgeInsets.only(bottom: 80 + bottomPadding),
           ),
 
+          // Navigation Map Controller (invisible widget that controls map behavior)
+          if (_mapController != null)
+            NavigationMapController(
+              mapController: _mapController!,
+              navigationService: _navigationService,
+              polylines: _polylines,
+              onPolylinesChanged: _onPolylinesChanged,
+          ),
+
           // Search Bar at the Top
           Positioned(
             top: 0,
@@ -552,41 +843,62 @@ class _MapScreenState extends State<MapScreen> {
 
           if (_isLoading) const Center(child: CircularProgressIndicator()),
 
+          // Navigation Overlay
+          NavigationOverlay(
+            navigationService: _navigationService,
+            onExitNavigation: _exitNavigation,
+          ),
+
+          // Removed blue arrow compass indicator
+
+          // My Location Button
           Positioned(
             bottom: 16 + bottomPadding,
             right: 16,
             child: FloatingActionButton(
-              heroTag: Positioned(
-                bottom: 100 + bottomPadding,
-                right: 16,
-                child: Transform.rotate(
-                  angle:
-                      (_heading *
-                          (math.pi / 180) *
-                          -1), // Convert degrees to radians
-                  child: Container(
-                    padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Colors.white,
-                      boxShadow: [
-                        BoxShadow(blurRadius: 4, color: Colors.black26),
-                      ],
-                    ),
-                    child: const Icon(
-                      Icons.navigation,
-                      size: 30,
-                      color: Colors.blue,
-                    ),
-                  ),
-                ),
-              ),
+              heroTag: 'my_location',
               onPressed: _goToMyLocation,
               backgroundColor: Colors.white,
               foregroundColor: Colors.blue,
               child: const Icon(Icons.my_location),
             ),
           ),
+
+          // Re-center button (bottom left) - like in the image
+          if (_isNavigating)
+            Positioned(
+              bottom: 100 + bottomPadding,
+              left: 16,
+              child: GestureDetector(
+                onTap: _recenterMap,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withOpacity(0.8),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.keyboard_arrow_up,
+                        color: Colors.white,
+                        size: 16,
+                      ),
+                      const SizedBox(width: 4),
+                      const Text(
+                        'Re-center',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
         ],
       ),
     );

@@ -10,6 +10,16 @@
         "html-has-lang": "off"
       }
     ],
-    "no-inline-styles": "off"
+    "no-inline-styles": "off",
+    "compat-api/css": [
+      "default",
+      {
+        "ignore": [
+          "-ms-text-size-adjust",
+          "user-select",
+          "-webkit-text-decoration-skip"
+        ]
+      }
+    ]
   }
 }

@@ -46,7 +46,7 @@ class _ProvNotificationScreenState extends State<ProvNotificationScreen> {
     // switch (notification.type) {
     //   case 'users':
     //     print('Navigating to user details for ID: ${notification.relatedDocId}');
-    //     // TODO: Replace with your actual user detail/approval screen
+    //      Replace with your actual user detail/approval screen
     //     Navigator.push(
     //       context,
     //       MaterialPageRoute(
@@ -56,7 +56,7 @@ class _ProvNotificationScreenState extends State<ProvNotificationScreen> {
     //     break;
     //   case 'businesses':
     //     print('Navigating to business details for ID: ${notification.relatedDocId}');
-    //     // TODO: Replace with your actual business detail/approval screen
+    //      Replace with your actual business detail/approval screen
     //     // Navigator.push(context, MaterialPageRoute(builder: (context) => AdminBusinessApprovalScreen(businessId: notification.relatedDocId!)));
     //     break;
     //   // Add cases for 'reviews' and 'events' if they have detail pages

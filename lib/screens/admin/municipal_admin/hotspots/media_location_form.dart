@@ -126,7 +126,7 @@ class _AdminMediaAndLocationScreenState
               ? Image.memory(file.bytes!, width: 100, fit: BoxFit.cover)
               : Image.file(File(file.path!), width: 100, fit: BoxFit.cover);
         },
-        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        separatorBuilder: (_, _) => const SizedBox(width: 8),
       ),
     );
   }

@@ -41,5 +41,5 @@ app.get('/geocode', async (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`Directions proxy server running on http://localhost:${PORT}`);
+  console.log(`Directions proxy server running on port ${PORT}`);
 }); 

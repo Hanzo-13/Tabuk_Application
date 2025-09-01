@@ -11,6 +11,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:async';
+import 'dart:math' as math;
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 class BusinessDetailsModal extends StatefulWidget {
   final Map<String, dynamic> businessData;
@@ -69,6 +71,8 @@ class _BusinessDetailsModalState extends State<BusinessDetailsModal> {
   final PageController _pageController = PageController(viewportFraction: 0.92);
   int _currentImageIndex = 0;
   Timer? _slideshowTimer;
+  List<Map<String, dynamic>> _nearbyPlaces = [];
+  bool _isLoadingNearby = false;
 
   @override
   void initState() {
@@ -78,6 +82,7 @@ class _BusinessDetailsModalState extends State<BusinessDetailsModal> {
     role = widget.role;
     _fetchCreatorData();
     _startSlideshow();
+    _fetchNearbyPlaces();
   }
 
   @override
@@ -102,13 +107,17 @@ class _BusinessDetailsModalState extends State<BusinessDetailsModal> {
       if (!mounted) return;
       final imgs = _getImages();
       if (imgs.length <= 1) return;
-      final nextIndex = (_currentImageIndex + 1) % imgs.length;
-      _pageController.animateToPage(
-        nextIndex,
-        duration: const Duration(milliseconds: 400),
-        curve: Curves.easeInOut,
-      );
-      setState(() => _currentImageIndex = nextIndex);
+      
+      // Check if PageController is attached before animating
+      if (_pageController.hasClients) {
+        final nextIndex = (_currentImageIndex + 1) % imgs.length;
+        _pageController.animateToPage(
+          nextIndex,
+          duration: const Duration(milliseconds: 400),
+          curve: Curves.easeInOut,
+        );
+        setState(() => _currentImageIndex = nextIndex);
+      }
     });
   }
 
@@ -133,6 +142,110 @@ class _BusinessDetailsModalState extends State<BusinessDetailsModal> {
       }
     }
   }
+
+  Future<void> _fetchNearbyPlaces() async {
+    if (mounted) {
+      setState(() => _isLoadingNearby = true);
+    }
+
+    try {
+      // Try different possible coordinate fields
+      dynamic currentLat = businessData['latitude'] ?? businessData['location']?['lat'];
+      dynamic currentLng = businessData['longitude'] ?? businessData['location']?['lng'];
+      
+      if (currentLat == null || currentLng == null) {
+        if (kDebugMode) print('No coordinates found for current location');
+        if (mounted) {
+          setState(() => _isLoadingNearby = false);
+        }
+        return;
+      }
+
+      if (kDebugMode) {
+        print('Fetching nearby places from: $currentLat, $currentLng');
+        print('Business data keys: ${businessData.keys.toList()}');
+      }
+
+      final snapshot = await FirebaseFirestore.instance
+          .collection('destination')
+          .get();
+
+      if (kDebugMode) print('Found ${snapshot.docs.length} total destinations');
+
+      final places = <Map<String, dynamic>>[];
+      final currentPosition = LatLng(
+        (currentLat as num).toDouble(),
+        (currentLng as num).toDouble(),
+      );
+
+      for (final doc in snapshot.docs) {
+        final data = doc.data();
+        dynamic placeLat = data['latitude'] ?? data['location']?['lat'];
+        dynamic placeLng = data['longitude'] ?? data['location']?['lng'];
+        
+        if (placeLat != null && placeLng != null) {
+          final placePosition = LatLng(
+            (placeLat as num).toDouble(),
+            (placeLng as num).toDouble(),
+          );
+          
+          final distance = _calculateDistance(currentPosition, placePosition);
+          
+          // Only include places within 10km and exclude the current place
+          final currentHotspotId = businessData['hotspot_id'] ?? businessData['id']?.toString();
+          if (distance <= 10.0 && doc.id != currentHotspotId) {
+            if (kDebugMode) {
+              print('Adding nearby place: ${data['business_name'] ?? data['name']} at ${distance.toStringAsFixed(2)} km');
+            }
+            places.add({
+              ...data,
+              'hotspot_id': doc.id,
+              'distance': distance,
+            });
+          }
+        }
+      }
+
+      if (kDebugMode) print('Found ${places.length} places within 10km');
+
+      // Sort by distance and take top 5
+      places.sort((a, b) => (a['distance'] as double).compareTo(b['distance'] as double));
+      
+      if (mounted) {
+        setState(() {
+          _nearbyPlaces = places.take(5).toList();
+          _isLoadingNearby = false;
+        });
+      }
+      
+      if (kDebugMode) {
+        print('Final nearby places: ${_nearbyPlaces.length}');
+        for (final place in _nearbyPlaces) {
+          print('  - ${place['business_name'] ?? place['name']}: ${(place['distance'] as double).toStringAsFixed(2)} km');
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) print('Error fetching nearby places: $e');
+      if (mounted) {
+        setState(() => _isLoadingNearby = false);
+      }
+    }
+  }
+
+  double _calculateDistance(LatLng point1, LatLng point2) {
+    const double earthRadius = 6371; // km
+    final double dLat = _degreesToRadians(point2.latitude - point1.latitude);
+    final double dLng = _degreesToRadians(point2.longitude - point1.longitude);
+    final double a = math.sin(dLat / 2) * math.sin(dLat / 2) +
+        math.cos(_degreesToRadians(point1.latitude)) *
+            math.cos(_degreesToRadians(point2.latitude)) *
+            math.sin(dLng / 2) *
+            math.sin(dLng / 2);
+    final double c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a));
+    return earthRadius * c;
+  }
+
+  double _degreesToRadians(double degrees) => degrees * (math.pi / 180);
 
   Future<void> _confirmArchive(BuildContext context) async {
     final confirm = await showDialog<bool>(
@@ -757,7 +870,10 @@ class _BusinessDetailsModalState extends State<BusinessDetailsModal> {
     if (images.isEmpty) {
       return Container(
         height: 250,
-        color: Colors.grey[300],
+        decoration: BoxDecoration(
+          color: Colors.grey[300],
+          borderRadius: BorderRadius.circular(14),
+        ),
         child: const Center(child: Icon(Icons.photo, size: 50)),
       );
     }
@@ -787,10 +903,42 @@ class _BusinessDetailsModalState extends State<BusinessDetailsModal> {
                 ),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(14),
-                  child: Image.network(
-                    images[index],
-                    fit: BoxFit.cover,
-                    width: double.infinity,
+                  child: GestureDetector(
+                    onTap: () => _showFullScreenImage(images[index], images),
+                    child: Hero(
+                      tag: 'image_$index',
+                      child: AnimatedOpacity(
+                        duration: const Duration(milliseconds: 500),
+                        opacity: _currentImageIndex == index ? 1.0 : 0.7,
+                        child: Image.network(
+                          images[index],
+                          fit: BoxFit.cover,
+                          width: double.infinity,
+                          loadingBuilder: (context, child, loadingProgress) {
+                            if (loadingProgress == null) return child;
+                            return Container(
+                              color: Colors.grey[300],
+                              child: Center(
+                                child: CircularProgressIndicator(
+                                  value: loadingProgress.expectedTotalBytes != null
+                                      ? loadingProgress.cumulativeBytesLoaded /
+                                          loadingProgress.expectedTotalBytes!
+                                      : null,
+                                ),
+                              ),
+                            );
+                          },
+                          errorBuilder: (context, error, stackTrace) {
+                            return Container(
+                              color: Colors.grey[300],
+                              child: const Center(
+                                child: Icon(Icons.error, size: 50, color: Colors.red),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ),
                   ),
                 ),
               );
@@ -825,6 +973,124 @@ class _BusinessDetailsModalState extends State<BusinessDetailsModal> {
             ),
         ],
       ),
+    );
+  }
+
+  void _showFullScreenImage(String currentImage, List<String> allImages) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => FullScreenImageView(
+          currentImage: currentImage,
+          allImages: allImages,
+          initialIndex: allImages.indexOf(currentImage),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNearbyPlaces() {
+    if (_isLoadingNearby) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_nearbyPlaces.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _sectionHeader(Icons.near_me, 'Nearby Places'),
+        SizedBox(height: _chipSpacing),
+        SizedBox(
+          height: 120,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            itemCount: _nearbyPlaces.length,
+            itemBuilder: (context, index) {
+              final place = _nearbyPlaces[index];
+              final distance = place['distance'] as double;
+              final name = place['business_name'] ?? place['name'] ?? 'Unknown';
+              final images = place['images'] ?? [];
+              final imageUrl = images.isNotEmpty ? images.first.toString() : null;
+
+              return Container(
+                width: 200,
+                margin: const EdgeInsets.only(right: 12),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Colors.grey.shade300),
+                ),
+                child: InkWell(
+                  onTap: () {
+                    Navigator.pop(context);
+                    // Show the nearby place details
+                    BusinessDetailsModal.show(
+                      context: context,
+                      businessData: place,
+                      role: role,
+                      currentUserId: currentUserId,
+                      onNavigate: widget.onNavigate,
+                    );
+                  },
+                  borderRadius: BorderRadius.circular(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: ClipRRect(
+                          borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                          child: imageUrl != null
+                              ? Image.network(
+                                  imageUrl,
+                                  fit: BoxFit.cover,
+                                  width: double.infinity,
+                                  errorBuilder: (context, error, stackTrace) {
+                                    return Container(
+                                      color: Colors.grey[300],
+                                      child: const Icon(Icons.image, size: 30),
+                                    );
+                                  },
+                                )
+                              : Container(
+                                  color: Colors.grey[300],
+                                  child: const Icon(Icons.image, size: 30),
+                                ),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.all(8.0),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              name,
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w600,
+                                fontSize: 14,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            Text(
+                              '${distance.toStringAsFixed(1)} km away',
+                              style: TextStyle(
+                                color: Colors.grey[600],
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 
@@ -1036,9 +1302,13 @@ class _BusinessDetailsModalState extends State<BusinessDetailsModal> {
                       ),
                     ),
                   const Divider(height: 24),
-                  if (widget.showInteractions) _buildReviewSummary(context),
-                  if (widget.showInteractions) const Divider(height: 24),
-                  if (widget.showInteractions) _buildRoleBasedButtons(context),
+                  _buildNearbyPlaces(),
+                  if (widget.showInteractions) ...[
+                    const Divider(height: 24),
+                    _buildReviewSummary(context),
+                    const Divider(height: 24),
+                    _buildRoleBasedButtons(context),
+                  ],
                   const SizedBox(height: 20),
                 ],
               ),
@@ -1046,6 +1316,106 @@ class _BusinessDetailsModalState extends State<BusinessDetailsModal> {
           },
         ),
       ],
+    );
+  }
+}
+
+class FullScreenImageView extends StatefulWidget {
+  final String currentImage;
+  final List<String> allImages;
+  final int initialIndex;
+
+  const FullScreenImageView({
+    super.key,
+    required this.currentImage,
+    required this.allImages,
+    required this.initialIndex,
+  });
+
+  @override
+  State<FullScreenImageView> createState() => _FullScreenImageViewState();
+}
+
+class _FullScreenImageViewState extends State<FullScreenImageView> {
+  late PageController _pageController;
+  late int _currentIndex;
+
+  @override
+  void initState() {
+    super.initState();
+    _currentIndex = widget.initialIndex;
+    _pageController = PageController(initialPage: widget.initialIndex);
+  }
+
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.black,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.close, color: Colors.white),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: Text(
+          '${_currentIndex + 1} of ${widget.allImages.length}',
+          style: const TextStyle(color: Colors.white),
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.fullscreen_exit, color: Colors.white),
+            onPressed: () => Navigator.pop(context),
+          ),
+        ],
+      ),
+      body: PageView.builder(
+        controller: _pageController,
+        itemCount: widget.allImages.length,
+        onPageChanged: (index) {
+          setState(() {
+            _currentIndex = index;
+          });
+        },
+        itemBuilder: (context, index) {
+          return InteractiveViewer(
+            minScale: 0.5,
+            maxScale: 3.0,
+            child: Center(
+              child: Hero(
+                tag: 'image_$index',
+                child: Image.network(
+                  widget.allImages[index],
+                  fit: BoxFit.contain,
+                  loadingBuilder: (context, child, loadingProgress) {
+                    if (loadingProgress == null) return child;
+                    return Center(
+                      child: CircularProgressIndicator(
+                        value: loadingProgress.expectedTotalBytes != null
+                            ? loadingProgress.cumulativeBytesLoaded /
+                                loadingProgress.expectedTotalBytes!
+                            : null,
+                        color: Colors.white,
+                      ),
+                    );
+                  },
+                  errorBuilder: (context, error, stackTrace) {
+                    return const Center(
+                      child: Icon(Icons.error, size: 100, color: Colors.red),
+                    );
+                  },
+                ),
+              ),
+            ),
+          );
+        },
+      ),
     );
   }
 }

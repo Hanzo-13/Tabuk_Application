@@ -1,4 +1,4 @@
-// ignore_for_file: unnecessary_underscores
+// ignore_for_file: unnecessary_underscores, use_build_context_synchronously
 
 import 'package:capstone_app/screens/admin/provincial_admin/hotspots/spot_registration_screen.dart';
 import 'package:capstone_app/utils/colors.dart';

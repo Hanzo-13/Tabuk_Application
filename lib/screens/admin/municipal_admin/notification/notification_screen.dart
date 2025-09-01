@@ -5,7 +5,7 @@ import 'package:capstone_app/widgets/notification_card.dart';
 import 'package:badges/badges.dart' as badges;
 
 class NotificationsScreen extends StatefulWidget {
-  const NotificationsScreen({Key? key}) : super(key: key);
+  const NotificationsScreen({super.key});
 
   @override
   State<NotificationsScreen> createState() => _NotificationsScreenState();

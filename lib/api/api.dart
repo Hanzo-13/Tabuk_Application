@@ -6,13 +6,13 @@ class ApiEnvironment {
   static const String geocodeBaseUrl = "https://maps.googleapis.com/maps/api/geocode/json";
   static const String googleDirectionsApiKey = "AIzaSyCHDrbJrZHSeMFG40A-hQPB37nrmA6rUKE";
 
-  static String getDirectionsUrl(String origin, String destination) {
+  static String getDirectionsUrl(String origin, String destination, {String mode = 'driving'}) {
     if (kIsWeb) {
       // Use proxy for web with safe query construction
       final uri = Uri.parse(proxyBaseUrl).replace(queryParameters: {
         'origin': origin,
         'destination': destination,
-        'mode': 'driving',
+        'mode': mode,
         // Request a higher fidelity polyline for better on-map accuracy
         'overview': 'full',
         'units': 'metric',
@@ -26,7 +26,7 @@ class ApiEnvironment {
         'origin': origin,
         'destination': destination,
         'key': googleDirectionsApiKey,
-        'mode': 'driving',
+        'mode': mode,
         // Request a higher fidelity polyline for better on-map accuracy
         'overview': 'full',
         'units': 'metric',
