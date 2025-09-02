@@ -1,28 +1,19 @@
 // ignore_for_file: prefer_final_fields, avoid_print, unused_field, use_build_context_synchronously
 
 import 'dart:async';
-
 import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
-
-
 import 'package:capstone_app/models/destination_model.dart';
-
 import 'package:capstone_app/utils/colors.dart';
 import 'package:capstone_app/utils/constants.dart';
-
 import 'package:capstone_app/widgets/common_search_bar.dart';
-// import 'package:capstone_app/screens/admin/destination_form.dart'; // TODO: Create and import your destination form
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_compass/flutter_compass.dart';
-
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-
 
 class ProvMapScreen extends StatefulWidget {
   const ProvMapScreen({super.key});
