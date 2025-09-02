@@ -30,7 +30,6 @@ class MapScreen extends StatefulWidget {
 
   @override
   State<MapScreen> createState() => _MapScreenState();
-  
 }
 
 class _MapScreenState extends State<MapScreen> {
@@ -46,7 +45,7 @@ class _MapScreenState extends State<MapScreen> {
   bool _isLoading = false;
   final Set<Polyline> _polylines = {};
   bool _isLoadingDirections = false;
-  
+
   // Navigation service
   final NavigationService _navigationService = NavigationService();
   bool _isNavigating = false;
@@ -85,7 +84,7 @@ class _MapScreenState extends State<MapScreen> {
     super.initState();
     _initializeCategoryMarkerIcons().then((_) => _fetchDestinationPins());
     _startLocationStream(); // Start streaming location
-    
+
     // Listen to navigation state changes
     _navigationService.navigationStateStream.listen((isNavigating) {
       if (mounted) {
@@ -134,18 +133,21 @@ class _MapScreenState extends State<MapScreen> {
   void _checkProximityAndSaveArrival(Position userPosition) async {
     // Only check if markers are loaded
     if (_allMarkers.isEmpty) return;
-    
+
     // Check location permissions first
     final permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied || 
+    if (permission == LocationPermission.denied ||
         permission == LocationPermission.deniedForever) {
       return; // Skip proximity checking if no permission
     }
-    
+
     final userLatLng = LatLng(userPosition.latitude, userPosition.longitude);
     for (final marker in _allMarkers) {
       final markerLatLng = marker.position;
-      final double distance = _haversineDistanceMeters(userLatLng, markerLatLng);
+      final double distance = _haversineDistanceMeters(
+        userLatLng,
+        markerLatLng,
+      );
       if (distance <= 50) {
         // Get hotspotId from markerId
         final hotspotId = marker.markerId.value;
@@ -162,8 +164,10 @@ class _MapScreenState extends State<MapScreen> {
             destinationCategory: destinationInfo?['destinationCategory'],
             destinationType: destinationInfo?['destinationType'],
             destinationDistrict: destinationInfo?['destinationDistrict'],
-            destinationMunicipality: destinationInfo?['destinationMunicipality'],
-            destinationImages: destinationInfo?['destinationImages']?.cast<String>(),
+            destinationMunicipality:
+                destinationInfo?['destinationMunicipality'],
+            destinationImages:
+                destinationInfo?['destinationImages']?.cast<String>(),
             destinationDescription: destinationInfo?['destinationDescription'],
           );
         }
@@ -186,19 +190,23 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   void _filterMarkers() {
-    if (_searchQuery.isEmpty && _selectedCategory == 'All Categories' && 
-        _selectedMunicipality == 'All Municipalities' && _selectedType == 'All Types') {
+    if (_searchQuery.isEmpty &&
+        _selectedCategory == 'All Categories' &&
+        _selectedMunicipality == 'All Municipalities' &&
+        _selectedType == 'All Types') {
       setState(() => _markers = _allMarkers);
       return;
     }
 
-    final filtered = _allMarkers.where((marker) {
-      final name = marker.infoWindow.title?.toLowerCase() ?? '';
-      final matchesSearch = _searchQuery.isEmpty || name.contains(_searchQuery);
-      
-      // Simple filtering based on marker title only
-      return matchesSearch;
-    }).toSet();
+    final filtered =
+        _allMarkers.where((marker) {
+          final name = marker.infoWindow.title?.toLowerCase() ?? '';
+          final matchesSearch =
+              _searchQuery.isEmpty || name.contains(_searchQuery);
+
+          // Simple filtering based on marker title only
+          return matchesSearch;
+        }).toSet();
 
     setState(() {
       _markers = filtered;
@@ -228,33 +236,49 @@ class _MapScreenState extends State<MapScreen> {
         final hotspot = Hotspot.fromMap(data, doc.id);
         final double? lat = hotspot.latitude;
         final double? lng = hotspot.longitude;
-        final String name = hotspot.name.isNotEmpty ? hotspot.name : 'Tourist Spot';
+        final String name =
+            hotspot.name.isNotEmpty ? hotspot.name : 'Tourist Spot';
 
         if (lat != null && lng != null) {
           final position = LatLng(lat, lng);
 
           // Prefer category-based icon; fallback to text marker
-          final categoryRaw = hotspot.category.isNotEmpty ? hotspot.category : hotspot.type;
+          final categoryRaw =
+              hotspot.category.isNotEmpty ? hotspot.category : hotspot.type;
           final normalizedCategory = _normalizeCategory(categoryRaw);
           final categoryIcon = _getCategoryMarkerIcon(normalizedCategory);
-          final customIcon = categoryIcon ?? await CustomMapMarker.createTextMarker(
-            label: name,
-            color: Colors.orange,
-          );
+          final customIcon =
+              categoryIcon ??
+              await CustomMapMarker.createTextMarker(
+                label: name,
+                color: Colors.orange,
+              );
 
           final marker = Marker(
-            markerId: MarkerId(hotspot.hotspotId.isNotEmpty ? hotspot.hotspotId : doc.id),
+            markerId: MarkerId(
+              hotspot.hotspotId.isNotEmpty ? hotspot.hotspotId : doc.id,
+            ),
             position: position,
             icon: customIcon,
             infoWindow: InfoWindow(title: name),
             onTap: () {
-              final dataWithId = Map<String, dynamic>.from(data)
-                ..putIfAbsent('hotspot_id', () => hotspot.hotspotId.isNotEmpty ? hotspot.hotspotId : doc.id)
-                ..putIfAbsent('destinationName', () => name)
-                ..putIfAbsent('destinationCategory', () => hotspot.category)
-                ..putIfAbsent('destinationType', () => hotspot.type)
-                ..putIfAbsent('destinationDistrict', () => hotspot.district)
-                ..putIfAbsent('destinationMunicipality', () => hotspot.municipality);
+              final dataWithId =
+                  Map<String, dynamic>.from(data)
+                    ..putIfAbsent(
+                      'hotspot_id',
+                      () =>
+                          hotspot.hotspotId.isNotEmpty
+                              ? hotspot.hotspotId
+                              : doc.id,
+                    )
+                    ..putIfAbsent('destinationName', () => name)
+                    ..putIfAbsent('destinationCategory', () => hotspot.category)
+                    ..putIfAbsent('destinationType', () => hotspot.type)
+                    ..putIfAbsent('destinationDistrict', () => hotspot.district)
+                    ..putIfAbsent(
+                      'destinationMunicipality',
+                      () => hotspot.municipality,
+                    );
               BusinessDetailsModal.show(
                 context: context,
                 businessData: dataWithId,
@@ -304,7 +328,7 @@ class _MapScreenState extends State<MapScreen> {
 
       // Start navigation using the navigation service
       final success = await _navigationService.startNavigation(destination);
-      
+
       if (success) {
         // Clear existing polylines when starting navigation
         setState(() {
@@ -325,7 +349,10 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
-  Future<void> _getDirectionsToWithDestinationInfo(LatLng destination, Map<String, dynamic> destinationData) async {
+  Future<void> _getDirectionsToWithDestinationInfo(
+    LatLng destination,
+    Map<String, dynamic> destinationData,
+  ) async {
     try {
       setState(() {
         _isLoadingDirections = true;
@@ -334,16 +361,31 @@ class _MapScreenState extends State<MapScreen> {
       // Start navigation using the navigation service with destination information
       final success = await _navigationService.startNavigation(
         destination,
-        destinationId: destinationData['hotspot_id'] ?? destinationData['hotspotId'],
-        destinationName: destinationData['destinationName'] ?? destinationData['businessName'] ?? destinationData['name'],
-        destinationCategory: destinationData['destinationCategory'] ?? destinationData['category'],
-        destinationType: destinationData['destinationType'] ?? destinationData['type'],
-        destinationDistrict: destinationData['destinationDistrict'] ?? destinationData['district'],
-        destinationMunicipality: destinationData['destinationMunicipality'] ?? destinationData['municipality'],
-        destinationImages: destinationData['destinationImages']?.cast<String>() ?? destinationData['images']?.cast<String>(),
-        destinationDescription: destinationData['destinationDescription'] ?? destinationData['description'],
+        destinationId:
+            destinationData['hotspot_id'] ?? destinationData['hotspotId'],
+        destinationName:
+            destinationData['destinationName'] ??
+            destinationData['businessName'] ??
+            destinationData['name'],
+        destinationCategory:
+            destinationData['destinationCategory'] ??
+            destinationData['category'],
+        destinationType:
+            destinationData['destinationType'] ?? destinationData['type'],
+        destinationDistrict:
+            destinationData['destinationDistrict'] ??
+            destinationData['district'],
+        destinationMunicipality:
+            destinationData['destinationMunicipality'] ??
+            destinationData['municipality'],
+        destinationImages:
+            destinationData['destinationImages']?.cast<String>() ??
+            destinationData['images']?.cast<String>(),
+        destinationDescription:
+            destinationData['destinationDescription'] ??
+            destinationData['description'],
       );
-      
+
       if (success) {
         // Clear existing polylines when starting navigation
         setState(() {
@@ -371,7 +413,7 @@ class _MapScreenState extends State<MapScreen> {
       final permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
         final requestedPermission = await Geolocator.requestPermission();
-        if (requestedPermission == LocationPermission.denied || 
+        if (requestedPermission == LocationPermission.denied ||
             requestedPermission == LocationPermission.deniedForever) {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
@@ -397,24 +439,25 @@ class _MapScreenState extends State<MapScreen> {
       final originPlaceId = await _fetchPlaceIdForLatLng(origin);
       final destPlaceId = await _fetchPlaceIdForLatLng(destination);
 
-      final originParam = originPlaceId != null
-          ? 'place_id:$originPlaceId'
-          : '${origin.latitude},${origin.longitude}';
-      final destParam = destPlaceId != null
-          ? 'place_id:$destPlaceId'
-          : '${destination.latitude},${destination.longitude}';
+      final originParam =
+          originPlaceId != null
+              ? 'place_id:$originPlaceId'
+              : '${origin.latitude},${origin.longitude}';
+      final destParam =
+          destPlaceId != null
+              ? 'place_id:$destPlaceId'
+              : '${destination.latitude},${destination.longitude}';
 
-      final url = ApiEnvironment.getDirectionsUrl(
-        originParam,
-        destParam,
-      );
+      final url = ApiEnvironment.getDirectionsUrl(originParam, destParam);
 
       final response = await http.get(Uri.parse(url));
       if (response.statusCode != 200) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Failed to get directions: HTTP ${response.statusCode}'),
+              content: Text(
+                'Failed to get directions: HTTP ${response.statusCode}',
+              ),
               backgroundColor: Colors.red,
             ),
           );
@@ -424,11 +467,15 @@ class _MapScreenState extends State<MapScreen> {
       }
 
       final body = json.decode(response.body);
-      if (body['status'] != 'OK' || body['routes'] == null || body['routes'].isEmpty) {
+      if (body['status'] != 'OK' ||
+          body['routes'] == null ||
+          body['routes'].isEmpty) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('No route found: ${body['status'] ?? 'Unknown error'}'),
+              content: Text(
+                'No route found: ${body['status'] ?? 'Unknown error'}',
+              ),
               backgroundColor: Colors.orange,
             ),
           );
@@ -449,10 +496,13 @@ class _MapScreenState extends State<MapScreen> {
             final steps = (leg['steps'] as List<dynamic>?) ?? [];
             if (steps.isNotEmpty) {
               for (final step in steps) {
-                final polyline = (step as Map<String, dynamic>)['polyline']?['points'];
+                final polyline =
+                    (step as Map<String, dynamic>)['polyline']?['points'];
                 if (polyline != null && polyline.toString().isNotEmpty) {
                   final decoded = decoder.decodePolyline(polyline.toString());
-                  coords.addAll(decoded.map((p) => LatLng(p.latitude, p.longitude)));
+                  coords.addAll(
+                    decoded.map((p) => LatLng(p.latitude, p.longitude)),
+                  );
                 }
               }
             }
@@ -462,7 +512,9 @@ class _MapScreenState extends State<MapScreen> {
         if (coords.isEmpty && route['overview_polyline']?['points'] != null) {
           final points = route['overview_polyline']['points'];
           final decoded = decoder.decodePolyline(points.toString());
-          coords = decoded.map((p) => LatLng(p.latitude, p.longitude)).toList(growable: false);
+          coords = decoded
+              .map((p) => LatLng(p.latitude, p.longitude))
+              .toList(growable: false);
         }
       }
 
@@ -476,15 +528,17 @@ class _MapScreenState extends State<MapScreen> {
       }
 
       setState(() {
-        _polylines.add(Polyline(
-          polylineId: const PolylineId('route'),
-          points: coords,
-          color: Colors.blue,
-          width: 6,
-          endCap: Cap.roundCap,
-          startCap: Cap.roundCap,
-          jointType: JointType.round,
-        ));
+        _polylines.add(
+          Polyline(
+            polylineId: const PolylineId('route'),
+            points: coords,
+            color: Colors.blue,
+            width: 6,
+            endCap: Cap.roundCap,
+            startCap: Cap.roundCap,
+            jointType: JointType.round,
+          ),
+        );
       });
 
       // Fit camera
@@ -510,7 +564,6 @@ class _MapScreenState extends State<MapScreen> {
           ),
         );
       }
-
     } catch (_) {
       // no-op UI messaging kept minimal here
     } finally {
@@ -535,7 +588,10 @@ class _MapScreenState extends State<MapScreen> {
         // During navigation, re-center with bearing calculation
         final currentStep = _navigationService.getCurrentStep();
         if (currentStep != null) {
-          final bearing = _calculateBearing(_currentLatLng!, currentStep.endLocation);
+          final bearing = _calculateBearing(
+            _currentLatLng!,
+            currentStep.endLocation,
+          );
           _mapController?.moveCamera(
             CameraUpdate.newCameraPosition(
               CameraPosition(
@@ -551,11 +607,7 @@ class _MapScreenState extends State<MapScreen> {
         // Normal re-center
         _mapController?.moveCamera(
           CameraUpdate.newCameraPosition(
-            CameraPosition(
-              target: _currentLatLng!,
-              zoom: 18.0,
-              tilt: 45.0,
-            ),
+            CameraPosition(target: _currentLatLng!, zoom: 18.0, tilt: 45.0),
           ),
         );
       }
@@ -569,11 +621,13 @@ class _MapScreenState extends State<MapScreen> {
     final dLon = (end.longitude - start.longitude) * (math.pi / 180);
 
     final y = math.sin(dLon) * math.cos(lat2);
-    final x = math.cos(lat1) * math.sin(lat2) - math.sin(lat1) * math.cos(lat2) * math.cos(dLon);
-    
+    final x =
+        math.cos(lat1) * math.sin(lat2) -
+        math.sin(lat1) * math.cos(lat2) * math.cos(dLon);
+
     double bearing = math.atan2(y, x) * (180 / math.pi);
     bearing = (bearing + 360) % 360;
-    
+
     return bearing;
   }
 
@@ -586,7 +640,10 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   // Show navigation preview and start navigation
-  void _showNavigationPreview(LatLng destination, [Map<String, dynamic>? destinationData]) {
+  void _showNavigationPreview(
+    LatLng destination, [
+    Map<String, dynamic>? destinationData,
+  ]) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -611,7 +668,7 @@ class _MapScreenState extends State<MapScreen> {
                 ),
               ),
               const SizedBox(height: 20),
-              
+
               Text(
                 'Start Navigation',
                 style: TextStyle(
@@ -621,17 +678,14 @@ class _MapScreenState extends State<MapScreen> {
                 ),
               ),
               const SizedBox(height: 16),
-              
+
               Text(
                 'Get turn-by-turn directions to this destination',
-                style: TextStyle(
-                  fontSize: 16,
-                  color: Colors.grey[600],
-                ),
+                style: TextStyle(fontSize: 16, color: Colors.grey[600]),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 24),
-              
+
               // Start Navigation Button
               SizedBox(
                 width: double.infinity,
@@ -639,7 +693,10 @@ class _MapScreenState extends State<MapScreen> {
                   onPressed: () {
                     Navigator.pop(context);
                     if (destinationData != null) {
-                      _getDirectionsToWithDestinationInfo(destination, destinationData);
+                      _getDirectionsToWithDestinationInfo(
+                        destination,
+                        destinationData,
+                      );
                     } else {
                       _getDirectionsTo(destination);
                     }
@@ -674,7 +731,8 @@ class _MapScreenState extends State<MapScreen> {
     final double lat1 = _degToRad(a.latitude);
     final double lat2 = _degToRad(b.latitude);
     final double h =
-        (1 - math.cos(dLat)) / 2 + math.cos(lat1) * math.cos(lat2) * (1 - math.cos(dLon)) / 2;
+        (1 - math.cos(dLat)) / 2 +
+        math.cos(lat1) * math.cos(lat2) * (1 - math.cos(dLon)) / 2;
     return 2 * earthRadius * math.asin(math.sqrt(h));
   }
 
@@ -682,7 +740,9 @@ class _MapScreenState extends State<MapScreen> {
 
   Future<String?> _fetchPlaceIdForLatLng(LatLng latLng) async {
     try {
-      final url = ApiEnvironment.getGeocodeUrlForLatLng('${latLng.latitude},${latLng.longitude}');
+      final url = ApiEnvironment.getGeocodeUrlForLatLng(
+        '${latLng.latitude},${latLng.longitude}',
+      );
       final response = await http.get(Uri.parse(url));
       if (response.statusCode != 200) return null;
       final data = json.decode(response.body) as Map<String, dynamic>;
@@ -712,32 +772,40 @@ class _MapScreenState extends State<MapScreen> {
     }
   }
 
-  Future<BitmapDescriptor> _createCategoryMarker(IconData iconData, Color color) async {
+  Future<BitmapDescriptor> _createCategoryMarker(
+    IconData iconData,
+    Color color,
+  ) async {
     final ui.PictureRecorder recorder = ui.PictureRecorder();
     final Canvas canvas = Canvas(recorder);
     final double radius = _categoryMarkerSize / 2;
 
     // Shadow
-    final Paint shadowPaint = Paint()
-      ..color = Colors.black.withOpacity(0.2)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
+    final Paint shadowPaint =
+        Paint()
+          ..color = Colors.black.withOpacity(0.2)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
     canvas.drawCircle(Offset(radius + 1, radius + 1), radius - 4, shadowPaint);
 
     // Main circle
-    final Paint mainPaint = Paint()
-      ..color = color
-      ..style = PaintingStyle.fill;
+    final Paint mainPaint =
+        Paint()
+          ..color = color
+          ..style = PaintingStyle.fill;
     canvas.drawCircle(Offset(radius, radius), radius - 4, mainPaint);
 
     // Border
-    final Paint borderPaint = Paint()
-      ..color = Colors.white
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 3;
+    final Paint borderPaint =
+        Paint()
+          ..color = Colors.white
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 3;
     canvas.drawCircle(Offset(radius, radius), radius - 4, borderPaint);
 
     // Icon glyph
-    final TextPainter textPainter = TextPainter(textDirection: TextDirection.ltr);
+    final TextPainter textPainter = TextPainter(
+      textDirection: TextDirection.ltr,
+    );
     textPainter.text = TextSpan(
       text: String.fromCharCode(iconData.codePoint),
       style: TextStyle(
@@ -760,7 +828,9 @@ class _MapScreenState extends State<MapScreen> {
       _categoryMarkerSize.toInt(),
       _categoryMarkerSize.toInt(),
     );
-    final ByteData? bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+    final ByteData? bytes = await image.toByteData(
+      format: ui.ImageByteFormat.png,
+    );
     return BitmapDescriptor.fromBytes(bytes!.buffer.asUint8List());
   }
 
@@ -773,8 +843,12 @@ class _MapScreenState extends State<MapScreen> {
     if (value.contains('museum')) return 'Cultural Site';
     if (value.contains('eco')) return 'Natural Attraction';
     if (value.contains('park')) return 'Natural Attraction';
-    if (value.contains('restaurant') || value.contains('food')) return 'Restaurant';
-    if (value.contains('accommodation') || value.contains('hotel')) return 'Accommodation';
+    if (value.contains('restaurant') || value.contains('food')) {
+      return 'Restaurant';
+    }
+    if (value.contains('accommodation') || value.contains('hotel')) {
+      return 'Accommodation';
+    }
     if (value.contains('shopping')) return 'Shopping';
     if (value.contains('entertain')) return 'Entertainment';
     return value;
@@ -827,7 +901,7 @@ class _MapScreenState extends State<MapScreen> {
               navigationService: _navigationService,
               polylines: _polylines,
               onPolylinesChanged: _onPolylinesChanged,
-          ),
+            ),
 
           // Search Bar at the Top
           Positioned(
@@ -872,7 +946,10 @@ class _MapScreenState extends State<MapScreen> {
               child: GestureDetector(
                 onTap: _recenterMap,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.black.withOpacity(0.8),
                     borderRadius: BorderRadius.circular(20),
@@ -883,15 +960,15 @@ class _MapScreenState extends State<MapScreen> {
                       const Icon(
                         Icons.keyboard_arrow_up,
                         color: Colors.white,
-                        size: 16,
+                        size: 24, // Increased from 16 to 24
                       ),
-                      const SizedBox(width: 4),
+                      const SizedBox(width: 6), // Slightly wider spacing
                       const Text(
                         'Re-center',
                         style: TextStyle(
                           color: Colors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.w500,
+                          fontSize: 16, // Increased from 12 to 16
+                          fontWeight: FontWeight.w600, // Slightly bolder
                         ),
                       ),
                     ],
@@ -935,7 +1012,7 @@ class _MapScreenState extends State<MapScreen> {
                 ),
               ),
               const SizedBox(height: 20),
-              
+
               Text(
                 'Filter Destinations',
                 style: TextStyle(
@@ -966,21 +1043,39 @@ class _MapScreenState extends State<MapScreen> {
                   value: _selectedCategory,
                   isExpanded: true,
                   underline: Container(),
-                  items: categories.toList().map((category) => DropdownMenuItem(
-                    value: category,
-                    child: Row(
-                      children: [
-                        if (category == 'All Categories')
-                          const Icon(Icons.category, color: Colors.grey, size: 20)
-                        else if (_categoryIcons[category] != null)
-                          Icon(_categoryIcons[category], color: AppColors.primaryTeal, size: 20)
-                        else
-                          const Icon(Icons.label, color: Colors.grey, size: 20),
-                        const SizedBox(width: 8),
-                        Text(category),
-                      ],
-                    ),
-                  )).toList(),
+                  items:
+                      categories
+                          .toList()
+                          .map(
+                            (category) => DropdownMenuItem(
+                              value: category,
+                              child: Row(
+                                children: [
+                                  if (category == 'All Categories')
+                                    const Icon(
+                                      Icons.category,
+                                      color: Colors.grey,
+                                      size: 20,
+                                    )
+                                  else if (_categoryIcons[category] != null)
+                                    Icon(
+                                      _categoryIcons[category],
+                                      color: AppColors.primaryTeal,
+                                      size: 20,
+                                    )
+                                  else
+                                    const Icon(
+                                      Icons.label,
+                                      color: Colors.grey,
+                                      size: 20,
+                                    ),
+                                  const SizedBox(width: 8),
+                                  Text(category),
+                                ],
+                              ),
+                            ),
+                          )
+                          .toList(),
                   onChanged: (value) {
                     setState(() {
                       _selectedCategory = value!;
@@ -1011,16 +1106,26 @@ class _MapScreenState extends State<MapScreen> {
                   value: _selectedMunicipality,
                   isExpanded: true,
                   underline: Container(),
-                  items: municipalities.toList().map((municipality) => DropdownMenuItem(
-                    value: municipality,
-                    child: Row(
-                      children: [
-                        const Icon(Icons.location_city, color: AppColors.primaryTeal, size: 20),
-                        const SizedBox(width: 8),
-                        Text(municipality),
-                      ],
-                    ),
-                  )).toList(),
+                  items:
+                      municipalities
+                          .toList()
+                          .map(
+                            (municipality) => DropdownMenuItem(
+                              value: municipality,
+                              child: Row(
+                                children: [
+                                  const Icon(
+                                    Icons.location_city,
+                                    color: AppColors.primaryTeal,
+                                    size: 20,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(municipality),
+                                ],
+                              ),
+                            ),
+                          )
+                          .toList(),
                   onChanged: (value) {
                     setState(() {
                       _selectedMunicipality = value!;
@@ -1051,16 +1156,26 @@ class _MapScreenState extends State<MapScreen> {
                   value: _selectedType,
                   isExpanded: true,
                   underline: Container(),
-                  items: types.toList().map((type) => DropdownMenuItem(
-                    value: type,
-                    child: Row(
-                      children: [
-                        const Icon(Icons.type_specimen, color: AppColors.primaryTeal, size: 20),
-                        const SizedBox(width: 8),
-                        Text(type),
-                      ],
-                    ),
-                  )).toList(),
+                  items:
+                      types
+                          .toList()
+                          .map(
+                            (type) => DropdownMenuItem(
+                              value: type,
+                              child: Row(
+                                children: [
+                                  const Icon(
+                                    Icons.type_specimen,
+                                    color: AppColors.primaryTeal,
+                                    size: 20,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(type),
+                                ],
+                              ),
+                            ),
+                          )
+                          .toList(),
                   onChanged: (value) {
                     setState(() {
                       _selectedType = value!;

@@ -16,9 +16,9 @@ class NavigationOverlay extends StatefulWidget {
 }
 
 class _NavigationOverlayState extends State<NavigationOverlay> {
-  NavigationStep? _currentStep;
-  Map<String, dynamic> _remainingInfo = {};
   bool _isNavigating = false;
+  bool _showVehicleSelector = false;
+  Map<String, dynamic> _remainingInfo = {};
 
   @override
   void initState() {
@@ -27,21 +27,32 @@ class _NavigationOverlayState extends State<NavigationOverlay> {
   }
 
   void _listenToNavigationUpdates() {
-    // Listen to current step updates
-    widget.navigationService.stepStream.listen((step) {
-      if (mounted) {
-        setState(() {
-          _currentStep = step;
-          _remainingInfo = widget.navigationService.getRemainingInfo();
-        });
-      }
-    });
-
     // Listen to navigation state changes
     widget.navigationService.navigationStateStream.listen((isNavigating) {
       if (mounted) {
         setState(() {
           _isNavigating = isNavigating;
+          if (isNavigating) {
+            _remainingInfo = widget.navigationService.getRemainingInfo();
+          }
+        });
+      }
+    });
+
+    // Listen to step changes to update remaining info
+    widget.navigationService.stepStream.listen((step) {
+      if (mounted) {
+        setState(() {
+          _remainingInfo = widget.navigationService.getRemainingInfo();
+        });
+      }
+    });
+
+    // ADD THIS: Listen to transportation mode changes
+    widget.navigationService.transportationModeStream.listen((mode) {
+      if (mounted && _isNavigating) {
+        setState(() {
+          _remainingInfo = widget.navigationService.getRemainingInfo();
         });
       }
     });
@@ -49,188 +60,97 @@ class _NavigationOverlayState extends State<NavigationOverlay> {
 
   @override
   Widget build(BuildContext context) {
-    if (!_isNavigating || _currentStep == null) {
+    if (!_isNavigating) {
       return const SizedBox.shrink();
     }
 
-    return Column(
+    return Stack(
       children: [
-        // Top instruction card
-        _buildInstructionCard(),
-        
-        const Spacer(),
-        
-        // Bottom trip info card
-        _buildTripInfoCard(),
-      ],
-    );
-  }
+        // Vehicle selector overlay
+        if (_showVehicleSelector) _buildVehicleSelector(),
 
-  Widget _buildInstructionCard() {
-    return Container(
-      margin: const EdgeInsets.only(top: 60, left: 16, right: 16),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.green,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.2),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Current step info
-          Row(
-            children: [
-              Icon(
-                _getDirectionIcon(_currentStep!.instruction),
-                color: Colors.white,
-                size: 24,
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  _currentStep!.instruction,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
-                  ),
+        // Duration display at top
+        Positioned(
+          top: 120, // Moved down to avoid overlap with search bar
+          left: 16,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(25),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 4,
+                  offset: const Offset(0, 2),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          // Distance and step counter
-          Row(
-            children: [
-              Text(
-                _formatDistance(_currentStep!.distance),
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              const Spacer(),
-              Text(
-                'Step ${_remainingInfo['currentStep'] ?? 1} of ${_remainingInfo['totalSteps'] ?? 1}',
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTripInfoCard() {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 16, left: 16, right: 16),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          // Exit button
-          GestureDetector(
-            onTap: widget.onExitNavigation,
-            child: Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.red[50],
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                Icons.close,
-                color: Colors.red[600],
-                size: 24,
-              ),
+              ],
             ),
-          ),
-          
-          const SizedBox(width: 20),
-          
-          // Trip information
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
+                Icon(Icons.access_time, color: Colors.grey[600], size: 16),
+                const SizedBox(width: 6),
                 Text(
                   _formatDuration(_remainingInfo['duration'] ?? 0),
                   style: TextStyle(
-                    color: Colors.grey[800],
-                    fontSize: 20,
+                    fontSize: 16,
                     fontWeight: FontWeight.bold,
+                    color: Colors.grey[800],
                   ),
                 ),
-                const SizedBox(height: 4),
+                const SizedBox(width: 8),
                 Text(
-                  '${_formatDistance(_remainingInfo['distance'] ?? 0)} remaining',
-                  style: TextStyle(
-                    color: Colors.grey[600],
-                    fontSize: 16,
-                  ),
+                  '• ${_formatDistance(_remainingInfo['distance'] ?? 0)}',
+                  style: TextStyle(fontSize: 14, color: Colors.grey[600]),
                 ),
               ],
             ),
           ),
-          
-          // Re-center button
-          GestureDetector(
-            onTap: () {
-              widget.navigationService.forceRecenter();
-            },
-            child: Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.blue[50],
-                shape: BoxShape.circle,
-              ),
-              child: Icon(
-                Icons.my_location,
-                color: Colors.blue[600],
-                size: 24,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
+        ),
 
-  IconData _getDirectionIcon(String instruction) {
-    final lowerInstruction = instruction.toLowerCase();
-    
-    if (lowerInstruction.contains('turn left') || lowerInstruction.contains('left')) {
-      return Icons.turn_left;
-    } else if (lowerInstruction.contains('turn right') || lowerInstruction.contains('right')) {
-      return Icons.turn_right;
-    } else if (lowerInstruction.contains('u-turn') || lowerInstruction.contains('u turn')) {
-      return Icons.u_turn_left;
-    } else if (lowerInstruction.contains('arrive') || lowerInstruction.contains('destination')) {
-      return Icons.location_on;
-    } else {
-      return Icons.arrow_upward;
-    }
+        // Control buttons on the right
+        Positioned(
+          top: 120, // Aligned with duration display
+          right: 16,
+          child: Column(
+            children: [
+              // Vehicle selection button
+              Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                child: FloatingActionButton(
+                  heroTag: "transportButton",
+                  backgroundColor: Colors.white,
+                  onPressed: () {
+                    setState(() {
+                      _showVehicleSelector = !_showVehicleSelector;
+                    });
+                  },
+                  child: Text(
+                    widget.navigationService.getTransportationModeIcon(
+                      widget.navigationService.currentTransportationMode,
+                    ),
+                    style: const TextStyle(fontSize: 20),
+                  ),
+                ),
+              ),
+
+              // Exit navigation button
+              Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                child: FloatingActionButton(
+                  heroTag: "exitButton",
+                  backgroundColor: Colors.red[50],
+                  onPressed: widget.onExitNavigation,
+                  child: Icon(Icons.close, color: Colors.red[600]),
+                ),
+              ),
+            ],
+          ),
+        ),
+        //Re-center button removed - using the one from base map
+      ],
+    );
   }
 
   String _formatDistance(double meters) {
@@ -255,5 +175,114 @@ class _NavigationOverlayState extends State<NavigationOverlay> {
         return '${hours}h ${remainingMinutes}m';
       }
     }
+  }
+
+  Widget _buildVehicleSelector() {
+    return Positioned(
+      top: 180, // Moved below the duration display
+      left: 16,
+      right: 80,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        margin: const EdgeInsets.only(top: 8), // Added margin for spacing
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.2), // Increased shadow opacity
+              blurRadius: 12, // Increased blur for better elevation
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text(
+              'Choose Transportation',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children:
+                  widget.navigationService
+                      .getAvailableTransportationModes()
+                      .map((mode) {
+                        final isSelected =
+                            mode ==
+                            widget.navigationService.currentTransportationMode;
+                        return GestureDetector(
+                          onTap: () {
+                            widget.navigationService.changeTransportationMode(
+                              mode,
+                            );
+                            setState(() {
+                              _showVehicleSelector = false;
+                            });
+                          },
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 12,
+                            ),
+                            decoration: BoxDecoration(
+                              color:
+                                  isSelected
+                                      ? widget.navigationService
+                                          .getTransportationModeColor(mode)
+                                          .withOpacity(0.2)
+                                      : Colors.grey[100],
+                              borderRadius: BorderRadius.circular(25),
+                              border: Border.all(
+                                color:
+                                    isSelected
+                                        ? widget.navigationService
+                                            .getTransportationModeColor(mode)
+                                        : Colors.grey[300]!,
+                                width: 2,
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  widget.navigationService
+                                      .getTransportationModeIcon(mode),
+                                  style: const TextStyle(fontSize: 16),
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  widget.navigationService
+                                      .getTransportationModeDisplayName(mode),
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    fontWeight:
+                                        isSelected
+                                            ? FontWeight.bold
+                                            : FontWeight.normal,
+                                    color:
+                                        isSelected
+                                            ? widget.navigationService
+                                                .getTransportationModeColor(
+                                                  mode,
+                                                )
+                                            : Colors.grey[700],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      })
+                      .toList(),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

@@ -1,5 +1,4 @@
 // ignore_for_file: constant_identifier_names, depend_on_referenced_packages, prefer_final_fields
-
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
@@ -62,10 +61,15 @@ class NavigationService {
   final _navigationStateController = StreamController<bool>.broadcast();
   final _locationController = StreamController<Position>.broadcast();
   final _arrivalController = StreamController<String>.broadcast();
-  
+
   // Stream group for better memory management
   final StreamGroup _streamGroup = StreamGroup();
 
+  // Add this new stream controller in NavigationService
+  final _transportationModeController = StreamController<String>.broadcast();
+
+  Stream<String> get transportationModeStream =>
+      _transportationModeController.stream;
   Stream<NavigationStep> get stepStream => _stepController.stream;
   Stream<bool> get navigationStateStream => _navigationStateController.stream;
   Stream<Position> get locationStream => _locationController.stream;
@@ -76,11 +80,11 @@ class NavigationService {
   int _currentStepIndex = 0;
   Position? _currentPosition;
   StreamSubscription<Position>? _positionStream;
-  bool _isNavigating = false; 
+  bool _isNavigating = false;
   String? _destinationName;
   String _currentTransportationMode = MODE_WALKING;
   bool _isMapRotated = true;
-  
+
   // Destination information for arrival tracking
   String? _destinationId;
   String? _destinationCategory;
@@ -89,14 +93,20 @@ class NavigationService {
   String? _destinationMunicipality;
   List<String>? _destinationImages;
   String? _destinationDescription;
-  
-  final StreamController<Set<Polyline>> _polylineController = StreamController<Set<Polyline>>.broadcast();
+
+  final StreamController<Set<Polyline>> _polylineController =
+      StreamController<Set<Polyline>>.broadcast();
 
   NavigationRoute? get currentRoute => _currentRoute;
   bool get isNavigating => _isNavigating;
 
+  // Update changeTransportationMode method
   void changeTransportationMode(String mode) {
     _currentTransportationMode = mode;
+
+    // Emit transportation mode change to notify UI immediately
+    _transportationModeController.add(mode);
+
     // Recalculate route with new mode if currently navigating
     if (_isNavigating && _currentRoute != null) {
       _recalculateRouteWithNewMode();
@@ -106,39 +116,35 @@ class NavigationService {
   /// Transportation mode constants
   static const String MODE_WALKING = 'walking';
   static const String MODE_DRIVING = 'driving';
-  static const String MODE_BICYCLING = 'bicycling';
   static const String MODE_MOTORCYCLE = 'motorcycle';
-  static const String MODE_TRANSIT = 'transit';
 
   /// Get all available transportation modes
   List<String> getAvailableTransportationModes() {
-    return [
-      MODE_WALKING,
-      MODE_BICYCLING,
-      MODE_DRIVING,
-      MODE_MOTORCYCLE,
-      MODE_TRANSIT,
-    ];
+    return [MODE_WALKING, MODE_DRIVING, MODE_MOTORCYCLE];
   }
 
-  /// Get transportation mode multiplier for time calculations
-  /// These multipliers are based on average speeds:
-  /// Walking: 5 km/h, Bicycling: 15 km/h, Driving: 40 km/h, Motorcycle: 50 km/h
-  double _getTransportationModeMultiplier(String mode) {
+  /// Get Google Maps compatible average speeds (km/h)
+  /// Based on Google Maps actual assumptions and real-world data
+  double _getTransportationModeSpeed(String mode) {
     switch (mode.toLowerCase()) {
       case MODE_WALKING:
-        return 1.0; // Base walking speed (5 km/h)
-      case MODE_BICYCLING:
-        return 0.33; // Bicycling is ~3x faster than walking (15 km/h)
+        return 5.0; // Slightly faster average walking speed
       case MODE_DRIVING:
-        return 0.125; // Driving is ~8x faster than walking (40 km/h)
+        return 45.0; // Better average for mixed urban/suburban driving
       case MODE_MOTORCYCLE:
-        return 0.1; // Motorcycle is ~10x faster than walking (50 km/h)
-      case MODE_TRANSIT:
-        return 0.25; // Transit is ~4x faster than walking (20 km/h average)
+        return 50.0; // Realistic motorcycle speed considering traffic
       default:
-        return 1.0;
+        return 5.0; // Default to walking
     }
+  }
+
+  /// Calculate realistic travel time based on distance and transportation mode
+  /// Returns time in seconds
+  double _calculateTravelTime(double distanceInMeters, String mode) {
+    final speedKmh = _getTransportationModeSpeed(mode);
+    final distanceKm = distanceInMeters / 1000.0;
+    final timeInHours = distanceKm / speedKmh;
+    return timeInHours * 3600; // Convert to seconds
   }
 
   /// Get transportation mode name for display
@@ -148,12 +154,8 @@ class NavigationService {
         return 'Walking';
       case MODE_DRIVING:
         return 'Driving';
-      case MODE_BICYCLING:
-        return 'Bicycling';
       case MODE_MOTORCYCLE:
         return 'Motorcycle';
-      case MODE_TRANSIT:
-        return 'Transit';
       default:
         return 'Walking';
     }
@@ -164,14 +166,10 @@ class NavigationService {
     switch (mode.toLowerCase()) {
       case MODE_WALKING:
         return '🚶';
-      case MODE_BICYCLING:
-        return '🚴';
       case MODE_DRIVING:
         return '🚗';
       case MODE_MOTORCYCLE:
         return '🏍️';
-      case MODE_TRANSIT:
-        return '🚌';
       default:
         return '🚶';
     }
@@ -182,23 +180,13 @@ class NavigationService {
     switch (mode.toLowerCase()) {
       case MODE_WALKING:
         return Colors.green;
-      case MODE_BICYCLING:
-        return Colors.blue;
       case MODE_DRIVING:
         return Colors.orange;
       case MODE_MOTORCYCLE:
         return Colors.red;
-      case MODE_TRANSIT:
-        return Colors.purple;
       default:
         return Colors.green;
     }
-  }
-
-  /// Adjust duration based on transportation mode
-  double _adjustDurationForTransportationMode(double baseDuration, String mode) {
-    final multiplier = _getTransportationModeMultiplier(mode);
-    return baseDuration * multiplier;
   }
 
   /// Convert transportation mode to API-compatible mode
@@ -206,14 +194,39 @@ class NavigationService {
     switch (mode.toLowerCase()) {
       case MODE_MOTORCYCLE:
         return MODE_DRIVING; // Google Maps API doesn't have motorcycle mode, use driving
-      case MODE_TRANSIT:
-        return MODE_DRIVING; // Google Maps API transit mode is complex, use driving for now
       case MODE_WALKING:
       case MODE_DRIVING:
-      case MODE_BICYCLING:
         return mode.toLowerCase();
       default:
         return MODE_WALKING;
+    }
+  }
+
+  /// Get step-specific detection distance based on transportation mode
+  double _getStepDetectionDistance(String mode) {
+    switch (mode.toLowerCase()) {
+      case MODE_WALKING:
+        return 15.0; // 15 meters for walking
+      case MODE_DRIVING:
+        return 50.0; // 50 meters for driving
+      case MODE_MOTORCYCLE:
+        return 45.0; // 45 meters for motorcycle
+      default:
+        return 15.0;
+    }
+  }
+
+  /// Get arrival detection distance based on transportation mode
+  double _getArrivalDetectionDistance(String mode) {
+    switch (mode.toLowerCase()) {
+      case MODE_WALKING:
+        return 20.0; // 20 meters for walking
+      case MODE_DRIVING:
+        return 100.0; // 100 meters for driving
+      case MODE_MOTORCYCLE:
+        return 80.0; // 80 meters for motorcycle
+      default:
+        return 20.0;
     }
   }
 
@@ -225,23 +238,28 @@ class NavigationService {
 
   bool get isMapRotated => _isMapRotated;
   String get currentTransportationMode => _currentTransportationMode;
-  
+
   /// Get current transportation mode display name
-  String get currentTransportationModeDisplayName => getTransportationModeDisplayName(_currentTransportationMode);
+  String get currentTransportationModeDisplayName =>
+      getTransportationModeDisplayName(_currentTransportationMode);
 
   Future<void> _recalculateRouteWithNewMode() async {
     if (_currentRoute == null) return;
-    
+
     try {
       final newRoute = await getDirections(
-        LatLng(_currentRoute!.destination.latitude, _currentRoute!.destination.longitude),
+        LatLng(
+          _currentRoute!.destination.latitude,
+          _currentRoute!.destination.longitude,
+        ),
         mode: _currentTransportationMode,
       );
-      
+
       if (newRoute != null) {
         _currentRoute = newRoute;
         _currentStepIndex = 0;
         _stepController.add(_currentRoute!.steps[_currentStepIndex]);
+        _createNavigationPolylines(); // Update polylines with new route
       }
     } catch (e) {
       if (kDebugMode) print('Error recalculating route: $e');
@@ -251,18 +269,17 @@ class NavigationService {
   /// Get turn-by-turn directions to a destination
   Future<NavigationRoute?> getDirections(
     LatLng destination, {
-    String mode = MODE_WALKING, // Default to walking like in the image
+    String mode = MODE_WALKING, // Default to walking
   }) async {
     try {
       final position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
       );
-      
       final origin = LatLng(position.latitude, position.longitude);
-      
+
       // Convert transportation mode to API-compatible mode
       final apiMode = _convertToApiMode(mode);
-      
+
       final url = ApiEnvironment.getDirectionsUrl(
         '${origin.latitude},${origin.longitude}',
         '${destination.latitude},${destination.longitude}',
@@ -273,73 +290,118 @@ class NavigationService {
       if (response.statusCode != 200) return null;
 
       final body = json.decode(response.body);
-      if (body['status'] != 'OK' || body['routes'] == null || body['routes'].isEmpty) return null;
+      if (body['status'] != 'OK' ||
+          body['routes'] == null ||
+          body['routes'].isEmpty) {
+        return null;
+      }
 
       final routes = body['routes'] as List<dynamic>;
       if (routes.isEmpty) return null;
-      
+
       final route = routes[0] as Map<String, dynamic>;
       final legs = route['legs'] as List<dynamic>? ?? [];
-      final overviewPolyline = route['overview_polyline']?['points']?.toString() ?? '';
+      final overviewPolyline =
+          route['overview_polyline']?['points']?.toString() ?? '';
 
       final decoder = PolylinePoints();
-      final overviewCoords = decoder.decodePolyline(overviewPolyline.toString());
+      final overviewCoords = decoder.decodePolyline(
+        overviewPolyline.toString(),
+      );
 
       final steps = <NavigationStep>[];
       double totalDistance = 0;
       double totalDuration = 0;
 
-              for (final leg in legs) {
-          final legSteps = leg['steps'] as List<dynamic>? ?? [];
-          
-          for (final step in legSteps) {
+      for (final leg in legs) {
+        final legSteps = leg['steps'] as List<dynamic>? ?? [];
+
+        for (final step in legSteps) {
           final stepData = step as Map<String, dynamic>;
           final instruction = stepData['html_instructions'] ?? '';
           final maneuver = stepData['maneuver']?.toString() ?? '';
           final distance = (stepData['distance']?['value'] ?? 0).toDouble();
-          final duration = (stepData['duration']?['value'] ?? 0).toDouble();
-          
-                      final startLocation = LatLng(
-              (stepData['start_location']?['lat'] ?? 0).toDouble(),
-              (stepData['start_location']?['lng'] ?? 0).toDouble(),
-            );
-            final endLocation = LatLng(
-              (stepData['end_location']?['lat'] ?? 0).toDouble(),
-              (stepData['end_location']?['lng'] ?? 0).toDouble(),
-            );
 
-                      // Decode step polyline if available
-            List<LatLng> stepPolyline = [];
-            if (stepData['polyline']?['points'] != null) {
-              final stepPoints = decoder.decodePolyline(stepData['polyline']['points'].toString());
-              stepPolyline = stepPoints.map((p) => LatLng(p.latitude, p.longitude)).toList();
-            } else {
-              stepPolyline = [startLocation, endLocation];
+          // FIXED: Get duration from API if available, otherwise calculate based on our mode
+          double duration;
+          if (stepData['duration']?['value'] != null) {
+            duration = (stepData['duration']['value']).toDouble();
+
+            // FIXED: Adjust duration for ALL transportation modes when API mode differs
+            if (mode != apiMode) {
+              // Calculate our expected duration and compare with API duration
+              final ourCalculatedDuration = _calculateTravelTime(
+                distance,
+                mode,
+              );
+              final apiCalculatedDuration = _calculateTravelTime(
+                distance,
+                apiMode,
+              );
+
+              // Apply ratio to adjust API duration to our mode
+              if (apiCalculatedDuration > 0) {
+                duration =
+                    duration * (ourCalculatedDuration / apiCalculatedDuration);
+              } else {
+                duration = ourCalculatedDuration;
+              }
             }
 
-          steps.add(NavigationStep(
-            instruction: _cleanHtmlInstructions(instruction),
-            maneuver: maneuver,
-            distance: distance,
-            duration: duration,
-            startLocation: startLocation,
-            endLocation: endLocation,
-            polyline: stepPolyline,
-          ));
+            // Additional specific adjustments for better accuracy
+            if (mode == MODE_MOTORCYCLE && apiMode == MODE_DRIVING) {
+              duration =
+                  duration * 0.85; // Motorcycle is ~15% faster than driving
+            }
+          } else {
+            // Calculate duration based on our transportation mode
+            duration = _calculateTravelTime(distance, mode);
+          }
+
+          final startLocation = LatLng(
+            (stepData['start_location']?['lat'] ?? 0).toDouble(),
+            (stepData['start_location']?['lng'] ?? 0).toDouble(),
+          );
+          final endLocation = LatLng(
+            (stepData['end_location']?['lat'] ?? 0).toDouble(),
+            (stepData['end_location']?['lng'] ?? 0).toDouble(),
+          );
+
+          // Decode step polyline if available
+          List<LatLng> stepPolyline = [];
+          if (stepData['polyline']?['points'] != null) {
+            final stepPoints = decoder.decodePolyline(
+              stepData['polyline']['points'].toString(),
+            );
+            stepPolyline =
+                stepPoints.map((p) => LatLng(p.latitude, p.longitude)).toList();
+          } else {
+            stepPolyline = [startLocation, endLocation];
+          }
+
+          steps.add(
+            NavigationStep(
+              instruction: _cleanHtmlInstructions(instruction),
+              maneuver: maneuver,
+              distance: distance,
+              duration: duration,
+              startLocation: startLocation,
+              endLocation: endLocation,
+              polyline: stepPolyline,
+            ),
+          );
 
           totalDistance += distance;
           totalDuration += duration;
         }
       }
 
-      // Adjust duration based on transportation mode
-      final adjustedDuration = _adjustDurationForTransportationMode(totalDuration, mode);
-      
       final navigationRoute = NavigationRoute(
         steps: steps,
         totalDistance: totalDistance,
-        totalDuration: adjustedDuration,
-        overviewPolyline: overviewCoords.map((p) => LatLng(p.latitude, p.longitude)).toList(),
+        totalDuration: totalDuration,
+        overviewPolyline:
+            overviewCoords.map((p) => LatLng(p.latitude, p.longitude)).toList(),
         origin: origin,
         destination: destination,
         travelMode: mode,
@@ -366,16 +428,20 @@ class NavigationService {
     String mode = MODE_WALKING, // Default to walking
   }) async {
     try {
-      if (kDebugMode) print('Starting navigation to: ${destination.latitude}, ${destination.longitude}');
-      
+      if (kDebugMode) {
+        print(
+          'Starting navigation to: ${destination.latitude}, ${destination.longitude}',
+        );
+      }
+
       // Check location permissions first
       final permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied || 
+      if (permission == LocationPermission.denied ||
           permission == LocationPermission.deniedForever) {
         if (kDebugMode) print('Location permission denied for navigation');
         return false;
       }
-      
+
       final route = await getDirections(destination, mode: mode);
       if (route == null) {
         if (kDebugMode) print('Failed to get directions');
@@ -386,7 +452,8 @@ class NavigationService {
 
       _currentRoute = route;
       _currentStepIndex = 0;
-      
+      _isNavigating = true;
+
       // Store destination information for arrival tracking
       _destinationId = destinationId;
       _destinationName = destinationName;
@@ -396,17 +463,17 @@ class NavigationService {
       _destinationMunicipality = destinationMunicipality;
       _destinationImages = destinationImages;
       _destinationDescription = destinationDescription;
-      
+
       // Start location tracking
       await _startLocationTracking();
-      
+
       // Create navigation polylines
       _createNavigationPolylines();
-      
+
       // Notify navigation started
       _navigationStateController.add(true);
       _stepController.add(route.steps[0]);
-      
+
       if (kDebugMode) print('Navigation started successfully');
       return true;
     } catch (e) {
@@ -420,30 +487,39 @@ class NavigationService {
     if (_currentRoute == null) return;
 
     final polylines = <Polyline>{};
-    
+
     // Main route polyline
-    polylines.add(Polyline(
-      polylineId: const PolylineId('navigation_route'),
-      points: _currentRoute!.overviewPolyline,
-      color: Colors.blue,
-      width: 8,
-      endCap: Cap.roundCap,
-      startCap: Cap.roundCap,
-      jointType: JointType.round,
-    ));
+    polylines.add(
+      Polyline(
+        polylineId: const PolylineId('navigation_route'),
+        points: _currentRoute!.overviewPolyline,
+        color: getTransportationModeColor(_currentTransportationMode),
+        width: 8,
+        endCap: Cap.roundCap,
+        startCap: Cap.roundCap,
+        jointType: JointType.round,
+      ),
+    );
 
     // Step-by-step polylines for better visualization
     for (int i = 0; i < _currentRoute!.steps.length; i++) {
       final step = _currentRoute!.steps[i];
-      polylines.add(Polyline(
-        polylineId: PolylineId('step_$i'),
-        points: step.polyline,
-        color: i == 0 ? Colors.green : Colors.blue.withOpacity(0.6),
-        width: i == 0 ? 10 : 6,
-        endCap: Cap.roundCap,
-        startCap: Cap.roundCap,
-        jointType: JointType.round,
-      ));
+      polylines.add(
+        Polyline(
+          polylineId: PolylineId('step_$i'),
+          points: step.polyline,
+          color:
+              i == 0
+                  ? Colors.green
+                  : getTransportationModeColor(
+                    _currentTransportationMode,
+                  ).withOpacity(0.6),
+          width: i == 0 ? 10 : 6,
+          endCap: Cap.roundCap,
+          startCap: Cap.roundCap,
+          jointType: JointType.round,
+        ),
+      );
     }
 
     _polylineController.add(polylines);
@@ -453,8 +529,9 @@ class NavigationService {
   void stopNavigation() {
     _currentRoute = null;
     _currentStepIndex = 0;
+    _isNavigating = false;
     _positionStream?.cancel();
-    
+
     // Clear destination information
     _destinationId = null;
     _destinationName = null;
@@ -464,16 +541,16 @@ class NavigationService {
     _destinationMunicipality = null;
     _destinationImages = null;
     _destinationDescription = null;
-    
+
     // Clear polylines
     _polylineController.add({});
-    
     _navigationStateController.add(false);
   }
 
   /// Get current navigation step
   NavigationStep? getCurrentStep() {
-    if (_currentRoute == null || _currentStepIndex >= _currentRoute!.steps.length) {
+    if (_currentRoute == null ||
+        _currentStepIndex >= _currentRoute!.steps.length) {
       return null;
     }
     return _currentRoute!.steps[_currentStepIndex];
@@ -481,7 +558,8 @@ class NavigationService {
 
   /// Get next navigation step
   NavigationStep? getNextStep() {
-    if (_currentRoute == null || _currentStepIndex + 1 >= _currentRoute!.steps.length) {
+    if (_currentRoute == null ||
+        _currentStepIndex + 1 >= _currentRoute!.steps.length) {
       return null;
     }
     return _currentRoute!.steps[_currentStepIndex + 1];
@@ -507,12 +585,13 @@ class NavigationService {
     };
   }
 
-  /// Start location tracking for navigation
+  /// FIXED: Start location tracking for navigation with consistent distance filtering
   Future<void> _startLocationTracking() async {
     try {
-      const locationSettings = LocationSettings(
+      // FIXED: Use consistent distance filter across all modes for accuracy
+      LocationSettings locationSettings = const LocationSettings(
         accuracy: LocationAccuracy.high,
-        distanceFilter: 5, // Update every 5 meters
+        distanceFilter: 5, // Consistent 5 meters for all modes
       );
 
       _positionStream = Geolocator.getPositionStream(
@@ -521,7 +600,6 @@ class NavigationService {
         (Position position) {
           _currentPosition = position;
           _locationController.add(position);
-          
           // Check if we need to advance to next step
           _checkStepProgress();
         },
@@ -556,21 +634,48 @@ class NavigationService {
     final currentStep = getCurrentStep();
     if (currentStep == null) return;
 
-    final currentLatLng = LatLng(_currentPosition!.latitude, _currentPosition!.longitude);
-    final distanceToStepEnd = _calculateDistance(currentLatLng, currentStep.endLocation);
+    final currentLatLng = LatLng(
+      _currentPosition!.latitude,
+      _currentPosition!.longitude,
+    );
 
-    // If we're within 20 meters of the step end, advance to next step
-    if (distanceToStepEnd < 20 && _currentStepIndex < _currentRoute!.steps.length - 1) {
+    final distanceToStepEnd = _calculateDistance(
+      currentLatLng,
+      currentStep.endLocation,
+    );
+
+    // Use transportation mode specific detection distance
+    final detectionDistance = _getStepDetectionDistance(
+      _currentTransportationMode,
+    );
+
+    // If we're within detection distance of the step end, advance to next step
+    if (distanceToStepEnd < detectionDistance &&
+        _currentStepIndex < _currentRoute!.steps.length - 1) {
       _currentStepIndex++;
       _stepController.add(_currentRoute!.steps[_currentStepIndex]);
-      
+
       // Update polylines to highlight current step
       _updateStepPolylines();
-      
+
+      if (kDebugMode) {
+        print(
+          'Advanced to step ${_currentStepIndex + 1}/${_currentRoute!.steps.length}',
+        );
+      }
+
       // Check if we've reached the destination
       if (_currentStepIndex == _currentRoute!.steps.length - 1) {
-        final distanceToDestination = _calculateDistance(currentLatLng, _currentRoute!.destination);
-        if (distanceToDestination < 50) {
+        final distanceToDestination = _calculateDistance(
+          currentLatLng,
+          _currentRoute!.destination,
+        );
+
+        final arrivalDistance = _getArrivalDetectionDistance(
+          _currentTransportationMode,
+        );
+
+        if (distanceToDestination < arrivalDistance) {
           // We've arrived!
           _onArrival();
         }
@@ -583,39 +688,44 @@ class NavigationService {
     if (_currentRoute == null) return;
 
     final polylines = <Polyline>{};
-    
-    // Main route polyline
-    polylines.add(Polyline(
-      polylineId: const PolylineId('navigation_route'),
-      points: _currentRoute!.overviewPolyline,
-      color: Colors.blue,
-      width: 8,
-      endCap: Cap.roundCap,
-      startCap: Cap.roundCap,
-      jointType: JointType.round,
-    ));
 
-          // Step-by-step polylines with current step highlighted
-      for (int i = 0; i < _currentRoute!.steps.length; i++) {
-        final step = _currentRoute!.steps[i];
-        final isCurrentStep = i == _currentStepIndex;
-        final isCompletedStep = i < _currentStepIndex;
-        
-        Color stepColor;
-        int stepWidth;
-        
-        if (isCurrentStep) {
-          stepColor = Colors.green;
-          stepWidth = 12;
-        } else if (isCompletedStep) {
-          stepColor = Colors.green.withOpacity(0.3);
-          stepWidth = 4;
-        } else {
-          stepColor = Colors.blue.withOpacity(0.6);
-          stepWidth = 6;
-        }
-        
-        polylines.add(Polyline(
+    // Main route polyline
+    polylines.add(
+      Polyline(
+        polylineId: const PolylineId('navigation_route'),
+        points: _currentRoute!.overviewPolyline,
+        color: getTransportationModeColor(_currentTransportationMode),
+        width: 8,
+        endCap: Cap.roundCap,
+        startCap: Cap.roundCap,
+        jointType: JointType.round,
+      ),
+    );
+
+    // Step-by-step polylines with current step highlighted
+    for (int i = 0; i < _currentRoute!.steps.length; i++) {
+      final step = _currentRoute!.steps[i];
+      final isCurrentStep = i == _currentStepIndex;
+      final isCompletedStep = i < _currentStepIndex;
+
+      Color stepColor;
+      int stepWidth;
+
+      if (isCurrentStep) {
+        stepColor = Colors.green;
+        stepWidth = 12;
+      } else if (isCompletedStep) {
+        stepColor = Colors.green.withOpacity(0.3);
+        stepWidth = 4;
+      } else {
+        stepColor = getTransportationModeColor(
+          _currentTransportationMode,
+        ).withOpacity(0.6);
+        stepWidth = 6;
+      }
+
+      polylines.add(
+        Polyline(
           polylineId: PolylineId('step_$i'),
           points: step.polyline,
           color: stepColor,
@@ -623,8 +733,9 @@ class NavigationService {
           endCap: Cap.roundCap,
           startCap: Cap.roundCap,
           jointType: JointType.round,
-        ));
-      }
+        ),
+      );
+    }
 
     _polylineController.add(polylines);
   }
@@ -633,7 +744,7 @@ class NavigationService {
   void _onArrival() async {
     // Notify arrival
     if (kDebugMode) print('Arrived at destination!');
-    
+
     // Save arrival to visited destinations
     if (_destinationId != null && _currentPosition != null) {
       try {
@@ -649,8 +760,11 @@ class NavigationService {
           destinationImages: _destinationImages,
           destinationDescription: _destinationDescription,
         );
-        
-        if (kDebugMode) print('Arrival saved successfully for: $_destinationName');
+
+        if (kDebugMode) {
+          print('Arrival saved successfully for: $_destinationName');
+        }
+
         // Notify arrival saved
         if (_destinationName != null) {
           _arrivalController.add(_destinationName!);
@@ -659,22 +773,25 @@ class NavigationService {
         if (kDebugMode) print('Error saving arrival: $e');
       }
     }
-    
+
     // Stop navigation after a short delay
     Future.delayed(const Duration(seconds: 3), () {
       stopNavigation();
     });
   }
 
-  /// Calculate distance between two points
+  /// Calculate distance between two points using Haversine formula
   double _calculateDistance(LatLng a, LatLng b) {
     const double earthRadius = 6371000; // meters
     final double dLat = _degToRad(b.latitude - a.latitude);
     final double dLon = _degToRad(b.longitude - a.longitude);
     final double lat1 = _degToRad(a.latitude);
     final double lat2 = _degToRad(b.latitude);
-    final double h = (1 - math.cos(dLat)) / 2 + 
-                     math.cos(lat1) * math.cos(lat2) * (1 - math.cos(dLon)) / 2;
+
+    final double h =
+        (1 - math.cos(dLat)) / 2 +
+        math.cos(lat1) * math.cos(lat2) * (1 - math.cos(dLon)) / 2;
+
     return 2 * earthRadius * math.asin(math.sqrt(h));
   }
 
@@ -684,19 +801,43 @@ class NavigationService {
   String _cleanHtmlInstructions(String htmlInstructions) {
     // Remove HTML tags
     String clean = htmlInstructions.replaceAll(RegExp(r'<[^>]*>'), '');
+
     // Decode HTML entities
     clean = clean.replaceAll('&nbsp;', ' ');
     clean = clean.replaceAll('&amp;', '&');
     clean = clean.replaceAll('&lt;', '<');
     clean = clean.replaceAll('&gt;', '>');
     clean = clean.replaceAll('&quot;', '"');
+
     return clean.trim();
   }
 
   /// Force re-center the map
   void forceRecenter() {
-    // Notify map controller to re-center
-    _locationController.add(_currentPosition!);
+    if (_currentPosition != null) {
+      // Notify map controller to re-center
+      _locationController.add(_currentPosition!);
+    }
+  }
+
+  /// Get estimated time for a given distance and transportation mode
+  /// Useful for UI displays and planning
+  String getEstimatedTimeString(double distanceInMeters, String mode) {
+    final timeInSeconds = _calculateTravelTime(distanceInMeters, mode);
+    final hours = (timeInSeconds / 3600).floor();
+    final minutes = ((timeInSeconds % 3600) / 60).round();
+
+    if (hours > 0) {
+      return '${hours}h ${minutes}m';
+    } else {
+      return '${minutes}m';
+    }
+  }
+
+  /// Get speed for current transportation mode (for UI display)
+  String getCurrentModeSpeedInfo() {
+    final speed = _getTransportationModeSpeed(_currentTransportationMode);
+    return '~${speed.toStringAsFixed(1)} km/h';
   }
 
   /// Dispose resources
@@ -708,5 +849,6 @@ class NavigationService {
     _navigationStateController.close();
     _arrivalController.close();
     _polylineController.close();
+    _transportationModeController.close();
   }
 }

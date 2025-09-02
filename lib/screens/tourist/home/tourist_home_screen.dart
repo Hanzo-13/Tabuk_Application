@@ -21,7 +21,8 @@ class TouristHomeScreen extends StatefulWidget {
   State<TouristHomeScreen> createState() => _TouristHomeScreenState();
 }
 
-class _TouristHomeScreenState extends State<TouristHomeScreen> with TickerProviderStateMixin {
+class _TouristHomeScreenState extends State<TouristHomeScreen>
+    with TickerProviderStateMixin {
   Position? _userPosition;
   late AnimationController _animationController;
   late Animation<double> _fadeAnimation;
@@ -67,15 +68,17 @@ class _TouristHomeScreenState extends State<TouristHomeScreen> with TickerProvid
     try {
       final user = FirebaseAuth.instance.currentUser;
       if (user != null) {
-        final userDoc = await FirebaseFirestore.instance
-            .collection('Users')
-            .doc(user.uid)
-            .get();
-        
+        final userDoc =
+            await FirebaseFirestore.instance
+                .collection('Users')
+                .doc(user.uid)
+                .get();
+
         if (userDoc.exists) {
           final userData = userDoc.data()!;
           setState(() {
-            _userName = userData['username'] ?? userData['display_name'] ?? 'Explorer';
+            _userName =
+                userData['username'] ?? userData['display_name'] ?? 'Explorer';
             _isUserLoggedIn = true;
           });
           // Set personalized greeting after user data is loaded
@@ -110,7 +113,7 @@ class _TouristHomeScreenState extends State<TouristHomeScreen> with TickerProvid
   void _setGreeting() {
     final hour = DateTime.now().hour;
     final random = math.Random();
-    
+
     if (_isUserLoggedIn && _userName.isNotEmpty) {
       // Personalized greetings for logged-in users
       if (hour >= 18) {
@@ -136,10 +139,11 @@ class _TouristHomeScreenState extends State<TouristHomeScreen> with TickerProvid
           'Good Afternoon, $_userName 🌤️',
           'Afternoon, $_userName 🌅',
           'Hello $_userName 🌤️',
-          'Good Afternoon, $_userName?🚶‍♂️',
+          'Good Afternoon, $_userName 🚶‍♂️',
           'Hi $_userName 🌤️',
         ];
-        _greeting = afternoonGreetings[random.nextInt(afternoonGreetings.length)];
+        _greeting =
+            afternoonGreetings[random.nextInt(afternoonGreetings.length)];
       }
     } else {
       // Generic greetings for guests
@@ -169,20 +173,19 @@ class _TouristHomeScreenState extends State<TouristHomeScreen> with TickerProvid
           'Good Afternoon 🚶‍♂️',
           'Hi 🌤️',
         ];
-        _greeting = afternoonGreetings[random.nextInt(afternoonGreetings.length)];
+        _greeting =
+            afternoonGreetings[random.nextInt(afternoonGreetings.length)];
       }
     }
   }
 
   Future<void> _fetchLocationAndRecommendations() async {
-
     try {
       // Get user location
       _userPosition = await _locationService.getCurrentPosition();
-      
+
       // Load all recommendations
       await _loadRecommendations();
-      
     } catch (e) {
       if (kDebugMode) print('Error fetching location and recommendations: $e');
     }
@@ -191,16 +194,17 @@ class _TouristHomeScreenState extends State<TouristHomeScreen> with TickerProvid
   Future<void> _loadRecommendations() async {
     try {
       // Load recommendations for different sections
-      final recommendations = await ContentRecommenderService.getAllRecommendations(
-        userLat: _userPosition?.latitude,
-        userLng: _userPosition?.longitude,
-        forYouLimit: AppConstants.homeForYouLimit,
-        popularLimit: AppConstants.homePopularLimit,
-        nearbyLimit: AppConstants.homeNearbyLimit,
-        discoverLimit: AppConstants.homeDiscoverLimit,
-        forceRefresh: true,
-      );
-      
+      final recommendations =
+          await ContentRecommenderService.getAllRecommendations(
+            userLat: _userPosition?.latitude,
+            userLng: _userPosition?.longitude,
+            forYouLimit: AppConstants.homeForYouLimit,
+            popularLimit: AppConstants.homePopularLimit,
+            nearbyLimit: AppConstants.homeNearbyLimit,
+            discoverLimit: AppConstants.homeDiscoverLimit,
+            forceRefresh: true,
+          );
+
       setState(() {
         _recommendations.clear();
         _recommendations.addAll(recommendations);
@@ -215,12 +219,13 @@ class _TouristHomeScreenState extends State<TouristHomeScreen> with TickerProvid
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => ViewAllScreen(
-          categoryKey: categoryKey,
-          title: title,
-          hotspots: hotspots,
-          accentColor: accentColor,
-        ),
+        builder:
+            (context) => ViewAllScreen(
+              categoryKey: categoryKey,
+              title: title,
+              hotspots: hotspots,
+              accentColor: accentColor,
+            ),
       ),
     );
   }
@@ -235,10 +240,7 @@ class _TouristHomeScreenState extends State<TouristHomeScreen> with TickerProvid
   Widget build(BuildContext context) {
     return Scaffold(
       body: CustomScrollView(
-        slivers: [
-          _buildAppBar(),
-          _buildRecommendations(),
-        ],
+        slivers: [_buildAppBar(), _buildRecommendations()],
       ),
     );
   }
@@ -265,52 +267,43 @@ class _TouristHomeScreenState extends State<TouristHomeScreen> with TickerProvid
           child: SafeArea(
             child: AnimatedBuilder(
               animation: _animationController,
-              builder: (context, child) => FadeTransition(
-                opacity: _fadeAnimation,
-                child: SlideTransition(
-                  position: _slideAnimation,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16.0,
-                      vertical: 8.0,
-                    ),
-                    child: MediaQuery(
-                      data: MediaQuery.of(context).copyWith(
-                        textScaler: const TextScaler.linear(1.0),
-                      ),
-                      child: LayoutBuilder(
-                        builder: (context, constraints) {
-                          final maxTextWidth = constraints.maxWidth - 60;
-                          return Column(
+              builder:
+                  (context, child) => FadeTransition(
+                    opacity: _fadeAnimation,
+                    child: SlideTransition(
+                      position: _slideAnimation,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 20.0,
+                          vertical: 12.0,
+                        ),
+                        child: MediaQuery(
+                          data: MediaQuery.of(
+                            context,
+                          ).copyWith(textScaler: const TextScaler.linear(1.0)),
+                          child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Row(
-                                children: [
-                                 
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: ConstrainedBox(
-                                      constraints: BoxConstraints(maxWidth: maxTextWidth),
-                                      child: Text(
-                                        _greeting,
-                                        maxLines: 2,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: const TextStyle(
-                                          fontSize: 24,
-                                          fontWeight: FontWeight.bold,
-                                          color: Colors.white,
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 8),
-                              ConstrainedBox(
-                                constraints: BoxConstraints(maxWidth: maxTextWidth + 48),
+                              // Greeting text
+                              Flexible(
                                 child: Text(
-                                  _isUserLoggedIn 
+                                  _greeting,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.white,
+                                    height: 1.1,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 6),
+                              // Subtitle text
+                              Flexible(
+                                child: Text(
+                                  _isUserLoggedIn
                                       ? 'Discover amazing places around you'
                                       : 'Discover amazing places around you',
                                   maxLines: 1,
@@ -318,17 +311,16 @@ class _TouristHomeScreenState extends State<TouristHomeScreen> with TickerProvid
                                   style: const TextStyle(
                                     fontSize: 16,
                                     color: Colors.white70,
+                                    height: 1.2,
                                   ),
                                 ),
                               ),
                             ],
-                          );
-                        },
+                          ),
+                        ),
                       ),
                     ),
                   ),
-                ),
-              ),
             ),
           ),
         ),
@@ -355,7 +347,7 @@ class _TouristHomeScreenState extends State<TouristHomeScreen> with TickerProvid
     for (int i = 0; i < sectionConfigs.length; i++) {
       final config = sectionConfigs[i];
       final hotspots = _recommendations[config.categoryKey] ?? [];
-      
+
       if (hotspots.isNotEmpty) {
         sections.add(
           RecommendationSectionWidget(
@@ -366,11 +358,12 @@ class _TouristHomeScreenState extends State<TouristHomeScreen> with TickerProvid
             icon: config.icon,
             hotspots: hotspots,
             animationDelay: (i + 1) * 200,
-            onViewAll: () => _navigateToViewAll(
-              config.categoryKey,
-              config.title,
-              config.accentColor,
-            ),
+            onViewAll:
+                () => _navigateToViewAll(
+                  config.categoryKey,
+                  config.title,
+                  config.accentColor,
+                ),
             showViewAll: config.showViewAll,
           ),
         );
@@ -378,12 +371,7 @@ class _TouristHomeScreenState extends State<TouristHomeScreen> with TickerProvid
     }
 
     return SliverToBoxAdapter(
-      child: Column(
-        children: [
-          ...sections,
-          const SizedBox(height: 40),
-        ],
-      ),
+      child: Column(children: [...sections, const SizedBox(height: 40)]),
     );
   }
 }
