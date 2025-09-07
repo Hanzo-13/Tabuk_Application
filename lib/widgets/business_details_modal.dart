@@ -5,6 +5,7 @@ import 'package:capstone_app/screens/review_screen.dart';
 import 'package:capstone_app/services/favorites_service.dart';
 import 'package:capstone_app/services/review_service.dart';
 import 'package:capstone_app/utils/colors.dart';
+import 'package:capstone_app/widgets/cached_image.dart';
 import 'package:capstone_app/widgets/review_form_modal.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
@@ -853,15 +854,33 @@ class _BusinessDetailsModalState extends State<BusinessDetailsModal> {
     return Row(
       children: [
         const Text(
-          'Tourist spot Status: ',
+          'Spot Status: ',
           style: TextStyle(fontWeight: FontWeight.bold),
         ),
         Chip(
           label: Text(status, style: const TextStyle(color: Colors.white)),
-          backgroundColor: status.toLowerCase() == 'open' ? Colors.green : Colors.grey,
+          backgroundColor: status.toLowerCase() == 'open'
+              ? Colors.green
+              : status.toLowerCase() == 'temporary close'
+            ? Colors.grey
+            : status.toLowerCase() == 'permanently close'
+                ? AppColors.errorRed
+                : Colors.grey,
         ),
       ],
     );
+  }
+
+  String _formatOperatingHours(dynamic value) {
+    // If the value is a Map, format it
+    if (value is Map) {
+      final from = value['open'] ?? '';
+      final to = value['close'] ?? '';
+      // Return a string with markers for coloring in the widget
+      return '$from | $to';
+    }
+    // If it's already a String or something else, return it as is
+    return value.toString();
   }
 
   Widget _buildImageGallery() {
@@ -888,6 +907,7 @@ class _BusinessDetailsModalState extends State<BusinessDetailsModal> {
             itemCount: images.length,
             onPageChanged: (i) => setState(() => _currentImageIndex = i),
             itemBuilder: (context, index) {
+              // The return statement must be a complete, self-contained widget.
               return AnimatedContainer(
                 duration: const Duration(milliseconds: 300),
                 margin: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
@@ -910,39 +930,32 @@ class _BusinessDetailsModalState extends State<BusinessDetailsModal> {
                       child: AnimatedOpacity(
                         duration: const Duration(milliseconds: 500),
                         opacity: _currentImageIndex == index ? 1.0 : 0.7,
-                        child: Image.network(
-                          images[index],
+                        // Simplified: No need for the ternary check here
+                        child: CachedImage(
+                          imageUrl: images[index],
                           fit: BoxFit.cover,
-                          width: double.infinity,
-                          loadingBuilder: (context, child, loadingProgress) {
-                            if (loadingProgress == null) return child;
-                            return Container(
-                              color: Colors.grey[300],
-                              child: Center(
-                                child: CircularProgressIndicator(
-                                  value: loadingProgress.expectedTotalBytes != null
-                                      ? loadingProgress.cumulativeBytesLoaded /
-                                          loadingProgress.expectedTotalBytes!
-                                      : null,
-                                ),
-                              ),
-                            );
-                          },
-                          errorBuilder: (context, error, stackTrace) {
-                            return Container(
-                              color: Colors.grey[300],
-                              child: const Center(
-                                child: Icon(Icons.error, size: 50, color: Colors.red),
-                              ),
-                            );
-                          },
+                          placeholderBuilder: (context) => Container(
+                            color: Colors.grey[300],
+                            child: const Center(
+                              child: CircularProgressIndicator(),
+                            ),
+                          ),
+                          errorBuilder: (context, error, stackTrace) =>
+                              Container(
+                            color: Colors.grey[300],
+                            child: Icon(
+                              Icons.image_not_supported,
+                              size: 60,
+                              color: Colors.grey[600],
+                            ),
+                          ),
                         ),
                       ),
                     ),
                   ),
                 ),
-              );
-            },
+              ); // <-- FIX: The AnimatedContainer is now properly closed with a parenthesis.
+            }, // <-- FIX: The brace now correctly closes the itemBuilder function body.
           ),
           if (images.length > 1)
             Padding(
@@ -975,7 +988,6 @@ class _BusinessDetailsModalState extends State<BusinessDetailsModal> {
       ),
     );
   }
-
   void _showFullScreenImage(String currentImage, List<String> allImages) {
     Navigator.push(
       context,
@@ -1011,7 +1023,7 @@ class _BusinessDetailsModalState extends State<BusinessDetailsModal> {
             itemBuilder: (context, index) {
               final place = _nearbyPlaces[index];
               final distance = place['distance'] as double;
-              final name = place['business_name'] ?? place['name'] ?? 'Unknown';
+              final name = place['business_name'] ?? place['name'] ?? 'Destination Name';
               final images = place['images'] ?? [];
               final imageUrl = images.isNotEmpty ? images.first.toString() : null;
 
@@ -1094,7 +1106,7 @@ class _BusinessDetailsModalState extends State<BusinessDetailsModal> {
     );
   }
 
-  List<Widget> _buildOperatingHoursList(Map<String, dynamic> hours) {
+    List<Widget> _buildOperatingHoursList(Map<String, dynamic> hours) {
     if (hours.isEmpty) {
       return const [Text('No operating hours provided.')];
     }
@@ -1114,7 +1126,11 @@ class _BusinessDetailsModalState extends State<BusinessDetailsModal> {
                   ),
                   Expanded(
                     flex: 3,
-                    child: Text(e.value.toString()),
+                    // --- THIS IS THE LINE THAT WAS FIXED ---
+                    // BEFORE: child: Text(e.value.toString()),
+                    // AFTER:
+                    child: Text(_formatOperatingHours(e.value)),
+                    // --- END OF FIX ---
                   ),
                 ],
               ),

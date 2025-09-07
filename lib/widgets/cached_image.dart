@@ -1,74 +1,69 @@
-// ===========================================
-// lib/widgets/cached_image.dart
-// ===========================================
-// Reusable image widget with Hive-based caching and loading fallback
-
-// ignore_for_file: strict_top_level_inference
-
+import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:capstone_app/services/image_cache_service.dart';
-import 'dart:typed_data';
+import 'package:path_provider/path_provider.dart';
+import 'package:http/http.dart' as http;
+
+class ImageCacheService {
+  static Future<File> _downloadImage(String url, String filename) async {
+    final response = await http.get(Uri.parse(url));
+    final dir = await getApplicationDocumentsDirectory();
+    final file = File('${dir.path}/$filename');
+    await file.writeAsBytes(response.bodyBytes);
+    return file;
+  }
+
+  static Future<String> getImagePath(String url) async {
+    final filename = url.split('/').last; // crude filename generator
+    final dir = await getApplicationDocumentsDirectory();
+    final file = File('${dir.path}/$filename');
+
+    if (await file.exists()) {
+      return file.path; // already downloaded
+    } else {
+      final downloaded = await _downloadImage(url, filename);
+      return downloaded.path;
+    }
+  }
+}
+
 
 class CachedImage extends StatelessWidget {
   final String imageUrl;
-  final double? width;
-  final double? height;
   final BoxFit fit;
-  final BorderRadius? borderRadius;
-  final Widget? placeholder;
-  final Widget? errorWidget;
+  final WidgetBuilder placeholderBuilder;
+  final Widget Function(BuildContext, Object, StackTrace?) errorBuilder;
 
   const CachedImage({
     super.key,
     required this.imageUrl,
-    this.width,
-    this.height,
     this.fit = BoxFit.cover,
-    this.borderRadius,
-    this.placeholder,
-    this.errorWidget,
+    required this.placeholderBuilder,
+    required this.errorBuilder,
   });
-  
-  get sColor => null;
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<Uint8List?>(
-      future: ImageCacheService.getImage(imageUrl),
+    return FutureBuilder<String>(
+      future: ImageCacheService.getImagePath(imageUrl),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return placeholder ??
-            const SizedBox(
-              width: 20,
-              height: 20,
-              child: Center(
-                child: CircularProgressIndicator(
-                  strokeWidth: 4,
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.orange),
-                ),
-              ),
-            );
+          return placeholderBuilder(context);
         }
-
-        if (snapshot.data != null) {
-          final image = Image.memory(
-            snapshot.data!,
+        if (snapshot.hasError) {
+          return errorBuilder(context, snapshot.error!, snapshot.stackTrace);
+        }
+        if (snapshot.hasData) {
+          // --- THE FIX IS HERE ---
+          // We add width and height properties to make the image fill its parent.
+          return Image.file(
+            File(snapshot.data!),
             fit: fit,
-            width: width,
-            height: height,
+            width: double.infinity,  // Force the image to expand to the full width
+            height: double.infinity, // Force the image to expand to the full height
           );
-
-          return borderRadius != null
-              ? ClipRRect(borderRadius: borderRadius!, child: image)
-              : image;
+          // --- END OF FIX ---
         }
-
-        return errorWidget ??
-            const Icon(
-              Icons.image_not_supported,
-              size: 60,
-              color: Colors.grey,
-            );
+        return errorBuilder(context, 'Unknown state', null);
       },
     );
   }

@@ -1467,7 +1467,7 @@ String _getRoleShortName(String role) {
             child: const Text("Delete"),
             onPressed: () async {
               Navigator.of(context).pop();
-              await EventService.deleteEvent(event.eventId);
+              await EventService.deleteEvent(event.eventId, adminOverride: true);
               _loadEvents();
             },
           ),
@@ -1529,7 +1529,7 @@ String _getRoleShortName(String role) {
             child: const Text("Admin Delete"),
             onPressed: () async {
               Navigator.of(context).pop();
-              await EventService.deleteEvent(event.eventId);
+              await EventService.deleteEvent(event.eventId, adminOverride: true);
               _loadEvents();
               // ignore: use_build_context_synchronously
               ScaffoldMessenger.of(context).showSnackBar(

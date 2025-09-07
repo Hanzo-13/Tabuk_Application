@@ -31,6 +31,8 @@ void main() async {
   // await DestinationCacheService.init();
   // runApp(TabukRoot());
 
+  FirebaseFirestore.instance.settings = const Settings(persistenceEnabled: true);
+
   final appDir = await getApplicationDocumentsDirectory();
   // final fetched = await FirebaseFirestore.instance.collection('destination').get();
   // final hotspots = fetched.docs.map((doc) => Hotspot.fromMap(doc.data(), doc.id)).toList();

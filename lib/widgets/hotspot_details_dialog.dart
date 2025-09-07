@@ -90,10 +90,9 @@ class _HotspotDetailsDialogState extends State<HotspotDetailsDialog> {
         child: widget.hotspot.images.isNotEmpty
             ? CachedImage(
                 imageUrl: widget.hotspot.images.first,
-                width: double.infinity,
                 fit: BoxFit.cover,
-                placeholder: _buildImagePlaceholder(),
-                errorWidget: _buildImagePlaceholder(),
+                placeholderBuilder: (context) => _buildImagePlaceholder(),
+                errorBuilder: (context, error, stackTrace) => _buildImagePlaceholder(),
               )
             : _buildImagePlaceholder(),
       ),

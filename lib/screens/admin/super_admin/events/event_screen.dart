@@ -11,15 +11,15 @@ import 'package:flutter/material.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:intl/intl.dart';
 
-class EventCalendarProvScreen extends StatefulWidget {
-  const EventCalendarProvScreen({super.key});
+class SuperEventCalendarScreen extends StatefulWidget {
+  const SuperEventCalendarScreen({super.key});
 
   @override
-  State<EventCalendarProvScreen> createState() =>
-      _EventCalendarProvScreenState();
+  State<SuperEventCalendarScreen> createState() =>
+      _SuperEventCalendarScreenState();
 }
 
-class _EventCalendarProvScreenState extends State<EventCalendarProvScreen>
+class _SuperEventCalendarScreenState extends State<SuperEventCalendarScreen>
     with TickerProviderStateMixin {
   DateTime _focusedDay = DateTime.now();
   DateTime? _selectedDay;
@@ -28,7 +28,7 @@ class _EventCalendarProvScreenState extends State<EventCalendarProvScreen>
   bool _isLoading = true;
   Map<DateTime, List<Event>> _eventMarkers = {};
   String _userRole = 'Administrator';
-  String? _adminType = 'Provincial Administrator';
+  String? _adminType = 'Super Administrator';
 
   late TabController _tabController;
   CalendarFormat _calendarFormat = CalendarFormat.month;
@@ -36,7 +36,7 @@ class _EventCalendarProvScreenState extends State<EventCalendarProvScreen>
   DateTime? _rangeEnd;
 
   // Filter controls
-  Set<String> _selectedCreatorTypes = {'Provincial Administrator', 'Municipal Administrator', 'business owner'};
+  Set<String> _selectedCreatorTypes = {'Provincial Administrator', 'Municipal Administrator', 'business owner', 'Super Administrator'};
   String _sortBy = 'date'; // 'date', 'title', 'creator'
   bool _showOnlyMyEvents = false;
 
@@ -987,7 +987,7 @@ Widget _buildActionButton(Event event, bool isMyEvent, BuildContext context) {
             ],
           ),
         ),
-        if (_adminType == 'Provincial Administrator')
+        if (_adminType == 'Super Administrator')
           const PopupMenuItem(
             value: 'override_delete',
             child: Row(
@@ -1028,6 +1028,8 @@ String _getRoleShortName(String role) {
       return 'Municipal';
     case 'business owner':
       return 'Business';
+    case 'Super Administrator':
+      return 'Super Admin';
     default:
       return role;
   }
@@ -1051,11 +1053,11 @@ String _getRoleShortName(String role) {
   Color _getRoleColor(String role) {
     switch (role) {
       case 'Provincial Administrator':
-        return Colors.blue.shade700;
+        return AppColors.provincialAdmin;
       case 'Municipal Administrator':
-        return Colors.green;
+        return AppColors.municipalAdmin;
       case 'business owner':
-        return Colors.yellow[700]!;
+        return AppColors.businessOwner;
       default:
         return Colors.grey;
     }
@@ -1066,10 +1068,10 @@ String _getRoleShortName(String role) {
     return Scaffold(
       appBar: AppBar(
         title: const Text(
-          "Provincial Event Calendar",
+          "Super Admin Event Calendar",
           style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
         ),
-        backgroundColor: AppColors.primaryTeal,
+        backgroundColor: AppColors.superAdmin,
         elevation: 2,
         iconTheme: const IconThemeData(color: Colors.white),
         centerTitle: true,
@@ -1511,7 +1513,7 @@ String _getRoleShortName(String role) {
             ),
             const SizedBox(height: 8),
             const Text(
-              "This action cannot be undone. As Provincial Administrator, you have the authority to delete any event.",
+              "This action can be undone.",
               style: TextStyle(fontSize: 12, color: Colors.grey),
             ),
           ],
@@ -1551,11 +1553,11 @@ String _getRoleShortName(String role) {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.event_busy, size: 64, color: Colors.grey.shade400),
-            const SizedBox(height: 16),
+            Icon(Icons.event_busy, size: 32, color: Colors.grey.shade400),
+            const SizedBox(height: 12),
             const Text(
               "No active events found",
-              style: TextStyle(fontSize: 18, color: Colors.black87),
+              style: TextStyle(fontSize: 12, color: Colors.black87),
             ),
             const SizedBox(height: 8),
             const Text(
@@ -1574,7 +1576,7 @@ String _getRoleShortName(String role) {
         final event = _newEvents[index];
         final currentUserId = FirebaseAuth.instance.currentUser?.uid ?? '';
         final isMyEvent = event.createdBy == currentUserId;
-        final canAdminDelete = _adminType == 'Provincial Administrator' && !isMyEvent;
+        final canAdminDelete = _adminType == 'Super Administrator' && !isMyEvent;
 
         return Card(
           margin: const EdgeInsets.only(bottom: 12),
@@ -1915,11 +1917,11 @@ String _getRoleShortName(String role) {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.person_outline, size: 64, color: Colors.grey.shade400),
-            const SizedBox(height: 16),
+            Icon(Icons.person_outline, size: 32, color: Colors.grey.shade400),
+            const SizedBox(height: 12),
             const Text(
               "You haven't created any events yet",
-              style: TextStyle(fontSize: 18, color: Colors.black87),
+              style: TextStyle(fontSize: 12, color: Colors.black87),
             ),
             const SizedBox(height: 8),
             ElevatedButton.icon(
@@ -2185,7 +2187,7 @@ String _getRoleShortName(String role) {
           
           const SizedBox(height: 24),
           
-          // Provincial Admin Powers Summary
+          // Super Admin Powers Summary
           Container(
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
@@ -2203,7 +2205,7 @@ String _getRoleShortName(String role) {
                     Icon(Icons.admin_panel_settings, color: Colors.blue.shade700),
                     const SizedBox(width: 8),
                     const Text(
-                      'Provincial Administrator Powers',
+                      'Super Administrator Powers',
                       style: TextStyle(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,

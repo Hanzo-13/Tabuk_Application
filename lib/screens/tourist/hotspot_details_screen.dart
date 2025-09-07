@@ -27,9 +27,8 @@ class HotspotDetailsScreen extends StatelessWidget {
                     final img = hotspot.images[index];
                     return CachedImage(
                       imageUrl: img,
-                      width: double.infinity,
                       fit: BoxFit.cover,
-                      placeholder: const Center(
+                      placeholderBuilder: (context) => const Center(
                         child: SizedBox(
                           width: 24,
                           height: 24,
@@ -38,6 +37,9 @@ class HotspotDetailsScreen extends StatelessWidget {
                             valueColor: AlwaysStoppedAnimation<Color>(Colors.teal),
                           ),
                         ),
+                      ),
+                      errorBuilder: (context, error, stackTrace) => const Center(
+                        child: Icon(Icons.broken_image, size: 48, color: Colors.grey),
                       ),
                     );
                   },

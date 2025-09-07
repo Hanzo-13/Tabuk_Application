@@ -32,6 +32,11 @@ class AppColors {
   static const Color darkBlue = Color.fromARGB(255, 2, 115, 160);
   static const Color darkTeal = Color.fromARGB(255, 19, 110, 106);
   static const Color lightTeal = Color.fromARGB(255, 20, 197, 188);
+  static const Color superAdmin = Color.fromARGB(255, 47, 10, 229);
+  static final Color provincialAdmin = Color.fromARGB(255, 25, 118, 210);
+  static const Color municipalAdmin = Color.fromARGB(255, 76, 175, 80);
+  static const Color businessOwner = Color.fromARGB(255, 233, 142, 7);
+  static const Color tourist = Color(0xFF2E8B8B);
 
   // Add missing color and property getters for compatibility
   static const Color errorRed = Color(0xFFD32F2F);

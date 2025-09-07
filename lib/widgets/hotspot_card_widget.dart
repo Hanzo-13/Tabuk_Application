@@ -102,8 +102,8 @@ class _HotspotCardWidgetState extends State<HotspotCardWidget> {
           ? CachedImage(
               imageUrl: widget.hotspot.images.first,
               fit: BoxFit.cover,
-              placeholder: _buildPlaceholder(),
-              errorWidget: _buildPlaceholder(),
+              placeholderBuilder: (context) => _buildPlaceholder(),
+              errorBuilder: (context, error, stackTrace) => _buildPlaceholder(),
             )
           : _buildPlaceholder(),
     );

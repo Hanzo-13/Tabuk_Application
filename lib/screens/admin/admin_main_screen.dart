@@ -10,6 +10,12 @@ import 'package:capstone_app/screens/admin/municipal_admin/home/home_screen.dart
 import 'package:capstone_app/screens/admin/municipal_admin/hotspots/spot_screen.dart';
 import 'package:capstone_app/screens/admin/municipal_admin/profile/profile_screen.dart';
 import 'package:capstone_app/screens/admin/municipal_admin/users/users_screen.dart';
+import 'package:capstone_app/screens/admin/super_admin/approval/approval_screen.dart';
+import 'package:capstone_app/screens/admin/super_admin/events/event_screen.dart';
+import 'package:capstone_app/screens/admin/super_admin/home/home_screen.dart';
+import 'package:capstone_app/screens/admin/super_admin/hotspots/spot_screen.dart';
+import 'package:capstone_app/screens/admin/super_admin/profile/profile_screen.dart';
+import 'package:capstone_app/screens/admin/super_admin/users/users_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -72,7 +78,7 @@ class _MainAdminScreenState extends State<MainAdminScreen> {
     if (_adminType == "provincial administrator") {
       return [
         _NavItem("Home", Icons.home_filled, const ProvHomeScreen()),
-        _NavItem("Destinations", Icons.pin_drop, const SpotsScreen()),
+        _NavItem("Spots", Icons.pin_drop, const SpotsScreen()),
         _NavItem("Events", Icons.event, const EventCalendarProvScreen()),
         _NavItem("Users", Icons.group, const ProvUsersScreen()),
         _NavItem("Profile", Icons.person, const AdminProfileScreen()),
@@ -80,10 +86,19 @@ class _MainAdminScreenState extends State<MainAdminScreen> {
     } else if (_adminType == "municipal administrator") {
       return [
         _NavItem("Home", Icons.home_filled, const MunicipalHomeScreen()),
-        _NavItem("Destinations", Icons.pin_drop, const MuniSpotsScreen()),
+        _NavItem("Spots", Icons.pin_drop, const MuniSpotsScreen()),
         _NavItem("Events", Icons.event, const EventCalendarMuniScreen()),
         _NavItem("Users", Icons.group, const MuniUsersScreen()),
         _NavItem("Profile", Icons.person, const MuniProfileScreen()),
+      ];
+    } else if (_adminType == "super administrator") {
+      return [
+        _NavItem("Home", Icons.home_filled, const SupHomeScreen()),
+        _NavItem("Spots", Icons.pin_drop, const SuperSpotsScreen()),
+        _NavItem("Events", Icons.event, const SuperEventCalendarScreen()),
+        _NavItem("Users", Icons.group, const SuperUsersScreen()),
+        _NavItem("Approvals", Icons.check_circle, const ApprovalScreen()),
+        _NavItem("Profile", Icons.person, const SuperProfileScreen()),
       ];
     } else {
       // fallback (just in case)

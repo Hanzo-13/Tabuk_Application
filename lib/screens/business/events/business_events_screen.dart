@@ -626,7 +626,7 @@ class _EventCalendarBusinessOwnerScreenState extends State<EventCalendarBusiness
           child: const Text("Delete"),
           onPressed: () async {
             Navigator.of(context).pop();
-            await EventService.deleteEvent(event.eventId);
+            await EventService.deleteEvent(event.eventId, adminOverride: true);
             _loadEvents(); // Refresh the list
           },
         ),

@@ -15,7 +15,7 @@ class EventService {
   }
 
   /// Delete an event
-  static Future<void> deleteEvent(String eventId) async {
+  static Future<void> deleteEvent(String eventId, {required bool adminOverride}) async {
     await _eventCollection.doc(eventId).delete();
   }
 

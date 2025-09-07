@@ -158,13 +158,21 @@ class _ViewAllScreenState extends State<ViewAllScreen> {
                 bottomLeft: Radius.circular(16),
               ),
               child: hotspot.images.isNotEmpty
-                  ? CachedImage(
-                      imageUrl: hotspot.images.first,
+                  ? SizedBox(
                       width: 110,
                       height: 88,
-                      fit: BoxFit.cover,
-                      placeholder: _buildPlaceholder(),
-                      errorWidget: _buildPlaceholder(),
+                      child: CachedImage(
+                        imageUrl: hotspot.images.first,
+                        fit: BoxFit.cover,
+                        placeholderBuilder: (context) => Container(
+                          color: Colors.grey[300],
+                          child: const Center(child: Icon(Icons.image, color: Colors.grey)),
+                        ),
+                        errorBuilder: (context, error, stackTrace) => Container(
+                          color: Colors.grey[300],
+                          child: const Center(child: Icon(Icons.broken_image, color: Colors.red)),
+                        ),
+                      ),
                     )
                   : _buildPlaceholder(),
             ),
