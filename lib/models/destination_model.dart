@@ -52,7 +52,9 @@ class Hotspot {
     this.localGuide,
     this.suggestions,
     this.latitude,
-    this.longitude, required id, required rating,
+    this.longitude,
+    required id,
+    required rating,
   });
 
   factory Hotspot.fromMap(Map<String, dynamic> map, String id) {
@@ -132,15 +134,18 @@ class Hotspot {
                   : DateTime.now()),
       safetyTips: parseList(map['safety_tips']),
       localGuide: map['local_guide'],
-      suggestions: suggestionsCombined.isNotEmpty
-          ? suggestionsCombined
-          : parseList(map['suggestions']),
+      suggestions:
+          suggestionsCombined.isNotEmpty
+              ? suggestionsCombined
+              : parseList(map['suggestions']),
       latitude:
           map['latitude'] != null ? (map['latitude'] as num).toDouble() : null,
       longitude:
           map['longitude'] != null
               ? (map['longitude'] as num).toDouble()
-              : null, id: null, rating: null,
+              : null,
+      id: null,
+      rating: null,
     );
   }
 
@@ -216,7 +221,9 @@ class Hotspot {
       suggestions: suggestions ?? this.suggestions,
       createdAt: createdAt ?? this.createdAt,
       latitude: latitude ?? this.latitude,
-      longitude: longitude ?? this.longitude, id: null, rating: null,
+      longitude: longitude ?? this.longitude,
+      id: null,
+      rating: null,
     );
   }
 

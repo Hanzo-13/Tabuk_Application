@@ -303,7 +303,7 @@ class _SuperSpotsScreenState extends State<SuperSpotsScreen> with TickerProvider
 
             // Image section
             if (images != null && images.isNotEmpty)
-              Container(
+              SizedBox(
                 height: 160,
                 width: double.infinity,
                 child: ClipRRect(

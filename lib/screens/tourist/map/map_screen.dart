@@ -1,4 +1,4 @@
-// ignore_for_file: prefer_final_fields, avoid_print, unused_field
+// ignore_for_file: prefer_final_fields, avoid_print, unused_field, use_build_context_synchronously
 
 import 'dart:async';
 import 'package:capstone_app/widgets/common_search_bar.dart';
@@ -10,11 +10,11 @@ import 'package:capstone_app/api/api.dart';
 import 'package:capstone_app/utils/constants.dart';
 import 'package:capstone_app/models/destination_model.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:capstone_app/services/offline_cache_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-// Removed unused compass import
 import 'dart:math' as math;
 import 'dart:convert';
 import 'dart:ui' as ui;
@@ -78,6 +78,10 @@ class _MapScreenState extends State<MapScreen> {
     'Shopping': Colors.blue,
     'Entertainment': Colors.pink,
   };
+
+  // Offline guest overlay state
+  bool _isOfflineMode = false;
+  List<Map<String, dynamic>> _cachedDestinations = [];
 
   @override
   void initState() {
@@ -215,6 +219,7 @@ class _MapScreenState extends State<MapScreen> {
 
   Future<void> _fetchDestinationPins() async {
     try {
+      if (mounted) setState(() => _isLoading = true);
       final user = FirebaseAuth.instance.currentUser;
       if (user != null) {
         final userDoc =
@@ -227,13 +232,38 @@ class _MapScreenState extends State<MapScreen> {
         });
       }
 
-      final snapshot =
-          await FirebaseFirestore.instance.collection('destination').get();
       final markers = <Marker>{};
+      List<Map<String, dynamic>> rawDocs = [];
+      // bool usedOffline = false; // available if you want to display a banner
+      try {
+        final snapshot = await FirebaseFirestore.instance
+            .collection('destination')
+            .get()
+            .timeout(const Duration(seconds: 3));
+          // Preserve document ids so hotspotId is reliable downstream
+        rawDocs = snapshot.docs.map((d) {
+          final m = Map<String, dynamic>.from(d.data());
+          if ((m['hotspot_id'] == null || m['hotspot_id'].toString().isEmpty) &&
+              (m['id'] == null || m['id'].toString().isEmpty)) {
+            m['hotspot_id'] = d.id;
+          }
+          return m;
+        }).toList();
+        // Cache for offline use
+        await OfflineCacheService.saveDestinations(rawDocs);
+        _isOfflineMode = false;
+        _cachedDestinations = rawDocs;
+      } catch (_) {
+        // Offline fallback
+        rawDocs = await OfflineCacheService.loadDestinations();
+        // usedOffline = true;
+        _isOfflineMode = rawDocs.isNotEmpty;
+        _cachedDestinations = rawDocs;
+      }
 
-      for (final doc in snapshot.docs) {
-        final data = doc.data();
-        final hotspot = Hotspot.fromMap(data, doc.id);
+      for (final data in rawDocs) {
+        final id = data['hotspot_id']?.toString() ?? data['id']?.toString() ?? '';
+        final hotspot = Hotspot.fromMap(data, id);
         final double? lat = hotspot.latitude;
         final double? lng = hotspot.longitude;
         final String name =
@@ -256,7 +286,7 @@ class _MapScreenState extends State<MapScreen> {
 
           final marker = Marker(
             markerId: MarkerId(
-              hotspot.hotspotId.isNotEmpty ? hotspot.hotspotId : doc.id,
+              hotspot.hotspotId.isNotEmpty ? hotspot.hotspotId : id,
             ),
             position: position,
             icon: customIcon,
@@ -267,9 +297,7 @@ class _MapScreenState extends State<MapScreen> {
                     ..putIfAbsent(
                       'hotspot_id',
                       () =>
-                          hotspot.hotspotId.isNotEmpty
-                              ? hotspot.hotspotId
-                              : doc.id,
+                          hotspot.hotspotId.isNotEmpty ? hotspot.hotspotId : id,
                     )
                     ..putIfAbsent('destinationName', () => name)
                     ..putIfAbsent('destinationCategory', () => hotspot.category)
@@ -299,8 +327,17 @@ class _MapScreenState extends State<MapScreen> {
         _allMarkers = markers;
         _markers = markers;
       });
+      if (rawDocs.isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No cached destinations available offline.'),
+          ),
+        );
+      }
     } catch (e) {
       print('Error fetching destinations: $e');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -325,6 +362,25 @@ class _MapScreenState extends State<MapScreen> {
       setState(() {
         _isLoadingDirections = true;
       });
+
+      // Ensure location services and permission are enabled before starting nav
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        await Geolocator.openLocationSettings();
+      }
+      var permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.deniedForever ||
+          permission == LocationPermission.denied) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Location permission required for navigation')),
+          );
+        }
+        return;
+      }
 
       // Start navigation using the navigation service
       final success = await _navigationService.startNavigation(destination);
@@ -880,6 +936,9 @@ class _MapScreenState extends State<MapScreen> {
         children: [
           GoogleMap(
             onMapCreated: _onMapCreated,
+            onCameraMove: (position) {
+              _navigationService.updateBearing(position.bearing);
+            },
             initialCameraPosition: CameraPosition(
               target: AppConstants.bukidnonCenter,
               zoom: AppConstants.kInitialZoom,
@@ -888,6 +947,7 @@ class _MapScreenState extends State<MapScreen> {
             polylines: _polylines,
             myLocationEnabled: true,
             myLocationButtonEnabled: false,
+            compassEnabled: false,
             zoomControlsEnabled: false,
             mapType: MapType.normal,
             cameraTargetBounds: CameraTargetBounds(AppConstants.bukidnonBounds),
@@ -917,7 +977,110 @@ class _MapScreenState extends State<MapScreen> {
 
           if (_isLoading) const Center(child: CircularProgressIndicator()),
 
-          // Navigation Overlay
+          // Offline guest overlay: banner + cached list
+          if (_isOfflineMode)
+            Positioned(
+              top: 70,
+              left: 16,
+              right: 16,
+              child: Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.black.withOpacity(0.7),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Row(
+                  children: [
+                    const Icon(Icons.offline_bolt, color: Colors.yellow, size: 18),
+                    const SizedBox(width: 8),
+                    const Expanded(
+                      child: Text(
+                        'Offline mode: showing cached places only',
+                        style: TextStyle(color: Colors.white),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          if (_isOfflineMode)
+            Positioned(
+              bottom: 16 + bottomPadding,
+              left: 16,
+              right: 16,
+              child: Container(
+                height: 140,
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: _cachedDestinations.isEmpty
+                    ? const Center(child: Text('No cached places available'))
+                    : ListView.builder(
+                        scrollDirection: Axis.horizontal,
+                        padding: const EdgeInsets.all(8),
+                        itemCount: _cachedDestinations.length,
+                        itemBuilder: (context, index) {
+                          final data = _cachedDestinations[index];
+                          final name = (data['business_name'] ?? data['name'] ?? 'Place').toString();
+                          final images = (data['images'] is List) ? data['images'] as List : [];
+                          final imageUrl = images.isNotEmpty ? images.first.toString() : (data['imageUrl']?.toString());
+                          return Container(
+                            width: 220,
+                            margin: const EdgeInsets.only(right: 8),
+                            child: InkWell(
+                              onTap: () {
+                                BusinessDetailsModal.show(
+                                  context: context,
+                                  businessData: data,
+                                  role: 'guest',
+                                  currentUserId: null,
+                                  showInteractions: false,
+                                );
+                              },
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Expanded(
+                                    child: ClipRRect(
+                                      borderRadius: BorderRadius.circular(10),
+                                      child: imageUrl != null
+                                          ? Image.network(
+                                              imageUrl,
+                                              fit: BoxFit.cover,
+                                              width: double.infinity,
+                                            )
+                                          : Container(
+                                              color: Colors.grey[300],
+                                              child: const Icon(Icons.image, size: 30),
+                                            ),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    name,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(fontWeight: FontWeight.w600),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+              ),
+            ),
+
+          // Navigation Overlay (disabled for guests & offline)
+          if (_role.toLowerCase() != 'guest' && !_isOfflineMode)
           NavigationOverlay(
             navigationService: _navigationService,
             onExitNavigation: _exitNavigation,
@@ -938,7 +1101,7 @@ class _MapScreenState extends State<MapScreen> {
             ),
           ),
 
-          // Re-center button (bottom left) - like in the image
+          // Re-center button (bottom left)
           if (_isNavigating)
             Positioned(
               bottom: 100 + bottomPadding,

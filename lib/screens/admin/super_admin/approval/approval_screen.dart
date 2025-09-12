@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 class ApprovalScreen extends StatefulWidget {
-  const ApprovalScreen({Key? key}) : super(key: key);
+  const ApprovalScreen({super.key});
 
   @override
   State<ApprovalScreen> createState() => _ApprovalScreenState();

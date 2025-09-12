@@ -2,8 +2,6 @@
 // ignore_for_file: use_build_context_synchronously
 
 import 'dart:async';
-// import 'package:capstone_app/models/destination_model.dart';
-// import 'package:capstone_app/services/cache_service.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -31,7 +29,9 @@ void main() async {
   // await DestinationCacheService.init();
   // runApp(TabukRoot());
 
-  FirebaseFirestore.instance.settings = const Settings(persistenceEnabled: true);
+  FirebaseFirestore.instance.settings = const Settings(
+    persistenceEnabled: true,
+  );
 
   final appDir = await getApplicationDocumentsDirectory();
   // final fetched = await FirebaseFirestore.instance.collection('destination').get();
@@ -178,7 +178,7 @@ class _RedirectByRoleState extends State<_RedirectByRole> {
       });
     }
   }
-  
+
   @override
   Widget build(BuildContext context) => const LoadingScreen();
 }

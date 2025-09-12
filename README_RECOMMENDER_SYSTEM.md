@@ -159,11 +159,11 @@ static const Color homeSeasonalColor = Colors.purple;
 - **Base Score**: 1.0
 - **Category Popularity**: +1.0 to +3.0
 - **Location Popularity**: +1.2 to +1.5 for central areas
-- **Random Factor**: +0.0 to +0.5 for variety
+- **Random Factor**: +0.0 to +0.5 for variety 
 
 ### Nearby Recommendations
 - **Distance-Based**: Closer locations get higher scores
-- **Range**: 30km maximum distance
+- **Range**: 30km maximum distance 
 - **Real-time**: Updates as user moves
 
 ### Discover Recommendations

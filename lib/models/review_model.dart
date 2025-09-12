@@ -35,7 +35,8 @@ class Review {
       userPhotoUrl: map['user_photo_url'],
       rating: (map['rating'] ?? 0).toDouble(),
       comment: map['comment'] ?? '',
-      datePosted: (map['date_posted'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      datePosted:
+          (map['date_posted'] as Timestamp?)?.toDate() ?? DateTime.now(),
       isVerified: map['is_verified'] ?? false,
     );
   }

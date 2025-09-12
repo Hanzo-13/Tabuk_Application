@@ -80,9 +80,31 @@ class _DestinationSelectionScreenState extends State<DestinationSelectionScreen>
 
   Future<void> _fetchHotspots() async {
     setState(() => _loadingHotspots = true);
-    final snapshot = await FirebaseFirestore.instance.collection('destination').get();
+    final query = FirebaseFirestore.instance.collection('destination');
+    final snapshot = await query.get();
+    final all = snapshot.docs.map((doc) => Hotspot.fromMap(doc.data(), doc.id)).toList();
+    final destinationLower = widget.destination.toLowerCase();
+    final filtered = all.where((h) {
+      final muni = (h.municipality).toString().toLowerCase();
+      final district = (h.district).toString().toLowerCase();
+      final location = (h.location).toString().toLowerCase();
+      return muni.contains(destinationLower) ||
+             district.contains(destinationLower) ||
+             location.contains(destinationLower);
+    }).toList();
+
+    // Fallback: if no matches (e.g., generic or new destination label), show top popular items
+    List<Hotspot> result = filtered;
+    if (result.isEmpty) {
+      // Try to sort by review_count or average_rating if available in source maps
+      // Since we have Hotspot, fallback to createdAt desc if no metrics are present
+      result = List<Hotspot>.from(all);
+      result.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+      result = result.take(10).toList();
+    }
+
     setState(() {
-      _hotspots = snapshot.docs.map((doc) => Hotspot.fromMap(doc.data(), doc.id)).toList();
+      _hotspots = result;
       _loadingHotspots = false;
     });
   }

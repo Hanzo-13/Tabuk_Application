@@ -57,16 +57,21 @@ class NavigationService {
   factory NavigationService() => _instance;
   NavigationService._internal();
 
-  final _stepController = StreamController<NavigationStep>.broadcast();
-  final _navigationStateController = StreamController<bool>.broadcast();
-  final _locationController = StreamController<Position>.broadcast();
-  final _arrivalController = StreamController<String>.broadcast();
+  StreamController<NavigationStep> _stepController =
+      StreamController<NavigationStep>.broadcast();
+  StreamController<bool> _navigationStateController =
+      StreamController<bool>.broadcast();
+  StreamController<Position> _locationController =
+      StreamController<Position>.broadcast();
+  StreamController<String> _arrivalController =
+      StreamController<String>.broadcast();
 
   // Stream group for better memory management
-  final StreamGroup _streamGroup = StreamGroup();
+  StreamGroup _streamGroup = StreamGroup();
 
   // Add this new stream controller in NavigationService
-  final _transportationModeController = StreamController<String>.broadcast();
+  StreamController<String> _transportationModeController =
+      StreamController<String>.broadcast();
 
   Stream<String> get transportationModeStream =>
       _transportationModeController.stream;
@@ -94,7 +99,7 @@ class NavigationService {
   List<String>? _destinationImages;
   String? _destinationDescription;
 
-  final StreamController<Set<Polyline>> _polylineController =
+  StreamController<Set<Polyline>> _polylineController =
       StreamController<Set<Polyline>>.broadcast();
 
   NavigationRoute? get currentRoute => _currentRoute;
@@ -105,12 +110,48 @@ class NavigationService {
     _currentTransportationMode = mode;
 
     // Emit transportation mode change to notify UI immediately
-    _transportationModeController.add(mode);
+    if (!_transportationModeController.isClosed) {
+      _transportationModeController.add(mode);
+    }
 
     // Recalculate route with new mode if currently navigating
     if (_isNavigating && _currentRoute != null) {
       _recalculateRouteWithNewMode();
     }
+  }
+
+  /// Safely recreate any closed stream controllers. Returns true if any were recreated.
+  bool reinitializeStreams() {
+    bool recreated = false;
+    if (_stepController.isClosed) {
+      _stepController = StreamController<NavigationStep>.broadcast();
+      recreated = true;
+    }
+    if (_navigationStateController.isClosed) {
+      _navigationStateController = StreamController<bool>.broadcast();
+      recreated = true;
+    }
+    if (_locationController.isClosed) {
+      _locationController = StreamController<Position>.broadcast();
+      recreated = true;
+    }
+    if (_arrivalController.isClosed) {
+      _arrivalController = StreamController<String>.broadcast();
+      recreated = true;
+    }
+    if (_polylineController.isClosed) {
+      _polylineController = StreamController<Set<Polyline>>.broadcast();
+      recreated = true;
+    }
+    if (_transportationModeController.isClosed) {
+      _transportationModeController = StreamController<String>.broadcast();
+      recreated = true;
+    }
+    // Recreate stream group if needed
+    if (recreated) {
+      _streamGroup = StreamGroup();
+    }
+    return recreated;
   }
 
   /// Transportation mode constants
@@ -428,6 +469,18 @@ class NavigationService {
     String mode = MODE_WALKING, // Default to walking
   }) async {
     try {
+      // If streams were previously closed via dispose, reinitialize them safely
+      if (_navigationStateController.isClosed ||
+          _stepController.isClosed ||
+          _polylineController.isClosed ||
+          _transportationModeController.isClosed ||
+          _locationController.isClosed ||
+          _arrivalController.isClosed) {
+        final recreated = reinitializeStreams();
+        if (kDebugMode && recreated) {
+          print('NavigationService streams reinitialized');
+        }
+      }
       if (kDebugMode) {
         print(
           'Starting navigation to: ${destination.latitude}, ${destination.longitude}',
@@ -471,8 +524,12 @@ class NavigationService {
       _createNavigationPolylines();
 
       // Notify navigation started
-      _navigationStateController.add(true);
-      _stepController.add(route.steps[0]);
+      if (!_navigationStateController.isClosed) {
+        _navigationStateController.add(true);
+      }
+      if (!_stepController.isClosed) {
+        _stepController.add(route.steps[0]);
+      }
 
       if (kDebugMode) print('Navigation started successfully');
       return true;
@@ -488,7 +545,7 @@ class NavigationService {
 
     final polylines = <Polyline>{};
 
-    // Main route polyline
+    // Main route polyline (use current transportation mode color consistently)
     polylines.add(
       Polyline(
         polylineId: const PolylineId('navigation_route'),
@@ -508,12 +565,9 @@ class NavigationService {
         Polyline(
           polylineId: PolylineId('step_$i'),
           points: step.polyline,
-          color:
-              i == 0
-                  ? Colors.green
-                  : getTransportationModeColor(
-                    _currentTransportationMode,
-                  ).withOpacity(0.6),
+          // Use the same color for all segments; emphasize current step by width only
+          color: getTransportationModeColor(_currentTransportationMode)
+              .withOpacity(i == 0 ? 1.0 : 0.6),
           width: i == 0 ? 10 : 6,
           endCap: Cap.roundCap,
           startCap: Cap.roundCap,
@@ -531,6 +585,7 @@ class NavigationService {
     _currentStepIndex = 0;
     _isNavigating = false;
     _positionStream?.cancel();
+    _positionStream = null;
 
     // Clear destination information
     _destinationId = null;
@@ -542,9 +597,13 @@ class NavigationService {
     _destinationImages = null;
     _destinationDescription = null;
 
-    // Clear polylines
-    _polylineController.add({});
-    _navigationStateController.add(false);
+    // Clear polylines if controller is still open
+    if (!_polylineController.isClosed) {
+      _polylineController.add({});
+    }
+    if (!_navigationStateController.isClosed) {
+      _navigationStateController.add(false);
+    }
   }
 
   /// Get current navigation step
@@ -588,6 +647,8 @@ class NavigationService {
   /// FIXED: Start location tracking for navigation with consistent distance filtering
   Future<void> _startLocationTracking() async {
     try {
+      // Cancel previous stream if any before starting a new one
+      await _positionStream?.cancel();
       // FIXED: Use consistent distance filter across all modes for accuracy
       LocationSettings locationSettings = const LocationSettings(
         accuracy: LocationAccuracy.high,
@@ -842,13 +903,21 @@ class NavigationService {
 
   /// Dispose resources
   void dispose() {
+    // Prefer stopping navigation and cancelling subscriptions
+    stopNavigation();
     _positionStream?.cancel();
-    _streamGroup.close();
-    _stepController.close();
-    _locationController.close();
-    _navigationStateController.close();
-    _arrivalController.close();
-    _polylineController.close();
-    _transportationModeController.close();
+    _positionStream = null;
+    // Close controllers only if really tearing down
+    if (!_streamGroup.isClosed) _streamGroup.close();
+    if (!_stepController.isClosed) _stepController.close();
+    if (!_locationController.isClosed) _locationController.close();
+    if (!_navigationStateController.isClosed) _navigationStateController.close();
+    if (!_arrivalController.isClosed) _arrivalController.close();
+    if (!_polylineController.isClosed) _polylineController.close();
+    if (!_transportationModeController.isClosed) {
+      _transportationModeController.close();
+    }
   }
+
+  void updateBearing(double bearing) {}
 }

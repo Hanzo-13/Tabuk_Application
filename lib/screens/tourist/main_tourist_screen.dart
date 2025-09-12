@@ -3,16 +3,20 @@
 // Main screen for Tourist users with bottom navigation
 // ===========================================
 
+// ignore_for_file: use_build_context_synchronously
+
 import 'package:capstone_app/services/auth_service.dart';
 import 'package:capstone_app/utils/colors.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:capstone_app/services/offline_cache_service.dart';
 import 'package:capstone_app/screens/tourist/event_calendar/tourist_event_calendar.dart';
 import 'home/tourist_home_screen.dart';
 import 'map/map_screen.dart';
 import 'profile/tourist_profile_screen.dart';
 import 'trips/trips_screen.dart';
+import 'package:capstone_app/screens/login_screen.dart';
 
 /// Main screen for tourist users with bottom navigation.
 class MainTouristScreen extends StatefulWidget {
@@ -43,7 +47,11 @@ class _MainTouristScreenState extends State<MainTouristScreen> {
       setState(() => _userRole = cachedRole);
     } else {
       final user = AuthService.currentUser;
-      if (user == null) return;
+      if (user == null) {
+        // Offline or not logged in -> guest
+        setState(() => _userRole = 'guest');
+        return;
+      }
       final doc = await FirebaseFirestore.instance.collection('Users').doc(user.uid).get();
       final role = doc.data()?['role'];
       if (role != null) {
@@ -54,6 +62,8 @@ class _MainTouristScreenState extends State<MainTouristScreen> {
         // If no role yet and dialog hasn't been shown, skip showing here
         // because centralized dialog is handled in login/signup flow
         debugPrint('Role missing and handled by AuthChecker or login flow');
+        // Fallback to guest for offline capability
+        setState(() => _userRole = 'guest');
       }
     }
   }
@@ -70,6 +80,17 @@ class _MainTouristScreenState extends State<MainTouristScreen> {
       return;
     }
     setState(() => _selectedIndex = index);
+  }
+
+  Future<void> logoutGuest(BuildContext context) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('user_role');
+    await OfflineCacheService.clearAll();
+    if (!mounted) return;
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const LoginScreen()),
+      (route) => false,
+    );
   }
 
   /// Pages based on role

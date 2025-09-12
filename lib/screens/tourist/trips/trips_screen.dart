@@ -76,16 +76,12 @@ class _TripsScreenState extends State<TripsScreen>
   /// Gets transportation icon based on transportation type
   IconData _getTransportationIcon(String transportation) {
     switch (transportation.toLowerCase()) {
+      case 'motorcycle':
+        return Icons.two_wheeler;
+      case 'walk':
+        return Icons.directions_walk;
       case 'car':
         return Icons.directions_car;
-      case 'plane':
-        return Icons.flight;
-      case 'bus':
-        return Icons.directions_bus;
-      case 'boat':
-        return Icons.directions_boat;
-      case 'train':
-        return Icons.train;
       default:
         return Icons.explore;
     }

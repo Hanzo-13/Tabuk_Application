@@ -31,6 +31,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 /// Login screen for user authentication.
 class LoginScreen extends StatefulWidget {
@@ -297,6 +298,7 @@ class _LoginScreenState extends State<LoginScreen> {
       if (mounted) setState(() => _isLoading = false);
     }
   }
+
 
   /// Dialog to prompt for password and link Google credential
   Future<void> _showLinkAccountDialog(
@@ -770,22 +772,18 @@ class _LoginScreenState extends State<LoginScreen> {
 
   /// Handles guest login (anonymous sign-in).
   Future<void> _handleGuestLogin() async {
-    if (!await _checkInternetConnection()) return;
-
-    setState(() => _isLoading = true);
-
+    // Allow guest mode even if offline; no network check required
+    setState(() => _isLoading = false);
     try {
-      final userCredential = await AuthService.signInAnonymously();
-      if (!mounted) return;
-      if (userCredential != null) {
-        _showSnackBar('Signed in as guest.', Colors.green);
-        NavigationHelper.navigateBasedOnRole(context, 'guest');
-      }
-    } catch (e) {
-      if (mounted) _showSnackBar(e.toString(), Colors.red);
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
+      // Ensure authenticated session is cleared
+      await AuthService.signOut();
+    } catch (_) {}
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('user_role', 'guest');
+    } catch (_) {}
+    _showSnackBar('Continuing as guest (offline supported).', Colors.green);
+    NavigationHelper.navigateBasedOnRole(context, 'guest');
   }
 }
 

@@ -14,6 +14,7 @@ import 'package:flutter/services.dart';
 import 'dart:async';
 import 'dart:math' as math;
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class BusinessDetailsModal extends StatefulWidget {
   final Map<String, dynamic> businessData;
@@ -42,20 +43,38 @@ class BusinessDetailsModal extends StatefulWidget {
     void Function(double lat, double lng)? onNavigate,
     bool showInteractions = true,
   }) {
-    showModalBottomSheet(
+    // Normalize role with local preference (guest override)
+    final String normalizedRole = role.toLowerCase();
+    Future<void> _open() async {
+      String finalRole = normalizedRole;
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final cachedRole = prefs.getString('user_role');
+        if (cachedRole != null && cachedRole.toLowerCase() == 'guest') {
+          finalRole = 'guest';
+        }
+      } catch (_) {}
+
+      showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       useSafeArea: true,
       backgroundColor: Colors.transparent,
-      builder: (_) => BusinessDetailsModal(
-        businessData: businessData,
-        role: role,
-        currentUserId: currentUserId,
-        creatorData: creatorData,
-        onNavigate: onNavigate,
-        showInteractions: showInteractions,
-      ),
+      builder:
+          (_) => BusinessDetailsModal(
+            businessData: businessData,
+            role: finalRole,
+            currentUserId: currentUserId,
+            creatorData: creatorData,
+            onNavigate: onNavigate,
+            showInteractions: finalRole == 'guest' ? false : showInteractions,
+          ),
     );
+    }
+
+    // Fire and forget
+    // ignore: discarded_futures
+    _open();
   }
 
   @override
@@ -96,7 +115,10 @@ class _BusinessDetailsModalState extends State<BusinessDetailsModal> {
   List<String> _getImages() {
     final dynamic imagesDynamic = businessData['images'] ?? [];
     return imagesDynamic is List
-        ? imagesDynamic.map((e) => e.toString()).where((e) => e.isNotEmpty).toList()
+        ? imagesDynamic
+            .map((e) => e.toString())
+            .where((e) => e.isNotEmpty)
+            .toList()
         : <String>[];
   }
 
@@ -108,7 +130,7 @@ class _BusinessDetailsModalState extends State<BusinessDetailsModal> {
       if (!mounted) return;
       final imgs = _getImages();
       if (imgs.length <= 1) return;
-      
+
       // Check if PageController is attached before animating
       if (_pageController.hasClients) {
         final nextIndex = (_currentImageIndex + 1) % imgs.length;
@@ -132,10 +154,11 @@ class _BusinessDetailsModalState extends State<BusinessDetailsModal> {
 
     final ownerUid = businessData['owner_uid'];
     if (ownerUid != null) {
-      final doc = await FirebaseFirestore.instance
-          .collection('Users')
-          .doc(ownerUid)
-          .get();
+      final doc =
+          await FirebaseFirestore.instance
+              .collection('Users')
+              .doc(ownerUid)
+              .get();
       if (doc.exists) {
         setState(() {
           _creatorData = doc.data();
@@ -151,9 +174,11 @@ class _BusinessDetailsModalState extends State<BusinessDetailsModal> {
 
     try {
       // Try different possible coordinate fields
-      dynamic currentLat = businessData['latitude'] ?? businessData['location']?['lat'];
-      dynamic currentLng = businessData['longitude'] ?? businessData['location']?['lng'];
-      
+      dynamic currentLat =
+          businessData['latitude'] ?? businessData['location']?['lat'];
+      dynamic currentLng =
+          businessData['longitude'] ?? businessData['location']?['lng'];
+
       if (currentLat == null || currentLng == null) {
         if (kDebugMode) print('No coordinates found for current location');
         if (mounted) {
@@ -167,9 +192,8 @@ class _BusinessDetailsModalState extends State<BusinessDetailsModal> {
         print('Business data keys: ${businessData.keys.toList()}');
       }
 
-      final snapshot = await FirebaseFirestore.instance
-          .collection('destination')
-          .get();
+      final snapshot =
+          await FirebaseFirestore.instance.collection('destination').get();
 
       if (kDebugMode) print('Found ${snapshot.docs.length} total destinations');
 
@@ -183,26 +207,25 @@ class _BusinessDetailsModalState extends State<BusinessDetailsModal> {
         final data = doc.data();
         dynamic placeLat = data['latitude'] ?? data['location']?['lat'];
         dynamic placeLng = data['longitude'] ?? data['location']?['lng'];
-        
+
         if (placeLat != null && placeLng != null) {
           final placePosition = LatLng(
             (placeLat as num).toDouble(),
             (placeLng as num).toDouble(),
           );
-          
+
           final distance = _calculateDistance(currentPosition, placePosition);
-          
+
           // Only include places within 10km and exclude the current place
-          final currentHotspotId = businessData['hotspot_id'] ?? businessData['id']?.toString();
+          final currentHotspotId =
+              businessData['hotspot_id'] ?? businessData['id']?.toString();
           if (distance <= 10.0 && doc.id != currentHotspotId) {
             if (kDebugMode) {
-              print('Adding nearby place: ${data['business_name'] ?? data['name']} at ${distance.toStringAsFixed(2)} km');
+              print(
+                'Adding nearby place: ${data['business_name'] ?? data['name']} at ${distance.toStringAsFixed(2)} km',
+              );
             }
-            places.add({
-              ...data,
-              'hotspot_id': doc.id,
-              'distance': distance,
-            });
+            places.add({...data, 'hotspot_id': doc.id, 'distance': distance});
           }
         }
       }
@@ -210,19 +233,23 @@ class _BusinessDetailsModalState extends State<BusinessDetailsModal> {
       if (kDebugMode) print('Found ${places.length} places within 10km');
 
       // Sort by distance and take top 5
-      places.sort((a, b) => (a['distance'] as double).compareTo(b['distance'] as double));
-      
+      places.sort(
+        (a, b) => (a['distance'] as double).compareTo(b['distance'] as double),
+      );
+
       if (mounted) {
         setState(() {
           _nearbyPlaces = places.take(5).toList();
           _isLoadingNearby = false;
         });
       }
-      
+
       if (kDebugMode) {
         print('Final nearby places: ${_nearbyPlaces.length}');
         for (final place in _nearbyPlaces) {
-          print('  - ${place['business_name'] ?? place['name']}: ${(place['distance'] as double).toStringAsFixed(2)} km');
+          print(
+            '  - ${place['business_name'] ?? place['name']}: ${(place['distance'] as double).toStringAsFixed(2)} km',
+          );
         }
       }
     } catch (e) {
@@ -237,7 +264,8 @@ class _BusinessDetailsModalState extends State<BusinessDetailsModal> {
     const double earthRadius = 6371; // km
     final double dLat = _degreesToRadians(point2.latitude - point1.latitude);
     final double dLng = _degreesToRadians(point2.longitude - point1.longitude);
-    final double a = math.sin(dLat / 2) * math.sin(dLat / 2) +
+    final double a =
+        math.sin(dLat / 2) * math.sin(dLat / 2) +
         math.cos(_degreesToRadians(point1.latitude)) *
             math.cos(_degreesToRadians(point2.latitude)) *
             math.sin(dLng / 2) *
@@ -251,20 +279,23 @@ class _BusinessDetailsModalState extends State<BusinessDetailsModal> {
   Future<void> _confirmArchive(BuildContext context) async {
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Archive Business'),
-        content: const Text('Are you sure you want to archive this business?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel'),
+      builder:
+          (ctx) => AlertDialog(
+            title: const Text('Archive Business'),
+            content: const Text(
+              'Are you sure you want to archive this business?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Archive'),
+              ),
+            ],
           ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Archive'),
-          ),
-        ],
-      ),
     );
 
     if (confirm == true) {
@@ -285,8 +316,14 @@ class _BusinessDetailsModalState extends State<BusinessDetailsModal> {
   Widget _buildRoleBasedButtons(BuildContext context) {
     final String creatorId = businessData['owner_uid'] ?? '';
     final bool isCreator = creatorId == currentUserId;
-    final String adminType = _creatorData?['admin_type'] ?? businessData['admin_type'] ?? '';
+    final String adminType =
+        _creatorData?['admin_type'] ?? businessData['admin_type'] ?? '';
     final String normalizedRole = role.toLowerCase();
+
+    // Hide advanced actions for guests
+    if (normalizedRole == 'guest') {
+      return const SizedBox.shrink();
+    }
 
     if (normalizedRole == 'tourist') {
       return Column(
@@ -297,19 +334,29 @@ class _BusinessDetailsModalState extends State<BusinessDetailsModal> {
               Expanded(
                 child: ElevatedButton.icon(
                   onPressed: () async {
-                    final lat = businessData['latitude'] ?? businessData['location']?['lat'];
-                    final lng = businessData['longitude'] ?? businessData['location']?['lng'];
+                    final lat =
+                        businessData['latitude'] ??
+                        businessData['location']?['lat'];
+                    final lng =
+                        businessData['longitude'] ??
+                        businessData['location']?['lng'];
                     if (lat != null && lng != null) {
                       Navigator.pop(context);
-                      widget.onNavigate?.call((lat as num).toDouble(), (lng as num).toDouble());
+                      widget.onNavigate?.call(
+                        (lat as num).toDouble(),
+                        (lng as num).toDouble(),
+                      );
                     } else {
                       if (context.mounted) {
                         showDialog(
                           context: context,
-                          builder: (ctx) => const AlertDialog(
-                            title: Text('No Coordinates'),
-                            content: Text('Destination coordinates not found.'),
-                          ),
+                          builder:
+                              (ctx) => const AlertDialog(
+                                title: Text('No Coordinates'),
+                                content: Text(
+                                  'Destination coordinates not found.',
+                                ),
+                              ),
                         );
                       }
                     }
@@ -324,7 +371,8 @@ class _BusinessDetailsModalState extends State<BusinessDetailsModal> {
                   onPressed: () async {
                     // Ensure we always have a hotspot_id for favorites
                     final enriched = Map<String, dynamic>.from(businessData);
-                    if ((enriched['hotspot_id'] == null || enriched['hotspot_id'].toString().isEmpty) &&
+                    if ((enriched['hotspot_id'] == null ||
+                            enriched['hotspot_id'].toString().isEmpty) &&
                         enriched['id'] != null) {
                       enriched['hotspot_id'] = enriched['id'].toString();
                     }
@@ -332,12 +380,18 @@ class _BusinessDetailsModalState extends State<BusinessDetailsModal> {
                       enriched,
                       enriched['hotspot_id']?.toString() ?? '',
                     );
-                    final success = await FavoritesService.addToFavorites(hotspot);
+                    final success = await FavoritesService.addToFavorites(
+                      hotspot,
+                    );
                     if (context.mounted) {
                       Navigator.pop(context);
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                          content: Text(success ? 'Added to Favorites!' : 'Failed to add to Favorites'),
+                          content: Text(
+                            success
+                                ? 'Added to Favorites!'
+                                : 'Failed to add to Favorites',
+                          ),
                           backgroundColor: Colors.red,
                         ),
                       );
@@ -435,13 +489,14 @@ class _BusinessDetailsModalState extends State<BusinessDetailsModal> {
     }
 
     if (normalizedRole == 'administrator' && isCreator) {
-
       final String creatorRole = _creatorData?['role'] ?? 'Unknown';
       final String creatorName = _creatorData?['name'] ?? 'Unknown';
       final String creatorEmail = _creatorData?['email'] ?? 'Unknown';
       final String creatorContact = businessData['contact_info'] ?? 'Unknown';
-      final String creatorMunicipality = businessData['municipality'] ?? 'Unknown';
-      final String adminType = _creatorData?['admin_type'] ?? businessData['admin_type'] ?? '';
+      final String creatorMunicipality =
+          businessData['municipality'] ?? 'Unknown';
+      final String adminType =
+          _creatorData?['admin_type'] ?? businessData['admin_type'] ?? '';
 
       // The Column is now the single widget being returned, containing everything inside.
       return Column(
@@ -460,7 +515,8 @@ class _BusinessDetailsModalState extends State<BusinessDetailsModal> {
               fontSize: 15,
             ),
           ),
-          if (creatorRole.toLowerCase() == 'administrator' && adminType.isNotEmpty)
+          if (creatorRole.toLowerCase() == 'administrator' &&
+              adminType.isNotEmpty)
             Text(
               'Admin Type: $adminType',
               style: const TextStyle(
@@ -473,8 +529,9 @@ class _BusinessDetailsModalState extends State<BusinessDetailsModal> {
           Text('Email: $creatorEmail'),
           Text('Contact: $creatorContact'),
           Text('Municipality: $creatorMunicipality'),
-          const SizedBox(height: 16), // Added more space for better UI separation
-
+          const SizedBox(
+            height: 16,
+          ), // Added more space for better UI separation
           // --- Action Buttons Section (Moved Inside the Column) ---
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -496,7 +553,10 @@ class _BusinessDetailsModalState extends State<BusinessDetailsModal> {
                 child: OutlinedButton.icon(
                   onPressed: () => _confirmArchive(context),
                   icon: const Icon(Icons.archive, color: Colors.red, size: 18),
-                  label: const Text('Archive', style: TextStyle(color: Colors.red)),
+                  label: const Text(
+                    'Archive',
+                    style: TextStyle(color: Colors.red),
+                  ),
                   style: OutlinedButton.styleFrom(
                     side: const BorderSide(color: Colors.red),
                     padding: const EdgeInsets.symmetric(vertical: 12),
@@ -514,8 +574,10 @@ class _BusinessDetailsModalState extends State<BusinessDetailsModal> {
       final String creatorName = _creatorData?['name'] ?? 'Unknown';
       final String creatorEmail = _creatorData?['email'] ?? 'Unknown';
       final String creatorContact = businessData['contact_info'] ?? 'Unknown';
-      final String creatorMunicipality = businessData['municipality'] ?? 'Unknown';
-      final String adminType = _creatorData?['admin_type'] ?? 'Municipal Administrator';
+      final String creatorMunicipality =
+          businessData['municipality'] ?? 'Unknown';
+      final String adminType =
+          _creatorData?['admin_type'] ?? 'Municipal Administrator';
 
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -532,7 +594,8 @@ class _BusinessDetailsModalState extends State<BusinessDetailsModal> {
               fontSize: 15,
             ),
           ),
-          if (creatorRole.toLowerCase() == 'administrator' && adminType.isNotEmpty)
+          if (creatorRole.toLowerCase() == 'administrator' &&
+              adminType.isNotEmpty)
             Text(
               'Admin Type: $adminType',
               style: const TextStyle(
@@ -550,103 +613,120 @@ class _BusinessDetailsModalState extends State<BusinessDetailsModal> {
       );
     }
 
-    if (normalizedRole == 'administrator' && adminType.toLowerCase() == 'provincial administrator') {
+    if (normalizedRole == 'administrator' &&
+        adminType.toLowerCase() == 'provincial administrator') {
+      final String creatorRole = _creatorData?['role'] ?? 'Unknown';
+      final String creatorName = _creatorData?['name'] ?? 'Unknown';
+      final String creatorEmail = _creatorData?['email'] ?? 'Unknown';
+      final String creatorContact = businessData['contact_info'] ?? 'Unknown';
+      final String creatorMunicipality =
+          businessData['municipality'] ?? 'Unknown';
+      final String adminType =
+          _creatorData?['admin_type'] ??
+          businessData['admin_type'] ??
+          'Provincial Administrator';
 
-    final String creatorRole = _creatorData?['role'] ?? 'Unknown';
-    final String creatorName = _creatorData?['name'] ?? 'Unknown';
-    final String creatorEmail = _creatorData?['email'] ?? 'Unknown';
-    final String creatorContact = businessData['contact_info'] ?? 'Unknown';
-    final String creatorMunicipality = businessData['municipality'] ?? 'Unknown';
-    final String adminType = _creatorData?['admin_type'] ?? businessData['admin_type'] ?? 'Provincial Administrator';
-
-    // The Column is now the single widget being returned, containing everything inside.
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        // --- Creator Details Section ---
-        const Text(
-          'Created By:',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        Text(
-          'Role: $creatorRole',
-          style: TextStyle(
-            color: AppColors.primaryTeal,
-            fontStyle: FontStyle.italic,
-            fontSize: 15,
+      // The Column is now the single widget being returned, containing everything inside.
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // --- Creator Details Section ---
+          const Text(
+            'Created By:',
+            style: TextStyle(fontWeight: FontWeight.bold),
           ),
-        ),
-        
-        if (creatorRole.toLowerCase() == 'administrator' && adminType.isNotEmpty)
           Text(
-            'Admin Type: $adminType',
-            style: const TextStyle(
-              color: Colors.deepPurple,
+            'Role: $creatorRole',
+            style: TextStyle(
+              color: AppColors.primaryTeal,
               fontStyle: FontStyle.italic,
               fontSize: 15,
             ),
           ),
-        Text('Name: $creatorName'),
-        Text('Email: $creatorEmail'),
-        Text('Contact: $creatorContact'),
-        Text('Municipality: $creatorMunicipality'),
-        const SizedBox(height: 16), // Added more space for better UI separation
 
-        // --- Action Buttons Section (Moved Inside the Column) ---
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-          children: [
-            Expanded(
-              child: ElevatedButton.icon(
-                onPressed: () {
-                  // TODO: Add your edit logic here
-                },
-                icon: const Icon(Icons.edit, size: 18),
-                label: const Text('Edit'),
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                ),
+          if (creatorRole.toLowerCase() == 'administrator' &&
+              adminType.isNotEmpty)
+            Text(
+              'Admin Type: $adminType',
+              style: const TextStyle(
+                color: Colors.deepPurple,
+                fontStyle: FontStyle.italic,
+                fontSize: 15,
               ),
             ),
-            const SizedBox(width: 8), // Added space between buttons
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: () => _confirmArchive(context),
-                icon: const Icon(Icons.archive, color: Colors.red, size: 18),
-                label: const Text('Archive', style: TextStyle(color: Colors.red)),
-                style: OutlinedButton.styleFrom(
-                  side: const BorderSide(color: Colors.red),
-                  padding: const EdgeInsets.symmetric(vertical: 12),
+          Text('Name: $creatorName'),
+          Text('Email: $creatorEmail'),
+          Text('Contact: $creatorContact'),
+          Text('Municipality: $creatorMunicipality'),
+          const SizedBox(
+            height: 16,
+          ), // Added more space for better UI separation
+          // --- Action Buttons Section (Moved Inside the Column) ---
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    // TODO: Add your edit logic here
+                  },
+                  icon: const Icon(Icons.edit, size: 18),
+                  label: const Text('Edit'),
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
                 ),
               ),
-            ),
-          ],
-        ),
-      ], // End of Column's children
-    ); // End of return statement
-  }
+              const SizedBox(width: 8), // Added space between buttons
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => _confirmArchive(context),
+                  icon: const Icon(Icons.archive, color: Colors.red, size: 18),
+                  label: const Text(
+                    'Archive',
+                    style: TextStyle(color: Colors.red),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Colors.red),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ], // End of Column's children
+      ); // End of return statement
+    }
 
     return const SizedBox();
   }
 
   Widget _buildReviewSummary(BuildContext context) {
-    final double averageRating = businessData['average_rating']?.toDouble() ?? 0.0;
+    final double averageRating =
+        businessData['average_rating']?.toDouble() ?? 0.0;
     final int reviewCount = businessData['review_count'] ?? 0;
     final String formattedCount =
-        reviewCount >= 1000 ? '${(reviewCount / 1000).toStringAsFixed(1)}K' : reviewCount.toString();
+        reviewCount >= 1000
+            ? '${(reviewCount / 1000).toStringAsFixed(1)}K'
+            : reviewCount.toString();
 
     return GestureDetector(
       onTap: () async {
         final result = await Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) => ReviewScreen(
-              businessId: businessData['hotspot_id'] ?? businessData['id']?.toString() ?? '',
-              businessName: businessData['business_name'] ?? 'Unknown Business',
-            ),
+            builder:
+                (_) => ReviewScreen(
+                  businessId:
+                      businessData['hotspot_id'] ??
+                      businessData['id']?.toString() ??
+                      '',
+                  businessName:
+                      businessData['business_name'] ?? 'Unknown Business',
+                ),
           ),
         );
-        
+
         // Refresh business data when returning from review screen
         if (result == true) {
           _refreshBusinessData();
@@ -663,12 +743,17 @@ class _BusinessDetailsModalState extends State<BusinessDetailsModal> {
                   children: [
                     Text(
                       averageRating.toStringAsFixed(1),
-                      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     Row(
                       children: List.generate(5, (index) {
                         return Icon(
-                          index < averageRating.round() ? Icons.star : Icons.star_border,
+                          index < averageRating.round()
+                              ? Icons.star
+                              : Icons.star_border,
                           size: 18,
                           color: Colors.amber,
                         );
@@ -683,7 +768,10 @@ class _BusinessDetailsModalState extends State<BusinessDetailsModal> {
                   children: [
                     Text(
                       formattedCount,
-                      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     const Text('Reviews'),
                   ],
@@ -693,7 +781,9 @@ class _BusinessDetailsModalState extends State<BusinessDetailsModal> {
             if (currentUserId != null && role.toLowerCase() == 'tourist')
               FutureBuilder<bool>(
                 future: ReviewService.hasUserReviewed(
-                  businessData['hotspot_id'] ?? businessData['id']?.toString() ?? '',
+                  businessData['hotspot_id'] ??
+                      businessData['id']?.toString() ??
+                      '',
                 ),
                 builder: (context, snapshot) {
                   if (snapshot.hasData && snapshot.data == true) {
@@ -702,7 +792,11 @@ class _BusinessDetailsModalState extends State<BusinessDetailsModal> {
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.check_circle, color: Colors.green, size: 16),
+                          Icon(
+                            Icons.check_circle,
+                            color: Colors.green,
+                            size: 16,
+                          ),
                           const SizedBox(width: 4),
                           Text(
                             'You have reviewed this place',
@@ -730,10 +824,7 @@ class _BusinessDetailsModalState extends State<BusinessDetailsModal> {
       children: [
         Icon(icon, color: AppColors.primaryTeal),
         const SizedBox(width: 8),
-        Text(
-          title,
-          style: const TextStyle(fontWeight: FontWeight.bold),
-        ),
+        Text(title, style: const TextStyle(fontWeight: FontWeight.bold)),
       ],
     );
   }
@@ -755,7 +846,10 @@ class _BusinessDetailsModalState extends State<BusinessDetailsModal> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(label, style: const TextStyle(fontWeight: FontWeight.w600)),
+                Text(
+                  label,
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
                 const SizedBox(height: 2),
                 Text(value),
               ],
@@ -774,48 +868,72 @@ class _BusinessDetailsModalState extends State<BusinessDetailsModal> {
     String guide = (businessData['local_guide'] ?? '').toString();
 
     if (restroom) {
-      chips.add(Chip(
-        avatar: const Icon(Icons.wc, size: 18),
-        label: const Text('Restroom'),
-      ));
+      chips.add(
+        Chip(
+          avatar: const Icon(Icons.wc, size: 18),
+          label: const Text('Restroom'),
+        ),
+      );
     }
     if (food.isNotEmpty) {
-      chips.add(Chip(
-        avatar: const Icon(Icons.restaurant, size: 18),
-        label: Text(food),
-      ));
+      chips.add(
+        Chip(avatar: const Icon(Icons.restaurant, size: 18), label: Text(food)),
+      );
     }
     if (water.isNotEmpty) {
-      chips.add(Chip(
-        avatar: const Icon(Icons.water_drop, size: 18),
-        label: Text(water),
-      ));
+      chips.add(
+        Chip(
+          avatar: const Icon(Icons.water_drop, size: 18),
+          label: Text(water),
+        ),
+      );
     }
     if (guide.isNotEmpty) {
-      chips.add(Chip(
-        avatar: const Icon(Icons.badge, size: 18),
-        label: Text('Guide: $guide'),
-      ));
+      chips.add(
+        Chip(
+          avatar: const Icon(Icons.badge, size: 18),
+          label: Text('Guide: $guide'),
+        ),
+      );
     }
     return chips;
   }
 
   Widget _quickFacts() {
-    final String distance = (businessData['distance_from_highway'] ?? '').toString();
-    final String status = (businessData['status'] ?? 'Close').toString();
-    final String category = (businessData['category'] ?? businessData['type'] ?? '').toString();
+    final String distance =
+        (businessData['distance_from_highway'] ?? '').toString();
+
+    // Compute status dynamically from data and operating hours
+    final String status = _computeStatus();
+
+    final String category =
+        (businessData['category'] ?? businessData['type'] ?? '').toString();
     final String municipality = (businessData['municipality'] ?? '').toString();
     final String contact = (businessData['contact_info'] ?? '').toString();
 
     final List<Widget> rows = [];
     if (category.isNotEmpty) {
-      rows.add(_iconInfoRow(icon: Icons.category, label: 'Category', value: category));
+      rows.add(
+        _iconInfoRow(icon: Icons.category, label: 'Category', value: category),
+      );
     }
     if (municipality.isNotEmpty) {
-      rows.add(_iconInfoRow(icon: Icons.location_city, label: 'Municipality', value: municipality));
+      rows.add(
+        _iconInfoRow(
+          icon: Icons.location_city,
+          label: 'Municipality',
+          value: municipality,
+        ),
+      );
     }
     if (distance.isNotEmpty) {
-      rows.add(_iconInfoRow(icon: Icons.signpost, label: 'From Highway', value: distance));
+      rows.add(
+        _iconInfoRow(
+          icon: Icons.signpost,
+          label: 'From Highway',
+          value: distance,
+        ),
+      );
     }
     if (contact.isNotEmpty) {
       rows.add(
@@ -823,10 +941,16 @@ class _BusinessDetailsModalState extends State<BusinessDetailsModal> {
           onLongPress: () async {
             await Clipboard.setData(ClipboardData(text: contact));
             if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Contact copied')));
+              ScaffoldMessenger.of(
+                context,
+              ).showSnackBar(const SnackBar(content: Text('Contact copied')));
             }
           },
-          child: _iconInfoRow(icon: Icons.phone, label: 'Contact', value: contact),
+          child: _iconInfoRow(
+            icon: Icons.phone,
+            label: 'Contact',
+            value: contact,
+          ),
         ),
       );
     }
@@ -835,14 +959,119 @@ class _BusinessDetailsModalState extends State<BusinessDetailsModal> {
     return Column(children: rows);
   }
 
+  String _computeStatus() {
+    // Explicit status if provided
+    final dynamic rawStatus = businessData['status'];
+    if (rawStatus is String && rawStatus.trim().isNotEmpty) {
+      return rawStatus;
+    }
+
+    // Archived → permanently close
+    if (businessData['archived'] == true) {
+      return 'permanently close';
+    }
+
+    final Map<String, dynamic> hours =
+        Map<String, dynamic>.from(businessData['operating_hours'] ?? {});
+    if (hours.isEmpty) return 'Unknown';
+
+    final String key = _weekdayKey(DateTime.now().weekday);
+    final dynamic today = hours[key];
+    if (today == null) return 'Unknown';
+
+    if (today is String) {
+      final t = today.toLowerCase();
+      if (t.contains('close')) return 'temporary close';
+      return today;
+    }
+
+    if (today is Map) {
+      final String openStr = (today['open'] ?? '').toString();
+      final String closeStr = (today['close'] ?? '').toString();
+      if (openStr.isEmpty || closeStr.isEmpty) return 'Unknown';
+
+      final DateTime? openTime = _parseTimeToday(openStr);
+      final DateTime? closeTime = _parseTimeToday(closeStr);
+      if (openTime == null || closeTime == null) return 'Unknown';
+
+      final now = DateTime.now();
+      if (now.isAfter(openTime) && now.isBefore(closeTime)) return 'open';
+      return 'temporary close';
+    }
+
+    return 'Unknown';
+  }
+
+  String _weekdayKey(int weekday) {
+    switch (weekday) {
+      case DateTime.monday:
+        return 'Monday';
+      case DateTime.tuesday:
+        return 'Tuesday';
+      case DateTime.wednesday:
+        return 'Wednesday';
+      case DateTime.thursday:
+        return 'Thursday';
+      case DateTime.friday:
+        return 'Friday';
+      case DateTime.saturday:
+        return 'Saturday';
+      case DateTime.sunday:
+        return 'Sunday';
+      default:
+        return 'Monday';
+    }
+  }
+
+  DateTime? _parseTimeToday(String input) {
+    try {
+      final now = DateTime.now();
+      final String trimmed = input.trim();
+
+      // 24-hour format HH:mm or H:mm
+      final RegExp r24 = RegExp(r'^(\d{1,2}):(\d{2})$');
+      final Match? m24 = r24.firstMatch(trimmed);
+      if (m24 != null) {
+        final int h = int.parse(m24.group(1)!);
+        final int min = int.parse(m24.group(2)!);
+        if (h >= 0 && h < 24 && min >= 0 && min < 60) {
+          return DateTime(now.year, now.month, now.day, h, min);
+        }
+      }
+
+      // 12-hour format hh:mm AM/PM
+      final RegExp r12 = RegExp(r'^(\d{1,2}):(\d{2})\s*([AaPp][Mm])$');
+      final Match? m12 = r12.firstMatch(trimmed);
+      if (m12 != null) {
+        int h = int.parse(m12.group(1)!);
+        final int min = int.parse(m12.group(2)!);
+        final String mer = m12.group(3)!.toLowerCase();
+        if (mer == 'am') {
+          if (h == 12) h = 0; // 12:xx AM -> 00:xx
+        } else {
+          if (h != 12) h += 12; // 1-11 PM -> 13-23
+        }
+        if (h >= 0 && h < 24 && min >= 0 && min < 60) {
+          return DateTime(now.year, now.month, now.day, h, min);
+        }
+      }
+
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
   String _getSuggestedItemsText() {
-    final dynamic raw = businessData['suggested_items'] ?? businessData['suggestions'];
+    final dynamic raw =
+        businessData['suggested_items'] ?? businessData['suggestions'];
     if (raw == null) return '';
     if (raw is List) {
-      final items = raw
-          .map((e) => e.toString().trim())
-          .where((e) => e.isNotEmpty)
-          .toList();
+      final items =
+          raw
+              .map((e) => e.toString().trim())
+              .where((e) => e.isNotEmpty)
+              .toList();
       return items.isNotEmpty ? items.join(', ') : '';
     }
     final text = raw.toString().trim();
@@ -859,13 +1088,14 @@ class _BusinessDetailsModalState extends State<BusinessDetailsModal> {
         ),
         Chip(
           label: Text(status, style: const TextStyle(color: Colors.white)),
-          backgroundColor: status.toLowerCase() == 'open'
-              ? Colors.green
-              : status.toLowerCase() == 'temporary close'
-            ? Colors.grey
-            : status.toLowerCase() == 'permanently close'
-                ? AppColors.errorRed
-                : Colors.grey,
+          backgroundColor:
+              status.toLowerCase() == 'open'
+                  ? Colors.green
+                  : status.toLowerCase() == 'temporary close'
+                  ? Colors.grey
+                  : status.toLowerCase() == 'permanently close'
+                  ? AppColors.errorRed
+                  : Colors.grey,
         ),
       ],
     );
@@ -934,21 +1164,22 @@ class _BusinessDetailsModalState extends State<BusinessDetailsModal> {
                         child: CachedImage(
                           imageUrl: images[index],
                           fit: BoxFit.cover,
-                          placeholderBuilder: (context) => Container(
-                            color: Colors.grey[300],
-                            child: const Center(
-                              child: CircularProgressIndicator(),
-                            ),
-                          ),
-                          errorBuilder: (context, error, stackTrace) =>
-                              Container(
-                            color: Colors.grey[300],
-                            child: Icon(
-                              Icons.image_not_supported,
-                              size: 60,
-                              color: Colors.grey[600],
-                            ),
-                          ),
+                          placeholderBuilder:
+                              (context) => Container(
+                                color: Colors.grey[300],
+                                child: const Center(
+                                  child: CircularProgressIndicator(),
+                                ),
+                              ),
+                          errorBuilder:
+                              (context, error, stackTrace) => Container(
+                                color: Colors.grey[300],
+                                child: Icon(
+                                  Icons.image_not_supported,
+                                  size: 60,
+                                  color: Colors.grey[600],
+                                ),
+                              ),
                         ),
                       ),
                     ),
@@ -988,15 +1219,17 @@ class _BusinessDetailsModalState extends State<BusinessDetailsModal> {
       ),
     );
   }
+
   void _showFullScreenImage(String currentImage, List<String> allImages) {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => FullScreenImageView(
-          currentImage: currentImage,
-          allImages: allImages,
-          initialIndex: allImages.indexOf(currentImage),
-        ),
+        builder:
+            (context) => FullScreenImageView(
+              currentImage: currentImage,
+              allImages: allImages,
+              initialIndex: allImages.indexOf(currentImage),
+            ),
       ),
     );
   }
@@ -1023,9 +1256,11 @@ class _BusinessDetailsModalState extends State<BusinessDetailsModal> {
             itemBuilder: (context, index) {
               final place = _nearbyPlaces[index];
               final distance = place['distance'] as double;
-              final name = place['business_name'] ?? place['name'] ?? 'Destination Name';
+              final name =
+                  place['business_name'] ?? place['name'] ?? 'Destination Name';
               final images = place['images'] ?? [];
-              final imageUrl = images.isNotEmpty ? images.first.toString() : null;
+              final imageUrl =
+                  images.isNotEmpty ? images.first.toString() : null;
 
               return Container(
                 width: 200,
@@ -1052,23 +1287,29 @@ class _BusinessDetailsModalState extends State<BusinessDetailsModal> {
                     children: [
                       Expanded(
                         child: ClipRRect(
-                          borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-                          child: imageUrl != null
-                              ? Image.network(
-                                  imageUrl,
-                                  fit: BoxFit.cover,
-                                  width: double.infinity,
-                                  errorBuilder: (context, error, stackTrace) {
-                                    return Container(
-                                      color: Colors.grey[300],
-                                      child: const Icon(Icons.image, size: 30),
-                                    );
-                                  },
-                                )
-                              : Container(
-                                  color: Colors.grey[300],
-                                  child: const Icon(Icons.image, size: 30),
-                                ),
+                          borderRadius: const BorderRadius.vertical(
+                            top: Radius.circular(12),
+                          ),
+                          child:
+                              imageUrl != null
+                                  ? Image.network(
+                                    imageUrl,
+                                    fit: BoxFit.cover,
+                                    width: double.infinity,
+                                    errorBuilder: (context, error, stackTrace) {
+                                      return Container(
+                                        color: Colors.grey[300],
+                                        child: const Icon(
+                                          Icons.image,
+                                          size: 30,
+                                        ),
+                                      );
+                                    },
+                                  )
+                                  : Container(
+                                    color: Colors.grey[300],
+                                    child: const Icon(Icons.image, size: 30),
+                                  ),
                         ),
                       ),
                       Padding(
@@ -1106,35 +1347,37 @@ class _BusinessDetailsModalState extends State<BusinessDetailsModal> {
     );
   }
 
-    List<Widget> _buildOperatingHoursList(Map<String, dynamic> hours) {
+  List<Widget> _buildOperatingHoursList(Map<String, dynamic> hours) {
     if (hours.isEmpty) {
       return const [Text('No operating hours provided.')];
     }
-    final entries = hours.entries.toList()
-      ..sort((a, b) => a.key.compareTo(b.key));
+    final entries =
+        hours.entries.toList()..sort((a, b) => a.key.compareTo(b.key));
     return entries
-        .map((e) => Padding(
-              padding: const EdgeInsets.symmetric(vertical: 2),
-              child: Row(
-                children: [
-                  Expanded(
-                    flex: 2,
-                    child: Text(
-                      e.key,
-                      style: const TextStyle(fontWeight: FontWeight.w600),
-                    ),
+        .map(
+          (e) => Padding(
+            padding: const EdgeInsets.symmetric(vertical: 2),
+            child: Row(
+              children: [
+                Expanded(
+                  flex: 2,
+                  child: Text(
+                    e.key,
+                    style: const TextStyle(fontWeight: FontWeight.w600),
                   ),
-                  Expanded(
-                    flex: 3,
-                    // --- THIS IS THE LINE THAT WAS FIXED ---
-                    // BEFORE: child: Text(e.value.toString()),
-                    // AFTER:
-                    child: Text(_formatOperatingHours(e.value)),
-                    // --- END OF FIX ---
-                  ),
-                ],
-              ),
-            ))
+                ),
+                Expanded(
+                  flex: 3,
+                  // --- THIS IS THE LINE THAT WAS FIXED ---
+                  // BEFORE: child: Text(e.value.toString()),
+                  // AFTER:
+                  child: Text(_formatOperatingHours(e.value)),
+                  // --- END OF FIX ---
+                ),
+              ],
+            ),
+          ),
+        )
         .toList();
   }
 
@@ -1142,42 +1385,48 @@ class _BusinessDetailsModalState extends State<BusinessDetailsModal> {
     if (fees.isEmpty) {
       return const [Text('No entrance fee information.')];
     }
-    final entries = fees.entries.toList()
-      ..sort((a, b) => a.key.compareTo(b.key));
+    final entries =
+        fees.entries.toList()..sort((a, b) => a.key.compareTo(b.key));
     return entries
-        .map((e) => Padding(
-              padding: const EdgeInsets.symmetric(vertical: 2),
-              child: Row(
-                children: [
-                  Expanded(
-                    flex: 2,
-                    child: Text(
-                      e.key,
-                      style: const TextStyle(fontWeight: FontWeight.w600),
-                    ),
+        .map(
+          (e) => Padding(
+            padding: const EdgeInsets.symmetric(vertical: 2),
+            child: Row(
+              children: [
+                Expanded(
+                  flex: 2,
+                  child: Text(
+                    e.key,
+                    style: const TextStyle(fontWeight: FontWeight.w600),
                   ),
-                  Expanded(
-                    flex: 3,
-                    child: Text('₱${(e.value is num ? (e.value as num).toStringAsFixed(2) : e.value.toString())}'),
+                ),
+                Expanded(
+                  flex: 3,
+                  child: Text(
+                    '₱${(e.value is num ? (e.value as num).toStringAsFixed(2) : e.value.toString())}',
                   ),
-                ],
-              ),
-            ))
+                ),
+              ],
+            ),
+          ),
+        )
         .toList();
   }
 
   // Removed unused _infoRow in favor of icon-based rows
 
   Future<String> _getReviewButtonText() async {
-    final businessId = businessData['hotspot_id'] ?? businessData['id']?.toString() ?? '';
+    final businessId =
+        businessData['hotspot_id'] ?? businessData['id']?.toString() ?? '';
     if (businessId.isEmpty) return 'Write a Review';
-    
+
     final hasReviewed = await ReviewService.hasUserReviewed(businessId);
     return hasReviewed ? 'Edit Review' : 'Write a Review';
   }
 
   void _showReviewForm(BuildContext context) async {
-    final businessId = businessData['hotspot_id'] ?? businessData['id']?.toString() ?? '';
+    final businessId =
+        businessData['hotspot_id'] ?? businessData['id']?.toString() ?? '';
     if (businessId.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -1191,7 +1440,7 @@ class _BusinessDetailsModalState extends State<BusinessDetailsModal> {
     // Check if user has already reviewed this business
     final hasReviewed = await ReviewService.hasUserReviewed(businessId);
     Review? existingReview;
-    
+
     if (hasReviewed) {
       existingReview = await ReviewService.getUserReview(businessId);
     }
@@ -1207,7 +1456,7 @@ class _BusinessDetailsModalState extends State<BusinessDetailsModal> {
           _refreshBusinessData();
         },
       );
-      
+
       // If review was submitted, refresh the data
       if (result == true) {
         _refreshBusinessData();
@@ -1217,9 +1466,12 @@ class _BusinessDetailsModalState extends State<BusinessDetailsModal> {
 
   Future<void> _refreshBusinessData() async {
     try {
-      final businessId = businessData['hotspot_id'] ?? businessData['id']?.toString() ?? '';
+      final businessId =
+          businessData['hotspot_id'] ?? businessData['id']?.toString() ?? '';
       if (businessId.isNotEmpty) {
-        final ratingSummary = await ReviewService.getBusinessRatingSummary(businessId);
+        final ratingSummary = await ReviewService.getBusinessRatingSummary(
+          businessId,
+        );
         setState(() {
           businessData['average_rating'] = ratingSummary['average_rating'];
           businessData['review_count'] = ratingSummary['review_count'];
@@ -1291,13 +1543,17 @@ class _BusinessDetailsModalState extends State<BusinessDetailsModal> {
                   _sectionHeader(Icons.schedule, 'Operating Hours'),
                   SizedBox(height: _chipSpacing),
                   ..._buildOperatingHoursList(
-                    Map<String, dynamic>.from(businessData['operating_hours'] ?? {}),
+                    Map<String, dynamic>.from(
+                      businessData['operating_hours'] ?? {},
+                    ),
                   ),
                   const Divider(height: 24),
                   _sectionHeader(Icons.payments, 'Entrance Fees'),
                   SizedBox(height: _chipSpacing),
                   ..._buildEntranceFeeList(
-                    Map<String, dynamic>.from(businessData['entrance_fees'] ?? {}),
+                    Map<String, dynamic>.from(
+                      businessData['entrance_fees'] ?? {},
+                    ),
                   ),
                   const Divider(height: 24),
                   _sectionHeader(Icons.checklist_rtl, 'Amenities & Tips'),
@@ -1413,10 +1669,11 @@ class _FullScreenImageViewState extends State<FullScreenImageView> {
                     if (loadingProgress == null) return child;
                     return Center(
                       child: CircularProgressIndicator(
-                        value: loadingProgress.expectedTotalBytes != null
-                            ? loadingProgress.cumulativeBytesLoaded /
-                                loadingProgress.expectedTotalBytes!
-                            : null,
+                        value:
+                            loadingProgress.expectedTotalBytes != null
+                                ? loadingProgress.cumulativeBytesLoaded /
+                                    loadingProgress.expectedTotalBytes!
+                                : null,
                         color: Colors.white,
                       ),
                     );

@@ -2,6 +2,7 @@
 
 import 'package:capstone_app/models/event_model.dart';
 import 'package:capstone_app/services/event_service.dart';
+import 'package:capstone_app/services/offline_cache_service.dart';
 import 'package:capstone_app/utils/colors.dart';
 import 'package:capstone_app/utils/constants.dart';
 import 'package:capstone_app/widgets/event_detail_modal.dart';
@@ -47,7 +48,15 @@ class _TouristEventCalendarScreenState extends State<TouristEventCalendarScreen>
 
   Future<void> _loadEvents() async {
     setState(() => _isLoading = true);
-    final events = await EventService.getAllEvents();
+    List<Event> events = [];
+    try {
+      events = await EventService.getAllEvents();
+      // Cache on success
+      await OfflineCacheService.saveEvents(events);
+    } catch (_) {
+      // Offline fallback
+      events = await OfflineCacheService.loadEvents();
+    }
     // final now = DateTime.now();
 
     for (var event in events) {

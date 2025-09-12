@@ -117,7 +117,6 @@ The navigation system allows users to:
 - 3-second delay before stopping navigation
 
 ## Future Enhancements
-
 - Voice guidance integration
 - Alternative route selection
 - Traffic-aware routing

@@ -87,6 +87,7 @@ class _HotspotCardWidgetState extends State<HotspotCardWidget> {
               _buildImage(),
               _buildGradientOverlay(),
               _buildContent(),
+              // Hide favorite button in guest mode; parent widgets set showFavoriteButton=false for guests
               if (widget.showFavoriteButton) _buildFavoriteButton(),
               _buildCategoryBadge(),
             ],

@@ -11,7 +11,7 @@ import 'package:capstone_app/utils/colors.dart';
 import 'destination_selection_screen.dart';
 
 /// Enum representing transportation options.
-enum TransportationType { car, plane, bus, boat, none }
+enum TransportationType { motorcycle, walk, car, none }
 
 /// Screen for selecting transportation method for a trip.
 class TransportationSelectionScreen extends StatefulWidget {
@@ -48,7 +48,7 @@ class _TransportationSelectionScreenState
   static const double _sectionSpacing = 24.0;
   static const double _buttonSpacing = 16.0;
   static const String _headerTitle = 'How will you travel?';
-  static const String _headerSubtitle = 'Select your preferred transportation method';
+  static const String _headerSubtitle = 'Select an available transportation method';
   static const String _backButtonLabel = 'Back';
   static const String _nextButtonLabel = 'Next';
   static const String _selectTransportError = 'Please select a transportation method';
@@ -154,24 +154,19 @@ class _TransportationSelectionScreenState
         crossAxisSpacing: 16,
         children: [
           _buildTransportationOption(
+            type: TransportationType.motorcycle,
+            icon: Icons.two_wheeler,
+            label: 'Motorcycle',
+          ),
+          _buildTransportationOption(
+            type: TransportationType.walk,
+            icon: Icons.directions_walk,
+            label: 'Walk',
+          ),
+          _buildTransportationOption(
             type: TransportationType.car,
             icon: Icons.directions_car,
             label: 'Car',
-          ),
-          _buildTransportationOption(
-            type: TransportationType.plane,
-            icon: Icons.flight,
-            label: 'Plane',
-          ),
-          _buildTransportationOption(
-            type: TransportationType.bus,
-            icon: Icons.directions_bus,
-            label: 'Bus',
-          ),
-          _buildTransportationOption(
-            type: TransportationType.boat,
-            icon: Icons.directions_boat,
-            label: 'Boat',
           ),
         ],
       ),
@@ -280,14 +275,12 @@ class _TransportationSelectionScreenState
   /// Gets the string representation of the selected transportation
   String _getSelectedTransportationString() {
     switch (_selectedTransportation) {
+      case TransportationType.motorcycle:
+        return 'Motorcycle';
+      case TransportationType.walk:
+        return 'Walk';
       case TransportationType.car:
         return 'Car';
-      case TransportationType.plane:
-        return 'Plane';
-      case TransportationType.bus:
-        return 'Bus';
-      case TransportationType.boat:
-        return 'Boat';
       case TransportationType.none:
         return 'Not specified';
     }
