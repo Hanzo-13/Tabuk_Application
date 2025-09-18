@@ -1,4 +1,5 @@
 import 'dart:math';
+import 'dart:math' as math;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
@@ -20,6 +21,11 @@ class ContentRecommenderService {
   static List<Hotspot>? _allHotspotsCache;
   static DateTime? _allHotspotsCacheTimestamp;
   static const Duration _hotspotsCacheValidity = Duration(minutes: 10);
+
+  // Cache for favorites count per hotspot to identify popularity
+  static Map<String, int>? _favoritesCountCache;
+  static DateTime? _favoritesCountCacheTimestamp;
+  static const Duration _favoritesCacheValidity = Duration(minutes: 10);
 
   /// Get personalized recommendations based on user preferences and favorites
   static Future<List<Hotspot>> getForYouRecommendations({
@@ -86,8 +92,11 @@ class ContentRecommenderService {
       
       if (allHotspots.isEmpty) return [];
 
+      // Fetch favorites count map to reflect known/liked destinations
+      final favoritesCountMap = await _getFavoritesCountMap(forceRefresh: forceRefresh);
+
       // Score hotspots based on popularity metrics
-      final scoredHotspots = await _scoreHotspotsByPopularity(allHotspots);
+      final scoredHotspots = await _scoreHotspotsByPopularity(allHotspots, favoritesCountMap);
       
       // Sort by popularity score and take top results
       scoredHotspots.sort((a, b) => b.score.compareTo(a.score));
@@ -152,8 +161,8 @@ class ContentRecommenderService {
         }
       }
 
-      // Sort by distance (closest first) and take top results
-      nearbyHotspots.sort((a, b) => a.score.compareTo(b.score));
+      // Sort by distance score (higher means closer) and take top results
+      nearbyHotspots.sort((a, b) => b.score.compareTo(a.score));
       
       final recommendations = nearbyHotspots
           .take(limit)
@@ -362,45 +371,55 @@ class ContentRecommenderService {
 
   static Future<List<ScoredHotspot>> _scoreHotspotsByPopularity(
     List<Hotspot> hotspots,
+    Map<String, int> favoritesCountMap,
   ) async {
     return hotspots.map((hotspot) {
       double score = 0.0;
-      
+
       // Base score
       score += 1.0;
-      
+
+      // Strong signal: favorites count (known destinations)
+      final favoritesCount = (favoritesCountMap[hotspot.hotspotId] ?? 0).toDouble();
+      // Log scale to avoid dominating
+      score += (1.8 * (favoritesCount > 0 ? math.log(1 + favoritesCount) : 0));
+
       // Category popularity (based on general tourist interest)
       switch (hotspot.category) {
         case AppConstants.naturalAttraction:
-          score += 3.0;
+          score += 2.2;
           break;
         case AppConstants.culturalSite:
-          score += 2.5;
-          break;
-        case AppConstants.adventureSpot:
-          score += 2.8;
-          break;
-        case AppConstants.restaurant:
           score += 2.0;
           break;
+        case AppConstants.adventureSpot:
+          score += 2.1;
+          break;
+        case AppConstants.restaurant:
+          score += 1.4;
+          break;
         case AppConstants.accommodation:
-          score += 1.5;
+          score += 1.0;
           break;
         default:
-          score += 1.0;
+          score += 0.6;
       }
-      
-      // Location popularity (central areas get higher scores)
-      if (hotspot.municipality.toLowerCase().contains('malaybalay')) {
-        score += 1.5;
-      }
-      if (hotspot.municipality.toLowerCase().contains('valencia')) {
-        score += 1.2;
-      }
-      
-      // Random factor for variety
-      score += Random().nextDouble() * 0.5;
-      
+
+      // More media often correlates with known spots
+      score += (hotspot.images.length >= 5) ? 0.7 : (hotspot.images.length >= 2 ? 0.4 : 0.1);
+
+      // Location popularity: central areas get higher scores
+      final muni = hotspot.municipality.toLowerCase();
+      if (muni.contains('malaybalay')) score += 1.2;
+      if (muni.contains('valencia')) score += 1.0;
+
+      // Slight preference to older, established spots
+      final ageDays = DateTime.now().difference(hotspot.createdAt).inDays;
+      score += (ageDays >= 365) ? 0.6 : (ageDays >= 180 ? 0.3 : 0.0);
+
+      // Random small factor for variety
+      score += Random().nextDouble() * 0.3;
+
       return ScoredHotspot(hotspot: hotspot, score: score);
     }).toList();
   }
@@ -408,42 +427,53 @@ class ContentRecommenderService {
   static Future<List<ScoredHotspot>> _scoreHotspotsForDiscovery(
     List<Hotspot> hotspots,
   ) async {
+    // Fetch favorites count to DE-emphasize known destinations
+    final favoritesCountMap = await _getFavoritesCountMap();
+
     return hotspots.map((hotspot) {
       double score = 0.0;
-      
+
       // Base score
       score += 1.0;
-      
-      // Lesser-known categories get higher scores
+
+      // Hidden gems: categories that are often less mainstream
       switch (hotspot.category) {
         case AppConstants.culturalSite:
-          score += 3.0;
+          score += 2.6;
           break;
         case AppConstants.adventureSpot:
-          score += 2.5;
+          score += 2.2;
           break;
         case AppConstants.naturalAttraction:
-          score += 2.0;
+          score += 1.8;
           break;
         default:
-          score += 1.5;
+          score += 1.2;
       }
-      
+
       // Remote locations get higher scores
-      if (hotspot.municipality.toLowerCase().contains('impasugong') ||
-          hotspot.municipality.toLowerCase().contains('cabanglasan') ||
-          hotspot.municipality.toLowerCase().contains('kitaotao')) {
+      final muni = hotspot.municipality.toLowerCase();
+      if (muni.contains('impasugong') ||
+          muni.contains('cabanglasan') ||
+          muni.contains('kitaotao') ||
+          muni.contains('dangcagan') ||
+          muni.contains('damulog') ||
+          muni.contains('kalilangan')) {
         score += 2.0;
       }
-      
+
+      // Penalize highly popular spots so Discover stays lesser-known
+      final favoritesCount = (favoritesCountMap[hotspot.hotspotId] ?? 0).toDouble();
+      score -= (favoritesCount > 0 ? math.log(1 + favoritesCount) : 0) * 1.5;
+
       // Unique features bonus
-      if (hotspot.safetyTips?.isNotEmpty ?? false) score += 1.0;
-      if (hotspot.localGuide?.isNotEmpty ?? false) score += 1.5;
-      if (hotspot.suggestions?.isNotEmpty ?? false) score += 0.8;
-      
+      if (hotspot.safetyTips?.isNotEmpty ?? false) score += 0.8;
+      if (hotspot.localGuide?.isNotEmpty ?? false) score += 1.0;
+      if (hotspot.suggestions?.isNotEmpty ?? false) score += 0.6;
+
       // Random factor for variety
-      score += Random().nextDouble() * 1.0;
-      
+      score += Random().nextDouble() * 0.8;
+
       return ScoredHotspot(hotspot: hotspot, score: score);
     }).toList();
   }
@@ -470,6 +500,36 @@ class ContentRecommenderService {
   static void clearCacheEntry(String cacheKey) {
     _recommendationCache.remove(cacheKey);
     _cacheTimestamps.remove(cacheKey);
+  }
+
+  // Favorites aggregation helpers
+  static Future<Map<String, int>> _getFavoritesCountMap({bool forceRefresh = false}) async {
+    try {
+      final now = DateTime.now();
+      final isValid = _favoritesCountCache != null &&
+          _favoritesCountCacheTimestamp != null &&
+          now.difference(_favoritesCountCacheTimestamp!) < _favoritesCacheValidity;
+
+      if (!forceRefresh && isValid && _favoritesCountCache != null) {
+        return _favoritesCountCache!;
+      }
+
+      final snapshot = await _firestore.collection('favorites').get();
+      final map = <String, int>{};
+      for (final doc in snapshot.docs) {
+        final data = doc.data();
+        final hotspotId = data['hotspotId']?.toString();
+        if (hotspotId == null || hotspotId.isEmpty) continue;
+        map[hotspotId] = (map[hotspotId] ?? 0) + 1;
+      }
+
+      _favoritesCountCache = map;
+      _favoritesCountCacheTimestamp = now;
+      return map;
+    } catch (e) {
+      if (kDebugMode) print('Error aggregating favorites: $e');
+      return _favoritesCountCache ?? <String, int>{};
+    }
   }
 }
 

@@ -157,19 +157,23 @@ static const Color homeSeasonalColor = Colors.purple;
 
 ### Popular Recommendations
 - **Base Score**: 1.0
-- **Category Popularity**: +1.0 to +3.0
-- **Location Popularity**: +1.2 to +1.5 for central areas
-- **Random Factor**: +0.0 to +0.5 for variety 
+- **Known Destinations (Favorites Count)**: +1.8 × ln(1 + favorites)
+- **Category Popularity**: +0.6 to +2.2
+- **Media Presence (images)**: +0.1 to +0.7
+- **Central Areas Bonus**: +1.0 to +1.2 (e.g., Malaybalay, Valencia)
+- **Established Spot Bonus**: +0.0 to +0.6 by age
+- **Random Factor**: +0.0 to +0.3 for variety 
 
 ### Nearby Recommendations
-- **Distance-Based**: Closer locations get higher scores
+- **Distance-Based**: Closer locations get higher scores (sorted closest-first)
 - **Range**: 30km maximum distance 
 - **Real-time**: Updates as user moves
 
 ### Discover Recommendations
 - **Hidden Gems**: Lesser-known categories get higher scores
-- **Remote Locations**: +2.0 for off-the-beaten-path places
-- **Unique Features**: +0.8 to +1.5 for special amenities
+- **Remote Locations**: +2.0 for off-the-beaten-path municipalities (e.g., Impasugong, Cabanglasan, Kitaotao, Dangcagan, Damulog, Kalilangan)
+- **Low Popularity Preference**: −1.5 × ln(1 + favorites) to de-emphasize known spots
+- **Unique Features**: +0.6 to +1.0 for special amenities/guides/suggestions
 
 ## Performance Features
 

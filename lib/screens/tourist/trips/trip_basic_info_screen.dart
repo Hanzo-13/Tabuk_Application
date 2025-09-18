@@ -15,8 +15,11 @@ import 'transportation_selection_screen.dart';
 /// Screen for entering basic trip information.
 class TripBasicInfoScreen extends StatefulWidget {
   final String destination;
+  final String? initialTripName;
+  final DateTime? initialStartDate;
+  final DateTime? initialEndDate;
 
-  const TripBasicInfoScreen({super.key, required this.destination});
+  const TripBasicInfoScreen({super.key, required this.destination, this.initialTripName, this.initialStartDate, this.initialEndDate});
 
   @override
   State<TripBasicInfoScreen> createState() => _TripBasicInfoScreenState();
@@ -44,6 +47,7 @@ class _TripBasicInfoScreenState extends State<TripBasicInfoScreen> {
   static const String _nextButtonLabel = 'Next';
   static const String _tripNameEmptyError = 'Please enter a trip name';
   static const String _tripDatesEmptyError = 'Please select both start and end dates';
+  static const String _quickPresetsLabel = 'Quick presets';
 
   // Controllers
   final TextEditingController _tripNameController = TextEditingController();
@@ -51,6 +55,7 @@ class _TripBasicInfoScreenState extends State<TripBasicInfoScreen> {
   // Trip date state
   DateTime? _startDate;
   DateTime? _endDate;
+  bool _isValid = false;
 
   @override
   void initState() {
@@ -60,15 +65,26 @@ class _TripBasicInfoScreenState extends State<TripBasicInfoScreen> {
 
   /// Initializes default values for trip name and dates
   void _initializeDefaultValues() {
-    _startDate = DateTime.now().add(const Duration(days: 1));
-    _endDate = DateTime.now().add(const Duration(days: 3));
-    _tripNameController.text = '${widget.destination} ${DateTime.now().year}';
+    _startDate = widget.initialStartDate ?? DateTime.now().add(const Duration(days: 1));
+    _endDate = widget.initialEndDate ?? DateTime.now().add(const Duration(days: 3));
+    _tripNameController.text = widget.initialTripName ?? '${widget.destination} ${DateTime.now().year}';
+    _tripNameController.addListener(_recomputeValidity);
+    _recomputeValidity();
   }
 
   @override
   void dispose() {
     _tripNameController.dispose();
     super.dispose();
+  }
+
+  void _recomputeValidity() {
+    final valid = _tripNameController.text.isNotEmpty && _startDate != null && _endDate != null;
+    if (valid != _isValid) {
+      setState(() {
+        _isValid = valid;
+      });
+    }
   }
 
   @override
@@ -141,6 +157,8 @@ class _TripBasicInfoScreenState extends State<TripBasicInfoScreen> {
             _buildTripNameField(),
             const SizedBox(height: _fieldSpacing),
             _buildTripDatesSection(),
+          const SizedBox(height: 12),
+          _buildQuickPresets(),
             const SizedBox(height: _buttonSpacing),
             _buildNextButton(),
             const SizedBox(height: _bottomSpacing),
@@ -212,6 +230,44 @@ class _TripBasicInfoScreenState extends State<TripBasicInfoScreen> {
     );
   }
 
+  /// Quick date presets for convenience
+  Widget _buildQuickPresets() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          _quickPresetsLabel,
+          style: TextStyle(color: AppColors.textLight),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            _buildPresetChip('Weekend', days: 2),
+            _buildPresetChip('3 days', days: 3),
+            _buildPresetChip('5 days', days: 5),
+            _buildPresetChip('1 week', days: 7),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPresetChip(String label, {required int days}) {
+    return ActionChip(
+      label: Text(label),
+      onPressed: () {
+        final now = DateTime.now();
+        setState(() {
+          _startDate = DateTime(now.year, now.month, now.day).add(const Duration(days: 1));
+          _endDate = _startDate!.add(Duration(days: days - 1));
+        });
+        _recomputeValidity();
+      },
+    );
+  }
+
   /// Builds a date field (start or end)
   Widget _buildDateField({required bool isStartDate}) {
     return Column(
@@ -268,7 +324,7 @@ class _TripBasicInfoScreenState extends State<TripBasicInfoScreen> {
       width: double.infinity,
       height: _nextButtonHeight,
       child: ElevatedButton(
-        onPressed: _continueToTransportation,
+        onPressed: _isValid ? _continueToTransportation : null,
         style: ElevatedButton.styleFrom(
           backgroundColor: AppColors.primaryOrange,
           foregroundColor: Colors.white,
@@ -317,6 +373,7 @@ class _TripBasicInfoScreenState extends State<TripBasicInfoScreen> {
           _endDate = picked;
         }
       });
+      _recomputeValidity();
     }
   }
 

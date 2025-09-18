@@ -1021,17 +1021,30 @@ class _TripsScreenState extends State<TripsScreen>
                         '$duration day${duration != 1 ? 's' : ''}',
                         style: TextStyle(color: AppColors.textLight),
                       ),
-                      if (trip.spots.isNotEmpty) ...[
-                        const SizedBox(width: 16),
-                        Icon(Icons.place, size: 16, color: AppColors.textLight),
-                        const SizedBox(width: 4),
-                        Text(
-                          '${trip.spots.length} spot${trip.spots.length != 1 ? 's' : ''}',
-                          style: TextStyle(color: AppColors.textLight),
-                        ),
-                      ],
                     ],
                   ),
+                  if (trip.spots.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        for (final spot in trip.spots.take(5))
+                          Chip(
+                            label: Text(
+                              spot,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            backgroundColor: AppColors.white.withOpacity(0.9),
+                          ),
+                        if (trip.spots.length > 5)
+                          Chip(
+                            label: Text('+${trip.spots.length - 5} more'),
+                            backgroundColor: AppColors.white.withOpacity(0.8),
+                          ),
+                      ],
+                    ),
+                  ],
                   const SizedBox(height: 12),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.end,

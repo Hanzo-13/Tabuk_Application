@@ -12,22 +12,27 @@ import 'package:capstone_app/models/trip_model.dart';
 import 'package:capstone_app/models/destination_model.dart';
 import 'package:capstone_app/services/trip_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'trip_review_screen.dart';
 
 /// Screen for selecting places to visit during a trip.
 class DestinationSelectionScreen extends StatefulWidget {
+  final String tripPlanId;
   final String destination;
   final String tripName;
   final DateTime startDate;
   final DateTime endDate;
   final String transportation;
+  final List<String>? initialSpots;
 
   const DestinationSelectionScreen({
     super.key,
+    required this.tripPlanId,
     required this.destination,
     required this.tripName,
     required this.startDate,
     required this.endDate,
     required this.transportation,
+    this.initialSpots,
   });
 
   @override
@@ -70,6 +75,12 @@ class _DestinationSelectionScreenState extends State<DestinationSelectionScreen>
     super.initState();
     _fetchHotspots();
     _selectedPlaceDate = widget.startDate;
+    if (widget.initialSpots != null && widget.initialSpots!.isNotEmpty) {
+      // Preload itinerary without dates; default to startDate
+      for (final s in widget.initialSpots!) {
+        _placesToVisit.add(PlaceVisit(place: s, date: widget.startDate));
+      }
+    }
   }
 
   @override
@@ -159,27 +170,31 @@ class _DestinationSelectionScreenState extends State<DestinationSelectionScreen>
 
   /// Builds the main content area - now properly scrollable
   Widget _buildContent() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(_padding),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            _selectPlacesLabel,
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            _addPlacesDescription,
-            style: TextStyle(fontSize: 14, color: AppColors.textLight),
-          ),
-          const SizedBox(height: 16),
-          _buildAddCustomPlace(),
-          const SizedBox(height: 16),
-          if (_placesToVisit.isNotEmpty) _buildItinerary(),
-          _buildPopularPlaces(),
-          const SizedBox(height: 16), // Extra padding at bottom
-        ],
+    return RefreshIndicator(
+      onRefresh: () async => _fetchHotspots(),
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(_padding),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              _selectPlacesLabel,
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              _addPlacesDescription,
+              style: TextStyle(fontSize: 14, color: AppColors.textLight),
+            ),
+            const SizedBox(height: 16),
+            _buildAddCustomPlace(),
+            const SizedBox(height: 16),
+            if (_placesToVisit.isNotEmpty) _buildItinerary(),
+            _buildPopularPlaces(),
+            const SizedBox(height: 16),
+          ],
+        ),
       ),
     );
   }
@@ -333,6 +348,27 @@ class _DestinationSelectionScreenState extends State<DestinationSelectionScreen>
         child: Center(child: CircularProgressIndicator()),
       );
     }
+    if (_hotspots.isEmpty) {
+      return Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppColors.backgroundColor,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: const [
+            Icon(Icons.info_outline, color: AppColors.textLight),
+            SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                'No suggestions found. Try adding your own places above or pull to refresh.',
+                style: TextStyle(color: AppColors.textLight),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -400,6 +436,7 @@ class _DestinationSelectionScreenState extends State<DestinationSelectionScreen>
     setState(() {
       _placesToVisit.removeAt(index);
     });
+    _autosaveDraft();
   }
 
    /// Shows the date picker dialog for selecting a date for a place
@@ -471,6 +508,7 @@ class _DestinationSelectionScreenState extends State<DestinationSelectionScreen>
         // Sort places by date
         _placesToVisit.sort((a, b) => a.date.compareTo(b.date));
       });
+      _autosaveDraft();
     } else {
       _showError('Please select a place and date.', Colors.red);
     }
@@ -481,26 +519,45 @@ class _DestinationSelectionScreenState extends State<DestinationSelectionScreen>
       _showError(_tripAddPlaceError, AppColors.primaryOrange);
       return;
     }
+    final userId = await _getUserId();
+    if (!mounted) return;
+    final trip = Trip(
+      tripPlanId: widget.tripPlanId,
+      title: widget.tripName,
+      startDate: widget.startDate,
+      endDate: widget.endDate,
+      transportation: widget.transportation,
+      spots: _placesToVisit.map((p) => p.place).toList(),
+      userId: userId,
+      status: 'Draft',
+    );
+    final result = await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => TripReviewScreen(trip: trip),
+      ),
+    );
+    if (!mounted) return;
+    if (result != null && result is Map<String, dynamic>) {
+      Navigator.of(context).pop(result);
+    }
+  }
+
+  Future<void> _autosaveDraft() async {
     try {
       final userId = await _getUserId();
-      final trip = Trip(
-        tripPlanId: DateTime.now().millisecondsSinceEpoch.toString(),
+      final draft = Trip(
+        tripPlanId: widget.tripPlanId,
         title: widget.tripName,
         startDate: widget.startDate,
         endDate: widget.endDate,
         transportation: widget.transportation,
         spots: _placesToVisit.map((p) => p.place).toList(),
         userId: userId,
+        status: 'Draft',
       );
-      await TripService.saveTrip(trip);
-      if (!mounted) return;
-      final result = trip.toMap();
-      result['fromDestinationSelection'] = true; // Add flag for TripsScreen
-      Navigator.of(context).pop(result);
-    } catch (e) {
-      if (!mounted) return;
-      _showError('Failed to save trip: $e', AppColors.primaryOrange);
-    }
+      await TripService.saveTrip(draft);
+    } catch (_) {}
   }
 
   Future<String> _getUserId() async {

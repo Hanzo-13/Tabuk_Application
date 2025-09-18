@@ -45,7 +45,7 @@ class BusinessDetailsModal extends StatefulWidget {
   }) {
     // Normalize role with local preference (guest override)
     final String normalizedRole = role.toLowerCase();
-    Future<void> _open() async {
+    Future<void> open() async {
       String finalRole = normalizedRole;
       try {
         final prefs = await SharedPreferences.getInstance();
@@ -74,7 +74,7 @@ class BusinessDetailsModal extends StatefulWidget {
 
     // Fire and forget
     // ignore: discarded_futures
-    _open();
+    open();
   }
 
   @override

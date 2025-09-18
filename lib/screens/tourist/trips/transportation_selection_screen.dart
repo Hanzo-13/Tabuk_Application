@@ -19,6 +19,7 @@ class TransportationSelectionScreen extends StatefulWidget {
   final String tripName;
   final DateTime startDate;
   final DateTime endDate;
+  final String? initialTransportation;
 
   const TransportationSelectionScreen({
     super.key,
@@ -26,6 +27,7 @@ class TransportationSelectionScreen extends StatefulWidget {
     required this.tripName,
     required this.startDate,
     required this.endDate,
+    this.initialTransportation,
   });
 
   @override
@@ -52,9 +54,21 @@ class _TransportationSelectionScreenState
   static const String _backButtonLabel = 'Back';
   static const String _nextButtonLabel = 'Next';
   static const String _selectTransportError = 'Please select a transportation method';
+  static const String _selectedHint = 'Tap again to deselect';
 
   // Current selected transportation
   TransportationType _selectedTransportation = TransportationType.none;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialTransportation != null) {
+      final t = widget.initialTransportation!.toLowerCase();
+      if (t == 'motorcycle') _selectedTransportation = TransportationType.motorcycle;
+      if (t == 'walk') _selectedTransportation = TransportationType.walk;
+      if (t == 'car') _selectedTransportation = TransportationType.car;
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -173,58 +187,77 @@ class _TransportationSelectionScreenState
     );
   }
 
-  /// Builds a single transportation option card
-  Widget _buildTransportationOption({
-    required TransportationType type,
-    required IconData icon,
-    required String label,
-  }) {
-    final bool isSelected = _selectedTransportation == type;
-    return GestureDetector(
-      onTap: () => _selectTransportation(type),
-      child: Container(
-        padding: const EdgeInsets.all(_optionPadding),
-        decoration: BoxDecoration(
+  /// Fixed version - builds a single transportation option card
+Widget _buildTransportationOption({
+  required TransportationType type,
+  required IconData icon,
+  required String label,
+}) {
+  final bool isSelected = _selectedTransportation == type;
+  return GestureDetector(
+    onTap: () => _selectTransportation(type),
+    child: Container(
+      padding: const EdgeInsets.all(_optionPadding),
+      decoration: BoxDecoration(
+        color: isSelected
+            ? AppColors.primaryOrange.withOpacity(0.1)
+            : Colors.white,
+        border: Border.all(
           color: isSelected
-              ? AppColors.primaryOrange.withOpacity(0.1)
-              : Colors.white,
-          border: Border.all(
-            color: isSelected
-                ? AppColors.primaryOrange
-                : AppColors.textLight.withOpacity(0.2),
-            width: isSelected ? 2 : 1,
-          ),
-          borderRadius: BorderRadius.circular(_optionBorderRadius),
-          boxShadow: [
-            if (isSelected)
-              BoxShadow(
-                color: AppColors.primaryOrange.withOpacity(0.15),
-                blurRadius: _optionBoxShadowBlur,
-                offset: const Offset(0, _optionBoxShadowOffsetY),
-              ),
-          ],
+              ? AppColors.primaryOrange
+              : AppColors.textLight.withOpacity(0.2),
+          width: isSelected ? 2 : 1,
         ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              icon,
-              size: _optionIconSize,
-              color: isSelected ? AppColors.primaryOrange : AppColors.textLight,
+        borderRadius: BorderRadius.circular(_optionBorderRadius),
+        boxShadow: [
+          if (isSelected)
+            BoxShadow(
+              color: AppColors.primaryOrange.withOpacity(0.15),
+              blurRadius: _optionBoxShadowBlur,
+              offset: const Offset(0, _optionBoxShadowOffsetY),
             ),
-            const SizedBox(height: 12),
-            Text(
+        ],
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        mainAxisSize: MainAxisSize.min, // Add this to minimize space
+        children: [
+          Icon(
+            icon,
+            size: _optionIconSize,
+            color: isSelected ? AppColors.primaryOrange : AppColors.textLight,
+          ),
+          const SizedBox(height: 8), // Reduced from 12
+          Flexible( // Wrap text in Flexible
+            child: Text(
               label,
               style: TextStyle(
                 color: isSelected ? AppColors.primaryOrange : AppColors.textDark,
                 fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
               ),
+              textAlign: TextAlign.center,
+            ),
+          ),
+          if (isSelected) ...[
+            const SizedBox(height: 4), // Reduced from 6
+            Flexible( // Wrap hint text in Flexible
+              child: Text(
+                _selectedHint,
+                style: const TextStyle(
+                  fontSize: 10, // Reduced from 11
+                  color: AppColors.textLight,
+                ),
+                textAlign: TextAlign.center,
+                maxLines: 2, // Allow text wrapping
+                overflow: TextOverflow.ellipsis,
+              ),
             ),
           ],
-        ),
+        ],
       ),
-    );
-  }
+    ),
+  );
+}
 
   /// Builds the navigation buttons (back and next)
   Widget _buildNavigationButtons() {
@@ -243,7 +276,7 @@ class _TransportationSelectionScreenState
         const SizedBox(width: _buttonSpacing),
         Expanded(
           child: ElevatedButton(
-            onPressed: _continueToDestinations,
+            onPressed: _isTransportationSelected() ? _continueToDestinations : null,
             style: ElevatedButton.styleFrom(
               backgroundColor: AppColors.primaryOrange,
               foregroundColor: Colors.white,
@@ -292,10 +325,12 @@ class _TransportationSelectionScreenState
     _showError(_selectTransportError, AppColors.primaryOrange);
     return;
   }
+  final String tripPlanId = DateTime.now().millisecondsSinceEpoch.toString();
   final result = await Navigator.push(
     context,
     MaterialPageRoute(
       builder: (context) => DestinationSelectionScreen(
+        tripPlanId: tripPlanId,
         destination: widget.destination,
         tripName: widget.tripName,
         startDate: widget.startDate,
