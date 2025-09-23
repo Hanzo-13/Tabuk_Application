@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+
 import '../models/destination_model.dart';
 import '../utils/colors.dart';
 import 'hotspot_card_widget.dart';
@@ -10,6 +11,7 @@ class RecommendationSectionWidget extends StatefulWidget {
   final Color accentColor;
   final IconData icon;
   final List<Hotspot> hotspots;
+  final String userRole;
   final int animationDelay;
   final VoidCallback? onViewAll;
   final bool showViewAll;
@@ -22,16 +24,19 @@ class RecommendationSectionWidget extends StatefulWidget {
     required this.accentColor,
     required this.icon,
     required this.hotspots,
+    required this.userRole,
     this.animationDelay = 0,
     this.onViewAll,
     this.showViewAll = true,
   });
 
   @override
-  State<RecommendationSectionWidget> createState() => _RecommendationSectionWidgetState();
+  State<RecommendationSectionWidget> createState() =>
+      _RecommendationSectionWidgetState();
 }
 
-class _RecommendationSectionWidgetState extends State<RecommendationSectionWidget>
+class _RecommendationSectionWidgetState
+    extends State<RecommendationSectionWidget>
     with SingleTickerProviderStateMixin {
   late AnimationController _controller;
   late Animation<double> _fadeAnimation;
@@ -75,23 +80,24 @@ class _RecommendationSectionWidgetState extends State<RecommendationSectionWidge
 
     return AnimatedBuilder(
       animation: _controller,
-      builder: (context, child) => FadeTransition(
-        opacity: _fadeAnimation,
-        child: SlideTransition(
-          position: _slideAnimation,
-          child: Container(
-            margin: const EdgeInsets.only(bottom: 24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                _buildHeader(),
-                const SizedBox(height: 16),
-                _buildHotspotsList(),
-              ],
+      builder:
+          (context, child) => FadeTransition(
+            opacity: _fadeAnimation,
+            child: SlideTransition(
+              position: _slideAnimation,
+              child: Container(
+                margin: const EdgeInsets.only(bottom: 24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildHeader(),
+                    const SizedBox(height: 16),
+                    _buildHotspotsList(),
+                  ],
+                ),
+              ),
             ),
           ),
-        ),
-      ),
     );
   }
 
@@ -106,11 +112,7 @@ class _RecommendationSectionWidgetState extends State<RecommendationSectionWidge
               color: widget.accentColor.withOpacity(0.1),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(
-              widget.icon,
-              color: widget.accentColor,
-              size: 24,
-            ),
+            child: Icon(widget.icon, color: widget.accentColor, size: 24),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -152,11 +154,13 @@ class _RecommendationSectionWidgetState extends State<RecommendationSectionWidge
         padding: const EdgeInsets.symmetric(horizontal: 16),
         itemCount: widget.hotspots.length,
         separatorBuilder: (_, _) => const SizedBox(width: 16),
-        itemBuilder: (context, index) => HotspotCardWidget(
-          hotspot: widget.hotspots[index],
-          accentColor: widget.accentColor,
-          categoryKey: widget.categoryKey,
-        ),
+        itemBuilder:
+            (context, index) => HotspotCardWidget(
+              hotspot: widget.hotspots[index],
+              accentColor: widget.accentColor,
+              categoryKey: widget.categoryKey,
+              userRole: widget.userRole,
+            ),
       ),
     );
   }
@@ -191,7 +195,7 @@ class RecommendationSections {
     icon: Icons.person_outline,
   );
 
-static const discover = RecommendationSectionConfig(
+  static const discover = RecommendationSectionConfig(
     title: 'Discover Hidden Gems',
     subtitle: 'Lesser-known amazing places',
     categoryKey: 'discover',
@@ -207,7 +211,7 @@ static const discover = RecommendationSectionConfig(
     icon: Icons.location_on,
   );
 
-   static const popular = RecommendationSectionConfig(
+  static const popular = RecommendationSectionConfig(
     title: 'Popular Destinations',
     subtitle: 'Most visited places in Bukidnon',
     categoryKey: 'popular',

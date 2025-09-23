@@ -2,16 +2,19 @@
 
 import 'dart:async';
 import 'dart:math' as math;
+
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:firebase_auth/firebase_auth.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
+
+import '../../../data/repositories/event_repository.dart';
 import '../../../models/destination_model.dart';
 import '../../../services/content_recommender_service.dart';
 import '../../../services/location_service.dart';
-import '../../../utils/constants.dart';
 import '../../../utils/colors.dart';
+import '../../../utils/constants.dart';
 import '../../../widgets/recommendation_section_widget.dart';
 import '../view_all_screen.dart';
 
@@ -40,16 +43,16 @@ class _TouristHomeScreenState extends State<TouristHomeScreen>
   String _greeting = '';
   String _userName = '';
   bool _isUserLoggedIn = false;
+  String _userRole = 'Tourist';
 
   final LocationService _locationService = LocationService();
+  final EventRepository _eventRepository = EventRepository();
 
   @override
   void initState() {
     super.initState();
     _initializeAnimations();
-    _checkUserLoginStatus();
-    _fetchLocationAndRecommendations();
-    _loadEvents();
+    _fetchAllData();
     _startEventSlider();
   }
 
@@ -98,21 +101,21 @@ class _TouristHomeScreenState extends State<TouristHomeScreen>
     });
   }
 
+  /// Fetch all data once in initState - no async calls in UI handlers
+  Future<void> _fetchAllData() async {
+    await Future.wait([
+      _checkUserLoginStatus(),
+      _fetchLocationAndRecommendations(),
+      _loadEvents(),
+    ]);
+  }
+
   Future<void> _loadEvents() async {
     try {
-      // Fetch without composite index; sort client-side to avoid FAILED_PRECONDITION
-      final snapshot = await FirebaseFirestore.instance
-          .collection('Events')
-          .where('status', isEqualTo: 'active')
-          .get();
+      final events = await _eventRepository.getActiveEventsOnce();
 
-      final list = snapshot.docs.map((doc) {
-        final data = doc.data();
-        data['id'] = doc.id;
-        return data;
-      }).toList();
-
-      list.sort((a, b) {
+      // Sort client-side to avoid Firestore composite index issues
+      events.sort((a, b) {
         final ad = a['startDate'];
         final bd = b['startDate'];
         DateTime aa;
@@ -134,9 +137,11 @@ class _TouristHomeScreenState extends State<TouristHomeScreen>
         return aa.compareTo(bb);
       });
 
-      setState(() {
-        _events = list.take(5).toList();
-      });
+      if (mounted) {
+        setState(() {
+          _events = events.take(5).toList();
+        });
+      }
     } catch (e) {
       if (kDebugMode) print('Error loading events: $e');
     }
@@ -154,33 +159,47 @@ class _TouristHomeScreenState extends State<TouristHomeScreen>
 
         if (userDoc.exists) {
           final userData = userDoc.data()!;
-          setState(() {
-            _userName =
-                userData['username'] ?? userData['display_name'] ?? 'Explorer';
-            _isUserLoggedIn = true;
-          });
-          _setGreeting();
+          if (mounted) {
+            setState(() {
+              _userName =
+                  userData['username'] ??
+                  userData['display_name'] ??
+                  'Explorer';
+              _isUserLoggedIn = true;
+              _userRole = userData['role']?.toString() ?? 'Tourist';
+            });
+            _setGreeting();
+          }
         } else {
+          if (mounted) {
+            setState(() {
+              _isUserLoggedIn = false;
+              _userName = '';
+              _userRole = 'Tourist';
+            });
+            _setGreeting();
+          }
+        }
+      } else {
+        if (mounted) {
           setState(() {
             _isUserLoggedIn = false;
             _userName = '';
+            _userRole = 'Tourist';
           });
           _setGreeting();
         }
-      } else {
-        setState(() {
-          _isUserLoggedIn = false;
-          _userName = '';
-        });
-        _setGreeting();
       }
     } catch (e) {
       if (kDebugMode) print('Error checking user status: $e');
-      setState(() {
-        _isUserLoggedIn = false;
-        _userName = '';
-      });
-      _setGreeting();
+      if (mounted) {
+        setState(() {
+          _isUserLoggedIn = false;
+          _userName = '';
+          _userRole = 'Tourist';
+        });
+        _setGreeting();
+      }
     }
   }
 
@@ -632,6 +651,7 @@ class _TouristHomeScreenState extends State<TouristHomeScreen>
             accentColor: config.accentColor,
             icon: config.icon,
             hotspots: hotspots,
+            userRole: _userRole,
             animationDelay: (i + 1) * 200,
             onViewAll:
                 () => _navigateToViewAll(

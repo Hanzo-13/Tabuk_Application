@@ -1,16 +1,17 @@
-import 'package:flutter/material.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
+
 import '../models/destination_model.dart';
 import '../services/favorites_service.dart';
 import '../utils/constants.dart';
-import 'cached_image.dart';
 import 'business_details_modal.dart';
+import 'cached_image.dart';
 
 class HotspotCardWidget extends StatefulWidget {
   final Hotspot hotspot;
   final Color accentColor;
   final String categoryKey;
+  final String userRole;
   final VoidCallback? onTap;
   final bool showFavoriteButton;
 
@@ -19,6 +20,7 @@ class HotspotCardWidget extends StatefulWidget {
     required this.hotspot,
     required this.accentColor,
     required this.categoryKey,
+    required this.userRole,
     this.onTap,
     this.showFavoriteButton = true,
   });
@@ -40,7 +42,9 @@ class _HotspotCardWidgetState extends State<HotspotCardWidget> {
 
   Future<void> _checkFavoriteStatus() async {
     try {
-      final isFavorite = await FavoritesService.isFavorite(widget.hotspot.hotspotId);
+      final isFavorite = await FavoritesService.isFavorite(
+        widget.hotspot.hotspotId,
+      );
       if (mounted) {
         setState(() {
           _isFavorite = isFavorite;
@@ -65,7 +69,7 @@ class _HotspotCardWidgetState extends State<HotspotCardWidget> {
       onTapDown: (_) => setState(() => _isPressed = true),
       onTapUp: (_) => setState(() => _isPressed = false),
       onTapCancel: () => setState(() => _isPressed = false),
-      onTap: widget.onTap ?? () => _showBusinessDetails(context),
+      onTap: widget.onTap ?? () => _showBusinessDetails(),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 150),
         transform: Matrix4.identity()..scale(_isPressed ? 0.95 : 1.0),
@@ -99,14 +103,16 @@ class _HotspotCardWidgetState extends State<HotspotCardWidget> {
 
   Widget _buildImage() {
     return Positioned.fill(
-      child: widget.hotspot.images.isNotEmpty
-          ? CachedImage(
-              imageUrl: widget.hotspot.images.first,
-              fit: BoxFit.cover,
-              placeholderBuilder: (context) => _buildPlaceholder(),
-              errorBuilder: (context, error, stackTrace) => _buildPlaceholder(),
-            )
-          : _buildPlaceholder(),
+      child:
+          widget.hotspot.images.isNotEmpty
+              ? CachedImage(
+                imageUrl: widget.hotspot.images.first,
+                fit: BoxFit.cover,
+                placeholderBuilder: (context) => _buildPlaceholder(),
+                errorBuilder:
+                    (context, error, stackTrace) => _buildPlaceholder(),
+              )
+              : _buildPlaceholder(),
     );
   }
 
@@ -124,10 +130,7 @@ class _HotspotCardWidgetState extends State<HotspotCardWidget> {
           gradient: LinearGradient(
             begin: Alignment.topCenter,
             end: Alignment.bottomCenter,
-            colors: [
-              Colors.transparent,
-              Colors.black.withOpacity(0.7),
-            ],
+            colors: [Colors.transparent, Colors.black.withOpacity(0.7)],
           ),
         ),
       ),
@@ -203,20 +206,21 @@ class _HotspotCardWidgetState extends State<HotspotCardWidget> {
             color: Colors.black.withOpacity(0.6),
             shape: BoxShape.circle,
           ),
-          child: _isLoadingFavorite
-              ? const SizedBox(
-                  width: 20,
-                  height: 20,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+          child:
+              _isLoadingFavorite
+                  ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                  )
+                  : Icon(
+                    _isFavorite ? Icons.favorite : Icons.favorite_border,
+                    color: _isFavorite ? Colors.red : Colors.white,
+                    size: 20,
                   ),
-                )
-              : Icon(
-                  _isFavorite ? Icons.favorite : Icons.favorite_border,
-                  color: _isFavorite ? Colors.red : Colors.white,
-                  size: 20,
-                ),
         ),
       ),
     );
@@ -261,14 +265,18 @@ class _HotspotCardWidgetState extends State<HotspotCardWidget> {
       case AppConstants.entertainment:
         return 'Fun';
       default:
-        return category.length > 8 ? '${category.substring(0, 8)}...' : category;
+        return category.length > 8
+            ? '${category.substring(0, 8)}...'
+            : category;
     }
   }
 
   Future<void> _toggleFavorite() async {
     try {
       if (_isFavorite) {
-        final success = await FavoritesService.removeFromFavorites(widget.hotspot.hotspotId);
+        final success = await FavoritesService.removeFromFavorites(
+          widget.hotspot.hotspotId,
+        );
         if (success && mounted) {
           setState(() {
             _isFavorite = false;
@@ -294,11 +302,7 @@ class _HotspotCardWidgetState extends State<HotspotCardWidget> {
       }
     } catch (e) {
       if (mounted) {
-        _showSnackBar(
-          'Error: $e',
-          Icons.error,
-          Colors.red,
-        );
+        _showSnackBar('Error: $e', Icons.error, Colors.red);
       }
     }
   }
@@ -321,36 +325,18 @@ class _HotspotCardWidgetState extends State<HotspotCardWidget> {
     );
   }
 
-  Future<void> _showBusinessDetails(BuildContext context) async {
-    try {
-      String role = 'Tourist';
-      String? currentUserId;
-      final user = FirebaseAuth.instance.currentUser;
-      if (user != null) {
-        currentUserId = user.uid;
-        final doc = await FirebaseFirestore.instance.collection('Users').doc(user.uid).get();
-        final data = doc.data();
-        if (data != null) {
-          final fetchedRole = data['role']?.toString();
-          if (fetchedRole != null && fetchedRole.trim().isNotEmpty) {
-            role = fetchedRole;
-          }
-        }
-      }
+  void _showBusinessDetails() {
+    final businessData = _mapHotspotToBusinessData(widget.hotspot);
+    final currentUserId = FirebaseAuth.instance.currentUser?.uid;
 
-      final businessData = _mapHotspotToBusinessData(widget.hotspot);
-      // Modal responsible for navigate/favorite/review actions
-      BusinessDetailsModal.show(
-        // ignore: use_build_context_synchronously
-        context: context,
-        businessData: businessData,
-        role: role,
-        currentUserId: currentUserId,
-        showInteractions: false,
-      );
-    } catch (_) {
-      // Silently fail to avoid breaking UX
-    }
+    // Synchronous call - no async/await in UI handler
+    BusinessDetailsModal.show(
+      context: context,
+      businessData: businessData,
+      role: widget.userRole,
+      currentUserId: currentUserId,
+      showInteractions: false,
+    );
   }
 
   Map<String, dynamic> _mapHotspotToBusinessData(Hotspot h) {

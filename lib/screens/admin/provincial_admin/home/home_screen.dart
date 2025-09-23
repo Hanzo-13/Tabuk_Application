@@ -297,7 +297,7 @@ class _ProvHomeScreenState extends State<ProvHomeScreen>
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
           colors: [
-            AppColors.primaryTeal,
+            AppColors.provincialAdmin,
             AppColors.primaryTeal.withOpacity(0.8),
           ],
         ),
@@ -336,7 +336,7 @@ class _ProvHomeScreenState extends State<ProvHomeScreen>
                             ? Icon(
                               Icons.admin_panel_settings,
                               size: 30,
-                              color: AppColors.primaryTeal,
+                              color: AppColors.provincialAdmin,
                             )
                             : null,
                   ),

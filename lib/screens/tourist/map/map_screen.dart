@@ -1,29 +1,33 @@
 // ignore_for_file: prefer_final_fields, avoid_print, unused_field, use_build_context_synchronously
 
 import 'dart:async';
+import 'dart:convert';
+import 'dart:math' as math;
+import 'dart:typed_data';
+import 'dart:ui' as ui;
+
+import 'package:capstone_app/api/api.dart';
+import 'package:capstone_app/data/repositories/destination_repository.dart';
+import 'package:capstone_app/models/connectivity_info.dart';
+import 'package:capstone_app/models/destination_model.dart';
+import 'package:capstone_app/services/arrival_service.dart';
+import 'package:capstone_app/services/connectivity_service.dart';
+import 'package:capstone_app/services/navigation_service.dart';
+import 'package:capstone_app/services/offline_cache_service.dart';
+import 'package:capstone_app/utils/colors.dart';
+import 'package:capstone_app/utils/constants.dart';
+import 'package:capstone_app/widgets/business_details_modal.dart';
 import 'package:capstone_app/widgets/common_search_bar.dart';
 import 'package:capstone_app/widgets/custom_map_marker.dart';
-import 'package:capstone_app/widgets/business_details_modal.dart';
-import 'package:capstone_app/widgets/navigation_overlay.dart';
 import 'package:capstone_app/widgets/navigation_map_controller.dart';
-import 'package:capstone_app/api/api.dart';
-import 'package:capstone_app/utils/constants.dart';
-import 'package:capstone_app/models/destination_model.dart';
+import 'package:capstone_app/widgets/navigation_overlay.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:capstone_app/services/offline_cache_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_polyline_points/flutter_polyline_points.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'dart:math' as math;
-import 'dart:convert';
-import 'dart:ui' as ui;
-import 'dart:typed_data';
-import 'package:flutter_polyline_points/flutter_polyline_points.dart';
 import 'package:http/http.dart' as http;
-import 'package:capstone_app/utils/colors.dart';
-import 'package:capstone_app/services/arrival_service.dart';
-import 'package:capstone_app/services/navigation_service.dart';
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
@@ -48,6 +52,8 @@ class _MapScreenState extends State<MapScreen> {
 
   // Navigation service
   final NavigationService _navigationService = NavigationService();
+  final ConnectivityService _connectivityService = ConnectivityService();
+  final DestinationRepository _destinationRepository = DestinationRepository();
   bool _isNavigating = false;
 
   String _searchQuery = '';
@@ -86,7 +92,7 @@ class _MapScreenState extends State<MapScreen> {
   @override
   void initState() {
     super.initState();
-    _initializeCategoryMarkerIcons().then((_) => _fetchDestinationPins());
+    _fetchAllData();
     _startLocationStream(); // Start streaming location
 
     // Listen to navigation state changes
@@ -107,6 +113,15 @@ class _MapScreenState extends State<MapScreen> {
         });
       }
     });
+  }
+
+  /// Fetch all data once in initState - no async calls in UI handlers
+  Future<void> _fetchAllData() async {
+    await Future.wait([
+      _initializeCategoryMarkerIcons(),
+      _fetchUserRole(),
+      _fetchDestinationPins(),
+    ]);
   }
 
   @override
@@ -217,9 +232,8 @@ class _MapScreenState extends State<MapScreen> {
     });
   }
 
-  Future<void> _fetchDestinationPins() async {
+  Future<void> _fetchUserRole() async {
     try {
-      if (mounted) setState(() => _isLoading = true);
       final user = FirebaseAuth.instance.currentUser;
       if (user != null) {
         final userDoc =
@@ -227,10 +241,24 @@ class _MapScreenState extends State<MapScreen> {
                 .collection('Users')
                 .doc(user.uid)
                 .get();
+        if (mounted) {
+          setState(() {
+            _role = userDoc.data()?['role'] ?? 'Guest';
+          });
+        }
+      }
+    } catch (e) {
+      if (mounted) {
         setState(() {
-          _role = userDoc.data()?['role'] ?? 'Guest';
+          _role = 'Guest';
         });
       }
+    }
+  }
+
+  Future<void> _fetchDestinationPins() async {
+    try {
+      if (mounted) setState(() => _isLoading = true);
 
       final markers = <Marker>{};
       List<Map<String, dynamic>> rawDocs = [];
@@ -240,15 +268,17 @@ class _MapScreenState extends State<MapScreen> {
             .collection('destination')
             .get()
             .timeout(const Duration(seconds: 3));
-          // Preserve document ids so hotspotId is reliable downstream
-        rawDocs = snapshot.docs.map((d) {
-          final m = Map<String, dynamic>.from(d.data());
-          if ((m['hotspot_id'] == null || m['hotspot_id'].toString().isEmpty) &&
-              (m['id'] == null || m['id'].toString().isEmpty)) {
-            m['hotspot_id'] = d.id;
-          }
-          return m;
-        }).toList();
+        // Preserve document ids so hotspotId is reliable downstream
+        rawDocs =
+            snapshot.docs.map((d) {
+              final m = Map<String, dynamic>.from(d.data());
+              if ((m['hotspot_id'] == null ||
+                      m['hotspot_id'].toString().isEmpty) &&
+                  (m['id'] == null || m['id'].toString().isEmpty)) {
+                m['hotspot_id'] = d.id;
+              }
+              return m;
+            }).toList();
         // Cache for offline use
         await OfflineCacheService.saveDestinations(rawDocs);
         _isOfflineMode = false;
@@ -262,7 +292,8 @@ class _MapScreenState extends State<MapScreen> {
       }
 
       for (final data in rawDocs) {
-        final id = data['hotspot_id']?.toString() ?? data['id']?.toString() ?? '';
+        final id =
+            data['hotspot_id']?.toString() ?? data['id']?.toString() ?? '';
         final hotspot = Hotspot.fromMap(data, id);
         final double? lat = hotspot.latitude;
         final double? lng = hotspot.longitude;
@@ -363,6 +394,15 @@ class _MapScreenState extends State<MapScreen> {
         _isLoadingDirections = true;
       });
 
+      // Check connectivity first
+      final connectivityInfo = await _connectivityService.checkConnection();
+      if (connectivityInfo.status != ConnectionStatus.connected) {
+        if (mounted) {
+          _showOfflineDirectionsDialog();
+        }
+        return;
+      }
+
       // Ensure location services and permission are enabled before starting nav
       final serviceEnabled = await Geolocator.isLocationServiceEnabled();
       if (!serviceEnabled) {
@@ -376,7 +416,9 @@ class _MapScreenState extends State<MapScreen> {
           permission == LocationPermission.denied) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Location permission required for navigation')),
+            const SnackBar(
+              content: Text('Location permission required for navigation'),
+            ),
           );
         }
         return;
@@ -927,6 +969,25 @@ class _MapScreenState extends State<MapScreen> {
     _mapController?.setMapStyle(AppConstants.kMapStyle);
   }
 
+  void _showOfflineDirectionsDialog() {
+    showDialog(
+      context: context,
+      builder:
+          (context) => AlertDialog(
+            title: const Text('Offline Mode'),
+            content: const Text(
+              'Turn-by-turn directions require an internet connection. Please check your connection and try again.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(),
+                child: const Text('OK'),
+              ),
+            ],
+          ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final bottomPadding = MediaQuery.of(context).padding.bottom;
@@ -991,7 +1052,11 @@ class _MapScreenState extends State<MapScreen> {
                 ),
                 child: Row(
                   children: [
-                    const Icon(Icons.offline_bolt, color: Colors.yellow, size: 18),
+                    const Icon(
+                      Icons.offline_bolt,
+                      color: Colors.yellow,
+                      size: 18,
+                    ),
                     const SizedBox(width: 8),
                     const Expanded(
                       child: Text(
@@ -1021,70 +1086,89 @@ class _MapScreenState extends State<MapScreen> {
                     ),
                   ],
                 ),
-                child: _cachedDestinations.isEmpty
-                    ? const Center(child: Text('No cached places available'))
-                    : ListView.builder(
-                        scrollDirection: Axis.horizontal,
-                        padding: const EdgeInsets.all(8),
-                        itemCount: _cachedDestinations.length,
-                        itemBuilder: (context, index) {
-                          final data = _cachedDestinations[index];
-                          final name = (data['business_name'] ?? data['name'] ?? 'Place').toString();
-                          final images = (data['images'] is List) ? data['images'] as List : [];
-                          final imageUrl = images.isNotEmpty ? images.first.toString() : (data['imageUrl']?.toString());
-                          return Container(
-                            width: 220,
-                            margin: const EdgeInsets.only(right: 8),
-                            child: InkWell(
-                              onTap: () {
-                                BusinessDetailsModal.show(
-                                  context: context,
-                                  businessData: data,
-                                  role: 'guest',
-                                  currentUserId: null,
-                                  showInteractions: false,
-                                );
-                              },
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Expanded(
-                                    child: ClipRRect(
-                                      borderRadius: BorderRadius.circular(10),
-                                      child: imageUrl != null
-                                          ? Image.network(
-                                              imageUrl,
-                                              fit: BoxFit.cover,
-                                              width: double.infinity,
-                                            )
-                                          : Container(
-                                              color: Colors.grey[300],
-                                              child: const Icon(Icons.image, size: 30),
-                                            ),
+                child:
+                    _cachedDestinations.isEmpty
+                        ? const Center(
+                          child: Text('No cached places available'),
+                        )
+                        : ListView.builder(
+                          scrollDirection: Axis.horizontal,
+                          padding: const EdgeInsets.all(8),
+                          itemCount: _cachedDestinations.length,
+                          itemBuilder: (context, index) {
+                            final data = _cachedDestinations[index];
+                            final name =
+                                (data['business_name'] ??
+                                        data['name'] ??
+                                        'Place')
+                                    .toString();
+                            final images =
+                                (data['images'] is List)
+                                    ? data['images'] as List
+                                    : [];
+                            final imageUrl =
+                                images.isNotEmpty
+                                    ? images.first.toString()
+                                    : (data['imageUrl']?.toString());
+                            return Container(
+                              width: 220,
+                              margin: const EdgeInsets.only(right: 8),
+                              child: InkWell(
+                                onTap: () {
+                                  BusinessDetailsModal.show(
+                                    context: context,
+                                    businessData: data,
+                                    role: 'guest',
+                                    currentUserId: null,
+                                    showInteractions: false,
+                                  );
+                                },
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Expanded(
+                                      child: ClipRRect(
+                                        borderRadius: BorderRadius.circular(10),
+                                        child:
+                                            imageUrl != null
+                                                ? Image.network(
+                                                  imageUrl,
+                                                  fit: BoxFit.cover,
+                                                  width: double.infinity,
+                                                )
+                                                : Container(
+                                                  color: Colors.grey[300],
+                                                  child: const Icon(
+                                                    Icons.image,
+                                                    size: 30,
+                                                  ),
+                                                ),
+                                      ),
                                     ),
-                                  ),
-                                  const SizedBox(height: 6),
-                                  Text(
-                                    name,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(fontWeight: FontWeight.w600),
-                                  ),
-                                ],
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      name,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
-                            ),
-                          );
-                        },
-                      ),
+                            );
+                          },
+                        ),
               ),
             ),
 
           // Navigation Overlay (disabled for guests & offline)
           if (_role.toLowerCase() != 'guest' && !_isOfflineMode)
-          NavigationOverlay(
-            navigationService: _navigationService,
-            onExitNavigation: _exitNavigation,
-          ),
+            NavigationOverlay(
+              navigationService: _navigationService,
+              onExitNavigation: _exitNavigation,
+            ),
 
           // Removed blue arrow compass indicator
 
