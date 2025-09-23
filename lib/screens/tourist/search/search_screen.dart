@@ -1,5 +1,8 @@
-import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/material.dart';
+
+import '../../../data/repositories/destination_repository.dart';
 import '../../../models/destination_model.dart';
 import '../../../utils/colors.dart';
 import '../../../widgets/business_details_modal.dart';
@@ -14,33 +17,67 @@ class SearchScreen extends StatefulWidget {
 
 class _SearchScreenState extends State<SearchScreen> {
   final TextEditingController _searchController = TextEditingController();
+  final DestinationRepository _destinationRepository = DestinationRepository();
   List<Hotspot> _allHotspots = [];
   List<Hotspot> _filteredHotspots = [];
   bool _isLoading = false;
   bool _hasSearched = false;
+  String _userRole = 'Tourist';
 
   @override
   void initState() {
     super.initState();
-    _loadHotspots();
+    _fetchAllData();
+  }
+
+  /// Fetch all data once in initState - no async calls in UI handlers
+  Future<void> _fetchAllData() async {
+    await Future.wait([_loadHotspots(), _fetchUserRole()]);
+  }
+
+  Future<void> _fetchUserRole() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        final userDoc =
+            await FirebaseFirestore.instance
+                .collection('Users')
+                .doc(user.uid)
+                .get();
+        if (mounted) {
+          setState(() {
+            _userRole = userDoc.data()?['role'] ?? 'Tourist';
+          });
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _userRole = 'Tourist';
+        });
+      }
+    }
   }
 
   Future<void> _loadHotspots() async {
     setState(() => _isLoading = true);
     try {
-      final snapshot = await FirebaseFirestore.instance.collection('destination').get();
-      final hotspots = snapshot.docs.map((doc) {
-        final data = doc.data();
-        return Hotspot.fromMap(data, doc.id);
-      }).where((h) => !(h.isArchived ?? false)).toList();
-      
-      setState(() {
-        _allHotspots = hotspots;
-        _isLoading = false;
-      });
-    } catch (e) {
-      setState(() => _isLoading = false);
+      final destinations = await _destinationRepository.getDestinationsOnce();
+      final hotspots =
+          destinations
+              .map((data) => Hotspot.fromMap(data, data['id'] ?? ''))
+              .where((h) => !(h.isArchived ?? false))
+              .toList();
+
       if (mounted) {
+        setState(() {
+          _allHotspots = hotspots;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoading = false);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error loading destinations: $e'),
@@ -53,7 +90,7 @@ class _SearchScreenState extends State<SearchScreen> {
 
   void _performSearch() {
     final searchTerm = _searchController.text.trim();
-    
+
     if (searchTerm.isEmpty) {
       setState(() {
         _filteredHotspots = [];
@@ -64,13 +101,24 @@ class _SearchScreenState extends State<SearchScreen> {
 
     setState(() {
       _hasSearched = true;
-      _filteredHotspots = _allHotspots.where((hotspot) {
-        return hotspot.name.toLowerCase().contains(searchTerm.toLowerCase()) ||
-               hotspot.description.toLowerCase().contains(searchTerm.toLowerCase()) ||
-               hotspot.district.toLowerCase().contains(searchTerm.toLowerCase()) ||
-               hotspot.municipality.toLowerCase().contains(searchTerm.toLowerCase()) ||
-               hotspot.category.toLowerCase().contains(searchTerm.toLowerCase());
-      }).toList();
+      _filteredHotspots =
+          _allHotspots.where((hotspot) {
+            return hotspot.name.toLowerCase().contains(
+                  searchTerm.toLowerCase(),
+                ) ||
+                hotspot.description.toLowerCase().contains(
+                  searchTerm.toLowerCase(),
+                ) ||
+                hotspot.district.toLowerCase().contains(
+                  searchTerm.toLowerCase(),
+                ) ||
+                hotspot.municipality.toLowerCase().contains(
+                  searchTerm.toLowerCase(),
+                ) ||
+                hotspot.category.toLowerCase().contains(
+                  searchTerm.toLowerCase(),
+                );
+          }).toList();
     });
   }
 
@@ -85,9 +133,7 @@ class _SearchScreenState extends State<SearchScreen> {
   void _navigateToMap() {
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (context) => const MapScreen(),
-      ),
+      MaterialPageRoute(builder: (context) => const MapScreen()),
     );
   }
 
@@ -115,7 +161,10 @@ class _SearchScreenState extends State<SearchScreen> {
                 children: [
                   // Search Bar
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 14,
+                    ),
                     decoration: BoxDecoration(
                       color: Colors.grey[100],
                       borderRadius: BorderRadius.circular(12),
@@ -152,7 +201,7 @@ class _SearchScreenState extends State<SearchScreen> {
                     ),
                   ),
                   const SizedBox(height: 12),
-                  
+
                   // Search Button
                   SizedBox(
                     width: double.infinity,
@@ -193,9 +242,7 @@ class _SearchScreenState extends State<SearchScreen> {
             ),
 
             // Results Section
-            Expanded(
-              child: _buildResultsSection(),
-            ),
+            Expanded(child: _buildResultsSection()),
           ],
         ),
       ),
@@ -238,10 +285,7 @@ class _SearchScreenState extends State<SearchScreen> {
             const SizedBox(height: 8),
             Text(
               'Enter keywords to find tourist attractions,\nrestaurants, and more in Bukidnon',
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey[500],
-              ),
+              style: TextStyle(fontSize: 14, color: Colors.grey[500]),
               textAlign: TextAlign.center,
             ),
           ],
@@ -254,11 +298,7 @@ class _SearchScreenState extends State<SearchScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(
-              Icons.search_off,
-              size: 80,
-              color: Colors.grey[400],
-            ),
+            Icon(Icons.search_off, size: 80, color: Colors.grey[400]),
             const SizedBox(height: 16),
             Text(
               'No results found',
@@ -271,10 +311,7 @@ class _SearchScreenState extends State<SearchScreen> {
             const SizedBox(height: 8),
             Text(
               'Try different keywords',
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey[500],
-              ),
+              style: TextStyle(fontSize: 14, color: Colors.grey[500]),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 20),
@@ -283,7 +320,10 @@ class _SearchScreenState extends State<SearchScreen> {
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.primaryTeal,
                 foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24,
+                  vertical: 12,
+                ),
               ),
               child: const Text('Clear Search'),
             ),
@@ -313,10 +353,7 @@ class _SearchScreenState extends State<SearchScreen> {
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              TextButton(
-                onPressed: _clearSearch,
-                child: const Text('Clear'),
-              ),
+              TextButton(onPressed: _clearSearch, child: const Text('Clear')),
             ],
           ),
         ),
@@ -343,13 +380,14 @@ class _SearchScreenState extends State<SearchScreen> {
       shadowColor: Colors.black.withOpacity(0.1),
       child: InkWell(
         onTap: () {
-          final dataWithId = hotspot.toJson()
-            ..putIfAbsent('hotspot_id', () => hotspot.hotspotId);
+          final dataWithId =
+              hotspot.toJson()
+                ..putIfAbsent('hotspot_id', () => hotspot.hotspotId);
           BusinessDetailsModal.show(
             context: context,
             businessData: dataWithId,
-            role: 'Tourist',
-            currentUserId: null,
+            role: _userRole,
+            currentUserId: FirebaseAuth.instance.currentUser?.uid,
             showInteractions: false,
             onNavigate: (lat, lng) {
               _navigateToMap();
@@ -365,17 +403,18 @@ class _SearchScreenState extends State<SearchScreen> {
               // Hotspot Image
               ClipRRect(
                 borderRadius: BorderRadius.circular(12),
-                child: hotspot.images.isNotEmpty
-                    ? Image.network(
-                        hotspot.images.first,
-                        width: 80,
-                        height: 80,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) {
-                          return _buildPlaceholderImage();
-                        },
-                      )
-                    : _buildPlaceholderImage(),
+                child:
+                    hotspot.images.isNotEmpty
+                        ? Image.network(
+                          hotspot.images.first,
+                          width: 80,
+                          height: 80,
+                          fit: BoxFit.cover,
+                          errorBuilder: (context, error, stackTrace) {
+                            return _buildPlaceholderImage();
+                          },
+                        )
+                        : _buildPlaceholderImage(),
               ),
               const SizedBox(width: 16),
               // Content
@@ -394,7 +433,10 @@ class _SearchScreenState extends State<SearchScreen> {
                     const SizedBox(height: 4),
                     // Category
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 2,
+                      ),
                       decoration: BoxDecoration(
                         color: AppColors.primaryTeal.withOpacity(0.1),
                         borderRadius: BorderRadius.circular(20),
@@ -467,11 +509,7 @@ class _SearchScreenState extends State<SearchScreen> {
         color: Colors.grey[300],
         borderRadius: BorderRadius.circular(12),
       ),
-      child: Icon(
-        Icons.image,
-        color: Colors.grey[500],
-        size: 32,
-      ),
+      child: Icon(Icons.image, color: Colors.grey[500], size: 32),
     );
   }
 

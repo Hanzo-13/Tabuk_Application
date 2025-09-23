@@ -1,4 +1,4 @@
-// ignore_for_file: prefer_final_fields, avoid_print, unused_field, use_build_context_synchronously
+// ignore_for_file: prefer_final_fields, avoid_print, unused_field, use_build_context_synchronously, unused_element, unused_local_variable
 
 import 'dart:async';
 import 'dart:math' as math;
