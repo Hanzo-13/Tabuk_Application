@@ -3,7 +3,8 @@ const fetch = require('node-fetch');
 const cors = require('cors');
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
+
 
 // Replace with your actual Google Directions API key
 const GOOGLE_API_KEY = 'AIzaSyCHDrbJrZHSeMFG40A-hQPB37nrmA6rUKE';
