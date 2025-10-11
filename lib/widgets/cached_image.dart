@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:path_provider/path_provider.dart';
 import 'package:http/http.dart' as http;
 
@@ -13,6 +14,10 @@ class ImageCacheService {
   }
 
   static Future<String> getImagePath(String url) async {
+    if (kIsWeb) {
+      // On web, return the URL directly; use browser cache
+      return url;
+    }
     final filename = url.split('/').last; // crude filename generator
     final dir = await getApplicationDocumentsDirectory();
     final file = File('${dir.path}/$filename');
@@ -53,15 +58,22 @@ class CachedImage extends StatelessWidget {
           return errorBuilder(context, snapshot.error!, snapshot.stackTrace);
         }
         if (snapshot.hasData) {
-          // --- THE FIX IS HERE ---
-          // We add width and height properties to make the image fill its parent.
-          return Image.file(
-            File(snapshot.data!),
-            fit: fit,
-            width: double.infinity,  // Force the image to expand to the full width
-            height: double.infinity, // Force the image to expand to the full height
-          );
-          // --- END OF FIX ---
+          final pathOrUrl = snapshot.data!;
+          if (kIsWeb) {
+            return Image.network(
+              pathOrUrl,
+              fit: fit,
+              width: double.infinity,
+              height: double.infinity,
+            );
+          } else {
+            return Image.file(
+              File(pathOrUrl),
+              fit: fit,
+              width: double.infinity,
+              height: double.infinity,
+            );
+          }
         }
         return errorBuilder(context, 'Unknown state', null);
       },

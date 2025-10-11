@@ -42,6 +42,7 @@ class _MapScreenState extends State<MapScreen> {
   StreamSubscription<Position>? _positionStream;
   Map<String, Map<String, dynamic>> _destinationData = {};
   LatLng? _currentLatLng;
+  Position? _lastAcceptedPosition;
   // Removed compass-related variables
 
   Set<Marker> _markers = {};
@@ -49,12 +50,26 @@ class _MapScreenState extends State<MapScreen> {
   bool _isLoading = false;
   final Set<Polyline> _polylines = {};
   bool _isLoadingDirections = false;
+  final Set<Circle> _circles = {};
+
+  // Smoothing config
+  final List<Position> _recentPositions = [];
+  DateTime? _lastOverlayUpdate;
+  static const int _smoothingWindow = 5;
+  static const double _maxJumpMeters = 100; // ignore >100m jump within 3s
+  static const Duration _jumpWindow = Duration(seconds: 3);
+  static const Duration _throttleInterval = Duration(milliseconds: 900); // ~1/s
+  static const double _recenterThresholdMeters = 20; // recenter if drift >20m
 
   // Navigation service
   final NavigationService _navigationService = NavigationService();
   final ConnectivityService _connectivityService = ConnectivityService();
   final DestinationRepository _destinationRepository = DestinationRepository();
   bool _isNavigating = false;
+
+  // Web/location UX
+  bool _showLocationBanner = false;
+  String _locationBannerText = 'Enable location to center the map on you.';
 
   String _searchQuery = '';
   String _role = 'Tourist';
@@ -94,6 +109,7 @@ class _MapScreenState extends State<MapScreen> {
     super.initState();
     _fetchAllData();
     _startLocationStream(); // Start streaming location
+    _ensureLocationPermissionAndCenter();
 
     // Listen to navigation state changes
     _navigationService.navigationStateStream.listen((isNavigating) {
@@ -140,13 +156,132 @@ class _MapScreenState extends State<MapScreen> {
     _positionStream = Geolocator.getPositionStream(
       locationSettings: locationSettings,
     ).listen((Position position) {
-      setState(() {
-        _currentLatLng = LatLng(position.latitude, position.longitude);
-      });
+      _handleIncomingPosition(position);
 
       // Proximity check for arrivals
       _checkProximityAndSaveArrival(position);
     });
+  }
+
+  void _handleIncomingPosition(Position position) {
+    final now = DateTime.now();
+    if (_lastOverlayUpdate != null && now.difference(_lastOverlayUpdate!) < _throttleInterval) {
+      return; // throttle updates
+    }
+
+    // Keep a small window of the most recent fixes
+    _recentPositions.add(position);
+    while (_recentPositions.length > _smoothingWindow) {
+      _recentPositions.removeAt(0);
+    }
+
+    // Pick the most accurate fix in the window
+    Position best = _recentPositions.reduce(
+      (a, b) => (a.accuracy <= b.accuracy) ? a : b,
+    );
+
+    // Anti-jump: if last accepted exists and time < 3s and jump >100m, ignore
+    if (_lastAcceptedPosition != null) {
+      final ts = _lastAcceptedPosition!.timestamp;
+      final tsMs = ts.millisecondsSinceEpoch;
+      final dt = now.difference(DateTime.fromMillisecondsSinceEpoch(tsMs));
+      final lastLatLng = LatLng(_lastAcceptedPosition!.latitude, _lastAcceptedPosition!.longitude);
+      final bestLatLng = LatLng(best.latitude, best.longitude);
+      final jump = _haversineDistanceMeters(lastLatLng, bestLatLng);
+      if (dt < _jumpWindow && jump > _maxJumpMeters) {
+        return; // discard spike
+      }
+    }
+
+    _lastAcceptedPosition = best;
+    _currentLatLng = LatLng(best.latitude, best.longitude);
+    _lastOverlayUpdate = now;
+
+    _updateUserLocationOverlay(best);
+
+    // Auto-recenter only when moved significantly to avoid jitter
+    if (_mapController != null) {
+      final camTarget = _currentLatLng!;
+      if (_lastCenter == null || _haversineDistanceMeters(_lastCenter!, camTarget) > _recenterThresholdMeters) {
+        _mapController!.animateCamera(CameraUpdate.newLatLng(camTarget));
+        _lastCenter = camTarget;
+      }
+    }
+    if (mounted) setState(() {});
+  }
+
+  LatLng? _lastCenter;
+
+  Future<void> _ensureLocationPermissionAndCenter() async {
+    try {
+      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      if (!serviceEnabled) {
+        if (mounted) {
+          setState(() {
+            _showLocationBanner = true;
+            _locationBannerText = 'Location services are off. Turn them on, then tap Enable.';
+          });
+        }
+        return; // Can't proceed if location services are disabled
+      }
+
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.deniedForever ||
+          permission == LocationPermission.denied) {
+        if (mounted) {
+          setState(() {
+            _showLocationBanner = true;
+            _locationBannerText = 'Location permission denied. Tap Enable and allow in the browser.';
+          });
+        }
+        return; // User denied permissions
+      }
+
+      final pos = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+      _currentLatLng = LatLng(pos.latitude, pos.longitude);
+      _updateUserLocationOverlay(pos);
+      if (_mapController != null) {
+        await _mapController!.animateCamera(
+          CameraUpdate.newLatLngZoom(_currentLatLng!, 14),
+        );
+      }
+      if (mounted) {
+        setState(() {
+          _showLocationBanner = false;
+        });
+      }
+    } catch (_) {
+      // Ignore errors; map will remain at default center
+    }
+  }
+
+  void _updateUserLocationOverlay(Position pos) {
+    final me = LatLng(pos.latitude, pos.longitude);
+    // Draw only a small blue dot circle (no pin/marker)
+    const double dotRadius = 18; // meters, purely visual
+    _circles.removeWhere((c) => c.circleId.value == 'me_accuracy');
+    _circles.add(
+      Circle(
+        circleId: const CircleId('me_accuracy'),
+        center: me,
+        radius: dotRadius,
+        strokeColor: Colors.transparent,
+        fillColor: Colors.blue.withOpacity(0.7),
+        strokeWidth: 0,
+        zIndex: 9998,
+      ),
+    );
+    // Rebuild markers from _allMarkers, but hide any destination marker overlapping the blue dot
+    _markers = _allMarkers.where((m) {
+      final d = _haversineDistanceMeters(me, m.position);
+      return d > 30; // hide markers within ~30m of user to avoid overlap
+    }).toSet();
+    if (mounted) setState(() {});
   }
 
   void _checkProximityAndSaveArrival(Position userPosition) async {
@@ -966,7 +1101,13 @@ class _MapScreenState extends State<MapScreen> {
   void _onMapCreated(GoogleMapController controller) {
     _mapController = controller;
     _controller.complete(controller);
-    _mapController?.setMapStyle(AppConstants.kMapStyle);
+    // On web, google_maps_flutter_web can throw MapStyleException for some
+    // styles. Guard and ignore failures so the map still renders.
+    try {
+      _mapController?.setMapStyle(AppConstants.kMapStyle);
+    } catch (_) {
+      // Fallback: no custom style
+    }
   }
 
   void _showOfflineDirectionsDialog() {
@@ -1005,6 +1146,7 @@ class _MapScreenState extends State<MapScreen> {
               zoom: AppConstants.kInitialZoom,
             ),
             markers: _markers,
+            circles: _circles,
             polylines: _polylines,
             myLocationEnabled: true,
             myLocationButtonEnabled: false,
@@ -1037,6 +1179,57 @@ class _MapScreenState extends State<MapScreen> {
           ),
 
           if (_isLoading) const Center(child: CircularProgressIndicator()),
+
+          // Enable location banner (web/desktop UX)
+          if (_showLocationBanner)
+            Positioned(
+              top: 70,
+              left: 16,
+              right: 16,
+              child: Material(
+                elevation: 4,
+                borderRadius: BorderRadius.circular(12),
+                color: Colors.white,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.my_location, color: AppColors.primaryTeal),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _locationBannerText,
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: _ensureLocationPermissionAndCenter,
+                        child: const Text('Enable'),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+
+          // Floating "my location" button
+          Positioned(
+            right: 16,
+            bottom: 24,
+            child: Material(
+              color: Colors.white,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              elevation: 6,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(16),
+                onTap: _ensureLocationPermissionAndCenter,
+                child: const Padding(
+                  padding: EdgeInsets.all(12),
+                  child: Icon(Icons.my_location, color: Colors.blue, size: 24),
+                ),
+              ),
+            ),
+          ),
 
           // Offline guest overlay: banner + cached list
           if (_isOfflineMode)

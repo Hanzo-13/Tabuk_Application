@@ -3,6 +3,9 @@
 
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter_web_plugins/url_strategy.dart';
+import 'package:flutter/gestures.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -18,9 +21,14 @@ import 'package:capstone_app/screens/login_screen.dart';
 import 'package:capstone_app/screens/splash_screen.dart';
 import 'package:capstone_app/screens/tourist/main_tourist_screen.dart';
 import 'firebase_options.dart';
+import 'package:capstone_app/widgets/responsive_wrapper.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  if (kIsWeb) {
+    // Use path-based URLs on web (no #)
+    setUrlStrategy(PathUrlStrategy());
+  }
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   await AuthService.initializeAuthState();
   // await Hive.initFlutter();
@@ -29,16 +37,25 @@ void main() async {
   // await DestinationCacheService.init();
   // runApp(TabukRoot());
 
-  FirebaseFirestore.instance.settings = const Settings(
-    persistenceEnabled: true,
-  );
+  try {
+    FirebaseFirestore.instance.settings = const Settings(
+      persistenceEnabled: true,
+    );
+  } catch (_) {
+    // Ignore if not supported in some web environments
+  }
 
-  final appDir = await getApplicationDocumentsDirectory();
+  // Hive initialization (different between web and mobile)
+  if (kIsWeb) {
+    await Hive.initFlutter();
+  } else {
+    final appDir = await getApplicationDocumentsDirectory();
+    await Hive.initFlutter(appDir.path);
+  }
   // final fetched = await FirebaseFirestore.instance.collection('destination').get();
   // final hotspots = fetched.docs.map((doc) => Hotspot.fromMap(doc.data(), doc.id)).toList();
   // await DestinationCacheService.cacheDestinations(hotspots);
 
-  await Hive.initFlutter(appDir.path);
   // Defer heavy image cache initialization until after first frame to reduce jank
   WidgetsBinding.instance.addPostFrameCallback((_) {
     ImageCacheService.init();
@@ -101,10 +118,12 @@ class _TabukRootState extends State<TabukRoot> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    return const MaterialApp(
+    return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: AppConstants.appName,
-      home: AuthChecker(),
+      scrollBehavior: const _AppScrollBehavior(),
+      builder: (context, child) => ResponsiveWrapper(child: child),
+      home: const AuthChecker(),
     );
   }
 }
@@ -189,4 +208,17 @@ class LoadingScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return const Scaffold(body: Center(child: CircularProgressIndicator()));
   }
+}
+
+// Custom ScrollBehavior to support mouse/trackpad and remove glow on web/desktop
+class _AppScrollBehavior extends MaterialScrollBehavior {
+  const _AppScrollBehavior();
+
+  @override
+  Set<PointerDeviceKind> get dragDevices => {
+        PointerDeviceKind.touch,
+        PointerDeviceKind.mouse,
+        PointerDeviceKind.trackpad,
+        PointerDeviceKind.stylus,
+      };
 }

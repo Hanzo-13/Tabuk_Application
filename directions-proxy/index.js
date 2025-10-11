@@ -3,12 +3,14 @@ const fetch = require('node-fetch');
 const cors = require('cors');
 
 const app = express();
-const PORT = 3000;
+const PORT = process.env.PORT || 3000;
 
 // Replace with your actual Google Directions API key
 const GOOGLE_API_KEY = 'AIzaSyCHDrbJrZHSeMFG40A-hQPB37nrmA6rUKE';
 
 app.use(cors());
+
+app.get('/health', (req, res) => res.json({ status: 'ok' }));
 
 app.get('/directions', async (req, res) => {
   const { origin, destination, mode = 'driving', overview = 'full', units = 'metric' } = req.query;

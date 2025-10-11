@@ -1,7 +1,12 @@
 import 'package:flutter/foundation.dart';
 
 class ApiEnvironment {
-  static const String proxyBaseUrl = "http://localhost:3000/directions";
+  // Override at build time with: --dart-define=PROXY_BASE_URL=https://your-proxy/directions
+  static const String defaultProxyBaseUrl = "https://directions-proxy-hjgo.onrender.com/directions";
+  static const String proxyBaseUrl = String.fromEnvironment(
+    'PROXY_BASE_URL',
+    defaultValue: defaultProxyBaseUrl,
+  );
   static const String directionsBaseUrl = "https://maps.googleapis.com/maps/api/directions/json";
   static const String geocodeBaseUrl = "https://maps.googleapis.com/maps/api/geocode/json";
   static const String googleDirectionsApiKey = "AIzaSyCHDrbJrZHSeMFG40A-hQPB37nrmA6rUKE";
