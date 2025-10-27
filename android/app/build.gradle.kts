@@ -39,7 +39,7 @@ android {
         applicationId = "com.example.capstone_app"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = 23
+        minSdk = flutter.minSdkVersion
         targetSdk = 35  // Updated to match plugin requirements
         versionCode = 1  // Fixed version instead of flutter.versionCode
         versionName = "1.0"  // Fixed version instead of flutter.versionName

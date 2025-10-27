@@ -19,31 +19,58 @@ import 'package:capstone_app/screens/splash_screen.dart';
 import 'package:capstone_app/screens/tourist/main_tourist_screen.dart';
 import 'firebase_options.dart';
 
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  await AuthService.initializeAuthState();
-  // await Hive.initFlutter();
-  // Hive.registerAdapter(HotspotAdapter());
+final Future<void> appInitialization = _initializeApp();
 
-  // await DestinationCacheService.init();
-  // runApp(TabukRoot());
+Future<void> _initializeApp() async {
+  // All the async work from your original main() function is moved here.
+  await AuthService.initializeAuthState();
 
   FirebaseFirestore.instance.settings = const Settings(
     persistenceEnabled: true,
   );
 
   final appDir = await getApplicationDocumentsDirectory();
-  // final fetched = await FirebaseFirestore.instance.collection('destination').get();
-  // final hotspots = fetched.docs.map((doc) => Hotspot.fromMap(doc.data(), doc.id)).toList();
-  // await DestinationCacheService.cacheDestinations(hotspots);
-
   await Hive.initFlutter(appDir.path);
-  // Defer heavy image cache initialization until after first frame to reduce jank
+  
+  // This can still be deferred until after the first frame for performance.
   WidgetsBinding.instance.addPostFrameCallback((_) {
     ImageCacheService.init();
   });
+}
 
+// void main() async {
+//   WidgetsFlutterBinding.ensureInitialized();
+//   await Firebase.initializeApp(
+//     options: DefaultFirebaseOptions.currentPlatform
+//   );
+
+//   await AuthService.initializeAuthState();
+
+//   FirebaseFirestore.instance.settings = const Settings(
+//     persistenceEnabled: true,
+//   );
+
+//   final appDir = await getApplicationDocumentsDirectory();
+//   // final fetched = await FirebaseFirestore.instance.collection('destination').get();
+//   // final hotspots = fetched.docs.map((doc) => Hotspot.fromMap(doc.data(), doc.id)).toList();
+//   // await DestinationCacheService.cacheDestinations(hotspots);
+
+//   await Hive.initFlutter(appDir.path);
+//   // Defer heavy image cache initialization until after first frame to reduce jank
+//   WidgetsBinding.instance.addPostFrameCallback((_) {
+//     ImageCacheService.init();
+//   });
+
+//   runApp(const TabukRoot());
+// }
+
+void main() async {
+  // --- Your main() function is now clean and safe ---
+  WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+  
   runApp(const TabukRoot());
 }
 
@@ -111,46 +138,109 @@ class _TabukRootState extends State<TabukRoot> with WidgetsBindingObserver {
 
 class AuthChecker extends StatelessWidget {
   const AuthChecker({super.key});
+
+  // @override
+  // Widget build(BuildContext context) {
+  //   return StreamBuilder<User?>(
+  //     stream: FirebaseAuth.instance.authStateChanges(),
+  //     builder: (context, snapshot) {
+  //       final user = snapshot.data;
+
+  //       if (snapshot.connectionState == ConnectionState.waiting) {
+  //         return const SplashScreen();
+  //       }
+
+  //       if (user == null) return const LoginScreen();
+  //       if (user.isAnonymous) return const MainTouristScreen();
+  //       if (!user.emailVerified) return const LoginScreen();
+
+  //       return FutureBuilder<DocumentSnapshot>(
+  //         future:
+  //             FirebaseFirestore.instance
+  //                 .collection('Users')
+  //                 .doc(user.uid)
+  //                 .get(),
+  //         builder: (context, snapshot) {
+  //           if (snapshot.connectionState == ConnectionState.waiting) {
+  //             return const LoadingScreen();
+  //           }
+  //           if (snapshot.hasError ||
+  //               !snapshot.hasData ||
+  //               !snapshot.data!.exists) {
+  //             // If user doc missing or error, redirect to LoginScreen or another default screen
+  //             return const LoginScreen();
+  //           }
+
+  //           final data = snapshot.data!.data() as Map<String, dynamic>;
+  //           final role = data['role']?.toString() ?? '';
+  //           final formCompleted = data['form_completed'] == true;
+
+  //           if (role.isEmpty) return const LoginScreen();
+  //           if (!formCompleted) return const LoginScreen();
+
+  //           return _RedirectByRole(role: role);
+  //         },
+  //       );
+  //     },
+  //   );
+  // }
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<User?>(
-      stream: FirebaseAuth.instance.authStateChanges(),
+    // We wrap the StreamBuilder with a FutureBuilder that waits on our
+    // appInitialization future from above.
+    return FutureBuilder(
+      future: appInitialization,
       builder: (context, snapshot) {
-        final user = snapshot.data;
-
+        // While initialization is running, show the splash screen.
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const SplashScreen();
         }
 
-        if (user == null) return const LoginScreen();
-        if (user.isAnonymous) return const MainTouristScreen();
-        if (!user.emailVerified) return const LoginScreen();
+        // If initialization fails (optional but good practice), show an error.
+        if (snapshot.hasError) {
+          return Scaffold(
+            body: Center(
+              child: Text("Error initializing app: ${snapshot.error}"),
+            ),
+          );
+        }
 
-        return FutureBuilder<DocumentSnapshot>(
-          future:
-              FirebaseFirestore.instance
-                  .collection('Users')
-                  .doc(user.uid)
-                  .get(),
+        // Once initialization is complete, proceed with your original auth logic.
+        return StreamBuilder<User?>(
+          stream: FirebaseAuth.instance.authStateChanges(),
           builder: (context, snapshot) {
+            final user = snapshot.data;
+
             if (snapshot.connectionState == ConnectionState.waiting) {
-              return const LoadingScreen();
-            }
-            if (snapshot.hasError ||
-                !snapshot.hasData ||
-                !snapshot.data!.exists) {
-              // If user doc missing or error, redirect to LoginScreen or another default screen
-              return const LoginScreen();
+              return const SplashScreen();
             }
 
-            final data = snapshot.data!.data() as Map<String, dynamic>;
-            final role = data['role']?.toString() ?? '';
-            final formCompleted = data['form_completed'] == true;
+            if (user == null) return const LoginScreen();
+            if (user.isAnonymous) return const MainTouristScreen();
+            // Your logic for emailVerified was a bit different, let's keep it
+            if (!user.emailVerified && !user.isAnonymous) return const LoginScreen();
 
-            if (role.isEmpty) return const LoginScreen();
-            if (!formCompleted) return const LoginScreen();
+            return FutureBuilder<DocumentSnapshot>(
+              future: FirebaseFirestore.instance.collection('Users').doc(user.uid).get(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const LoadingScreen();
+                }
+                if (snapshot.hasError || !snapshot.hasData || !snapshot.data!.exists) {
+                  return const LoginScreen();
+                }
 
-            return _RedirectByRole(role: role);
+                final data = snapshot.data!.data() as Map<String, dynamic>;
+                final role = data['role']?.toString() ?? '';
+                // Your original logic had form_completed, let's keep that.
+                final formCompleted = data['form_completed'] == true;
+
+                if (role.isEmpty) return const LoginScreen();
+                if (!formCompleted) return const LoginScreen();
+
+                return _RedirectByRole(role: role);
+              },
+            );
           },
         );
       },

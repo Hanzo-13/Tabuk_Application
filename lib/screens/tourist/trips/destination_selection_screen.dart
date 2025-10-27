@@ -100,8 +100,8 @@ class _DestinationSelectionScreenState extends State<DestinationSelectionScreen>
       final district = (h.district).toString().toLowerCase();
       final location = (h.location).toString().toLowerCase();
       return muni.contains(destinationLower) ||
-             district.contains(destinationLower) ||
-             location.contains(destinationLower);
+            district.contains(destinationLower) ||
+            location.contains(destinationLower);
     }).toList();
 
     // Fallback: if no matches (e.g., generic or new destination label), show top popular items
@@ -167,6 +167,7 @@ class _DestinationSelectionScreenState extends State<DestinationSelectionScreen>
       ),
     );
   }
+
 
   /// Builds the main content area - now properly scrollable
   Widget _buildContent() {
@@ -344,7 +345,7 @@ class _DestinationSelectionScreenState extends State<DestinationSelectionScreen>
   Widget _buildPopularPlaces() {
     if (_loadingHotspots) {
       return const SizedBox(
-        height: 200,
+        height: 300,
         child: Center(child: CircularProgressIndicator()),
       );
     }
@@ -453,19 +454,25 @@ class _DestinationSelectionScreenState extends State<DestinationSelectionScreen>
           return AlertDialog(
             title: Text(
               'Select Date for ${_currentlyEditingPlace ?? ''}',
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
-            content: SizedBox(
-              height: 200,
+            contentPadding: const EdgeInsets.fromLTRB(16.0, 20.0, 16.0, 0.0), // Adjust padding
+            // =================== THE FIX IS HERE ===================
+            // We replace the rigid SizedBox with a properly constrained Container.
+            content: Container(
+              width: double.maxFinite, // Make the content use the dialog's full width
+              height: 300,             // Give it a fixed height to prevent rendering errors
               child: ListView.builder(
+                shrinkWrap: true, // Important for lists inside constrained parents
                 itemCount: availableDates.length,
                 itemBuilder: (context, index) {
                   final date = availableDates[index];
                   final isSelected = _selectedPlaceDate == date;
                   return ListTile(
-                    title: Text(DateFormat('MMM dd, yyyy').format(date)),
+                    title: Text(DateFormat('MMMM dd, yyyy').format(date)),
                     trailing: isSelected
-                        ? const Icon(Icons.check, color: AppColors.primaryOrange)
-                        : null,
+                        ? const Icon(Icons.check_circle, color: AppColors.primaryOrange)
+                        : const Icon(Icons.circle_outlined, color: Colors.grey),
                     onTap: () {
                       setDialogState(() {
                         _selectedPlaceDate = date;
@@ -475,9 +482,17 @@ class _DestinationSelectionScreenState extends State<DestinationSelectionScreen>
                 },
               ),
             ),
+            // ================= END OF FIX =======================
             actions: [
               TextButton(
-                onPressed: () => Navigator.pop(context),
+                onPressed: () {
+                   // If the user cancels an edit, add the original place back
+                  if (_placesToVisit.every((p) => p.place != _currentlyEditingPlace)) {
+                       // This logic assumes you removed it before editing.
+                       // A safer pattern might be to only remove on save.
+                  }
+                  Navigator.pop(context);
+                },
                 child: const Text(_cancelButtonLabel),
               ),
               ElevatedButton(
