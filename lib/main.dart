@@ -23,47 +23,54 @@ import 'package:capstone_app/screens/tourist/main_tourist_screen.dart';
 import 'firebase_options.dart';
 import 'package:capstone_app/widgets/responsive_wrapper.dart';
 
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  if (kIsWeb) {
-    // Use path-based URLs on web (no #)
-    setUrlStrategy(PathUrlStrategy());
-  }
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  await AuthService.initializeAuthState();
-  // await Hive.initFlutter();
-  // Hive.registerAdapter(HotspotAdapter());
+// Create a global Future that will hold the result of our initialization.
+// This is done once and can be awaited in the UI.
+final Future<void> appInitialization = _initializeApp();
 
-  // await DestinationCacheService.init();
-  // runApp(TabukRoot());
+// This function contains all the async work that needs to be done before the app is fully ready.
+Future<void> _initializeApp() async {
+  await AuthService.initializeAuthState();
 
   try {
     FirebaseFirestore.instance.settings = const Settings(
       persistenceEnabled: true,
     );
   } catch (_) {
-    // Ignore if not supported in some web environments
+    // Firestore persistence is not supported in all web environments.
+    // We can safely ignore this error.
   }
 
-  // Hive initialization (different between web and mobile)
+  // Hive needs a different initialization path for web vs. mobile.
   if (kIsWeb) {
     await Hive.initFlutter();
   } else {
     final appDir = await getApplicationDocumentsDirectory();
     await Hive.initFlutter(appDir.path);
   }
-  // final fetched = await FirebaseFirestore.instance.collection('destination').get();
-  // final hotspots = fetched.docs.map((doc) => Hotspot.fromMap(doc.data(), doc.id)).toList();
-  // await DestinationCacheService.cacheDestinations(hotspots);
 
-  // Defer heavy image cache initialization until after first frame to reduce jank
+  // Defer non-critical initializations until after the first frame to improve startup time.
   WidgetsBinding.instance.addPostFrameCallback((_) {
-    ImageCacheService.init();
+    if (!kIsWeb) {
+      ImageCacheService.init();
+    }
   });
+}
+
+// The main() function is now simple and safe for all platforms.
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  if (kIsWeb) {
+    // Use path-based URLs on web (removes the # from the URL).
+    setUrlStrategy(PathUrlStrategy());
+  }
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
 
   runApp(const TabukRoot());
 }
 
+// Your TabukRoot class and its State are UNCHANGED. They contain your connectivity logic.
 class TabukRoot extends StatefulWidget {
   const TabukRoot({super.key});
   @override
@@ -128,48 +135,65 @@ class _TabukRootState extends State<TabukRoot> with WidgetsBindingObserver {
   }
 }
 
+// AuthChecker now waits for the initialization to finish before checking the auth state.
 class AuthChecker extends StatelessWidget {
   const AuthChecker({super.key});
+
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<User?>(
-      stream: FirebaseAuth.instance.authStateChanges(),
+    // Use a FutureBuilder to wait for our appInitialization to complete.
+    return FutureBuilder(
+      future: appInitialization,
       builder: (context, snapshot) {
-        final user = snapshot.data;
-
+        // While initializing, show a splash/loading screen.
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const SplashScreen();
         }
 
-        if (user == null) return const LoginScreen();
-        if (user.isAnonymous) return const MainTouristScreen();
-        if (!user.emailVerified) return const LoginScreen();
+        // If initialization fails, show an error message.
+        if (snapshot.hasError) {
+          return Scaffold(
+            body: Center(
+              child: Text("Error initializing app: ${snapshot.error}"),
+            ),
+          );
+        }
 
-        return FutureBuilder<DocumentSnapshot>(
-          future:
-              FirebaseFirestore.instance
-                  .collection('Users')
-                  .doc(user.uid)
-                  .get(),
+        // Once initialization is complete, proceed with your original authentication logic.
+        return StreamBuilder<User?>(
+          stream: FirebaseAuth.instance.authStateChanges(),
           builder: (context, snapshot) {
+            final user = snapshot.data;
+
             if (snapshot.connectionState == ConnectionState.waiting) {
-              return const LoadingScreen();
-            }
-            if (snapshot.hasError ||
-                !snapshot.hasData ||
-                !snapshot.data!.exists) {
-              // If user doc missing or error, redirect to LoginScreen or another default screen
-              return const LoginScreen();
+              return const SplashScreen();
             }
 
-            final data = snapshot.data!.data() as Map<String, dynamic>;
-            final role = data['role']?.toString() ?? '';
-            final formCompleted = data['form_completed'] == true;
+            if (user == null) return const LoginScreen();
+            if (user.isAnonymous) return const MainTouristScreen();
+            if (!user.emailVerified) return const LoginScreen();
 
-            if (role.isEmpty) return const LoginScreen();
-            if (!formCompleted) return const LoginScreen();
+            return FutureBuilder<DocumentSnapshot>(
+              future:
+                  FirebaseFirestore.instance.collection('Users').doc(user.uid).get(),
+              builder: (context, snapshot) {
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return const LoadingScreen();
+                }
+                if (snapshot.hasError || !snapshot.hasData || !snapshot.data!.exists) {
+                  return const LoginScreen();
+                }
 
-            return _RedirectByRole(role: role);
+                final data = snapshot.data!.data() as Map<String, dynamic>;
+                final role = data['role']?.toString() ?? '';
+                final formCompleted = data['form_completed'] == true;
+
+                if (role.isEmpty) return const LoginScreen();
+                if (!formCompleted) return const LoginScreen();
+
+                return _RedirectByRole(role: role);
+              },
+            );
           },
         );
       },
@@ -177,6 +201,7 @@ class AuthChecker extends StatelessWidget {
   }
 }
 
+// Your other classes (_RedirectByRole, LoadingScreen, _AppScrollBehavior) are UNCHANGED.
 class _RedirectByRole extends StatefulWidget {
   final String role;
   const _RedirectByRole({required this.role});
@@ -210,7 +235,6 @@ class LoadingScreen extends StatelessWidget {
   }
 }
 
-// Custom ScrollBehavior to support mouse/trackpad and remove glow on web/desktop
 class _AppScrollBehavior extends MaterialScrollBehavior {
   const _AppScrollBehavior();
 

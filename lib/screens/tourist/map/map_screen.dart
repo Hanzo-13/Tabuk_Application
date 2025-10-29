@@ -1129,24 +1129,6 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
-  void _showOfflineDirectionsDialog() {
-    showDialog(
-      context: context,
-      builder:
-          (context) => AlertDialog(
-            title: const Text('Offline Mode'),
-            content: const Text(
-              'Turn-by-turn directions require an internet connection. Please check your connection and try again.',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('OK'),
-              ),
-            ],
-          ),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {

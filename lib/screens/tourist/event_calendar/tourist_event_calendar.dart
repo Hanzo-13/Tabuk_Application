@@ -1,15 +1,14 @@
 // ignore_for_file: unnecessary_const, unnecessary_cast, prefer_final_fields, unnecessary_string_interpolations
 
+import 'package:capstone_app/data/repositories/event_repository.dart';
 import 'package:capstone_app/models/event_model.dart';
-import 'package:capstone_app/services/event_service.dart';
-import 'package:capstone_app/services/offline_cache_service.dart';
 import 'package:capstone_app/utils/colors.dart';
 import 'package:capstone_app/utils/constants.dart';
 import 'package:capstone_app/widgets/event_detail_modal.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:table_calendar/table_calendar.dart';
 import 'package:intl/intl.dart';
+import 'package:table_calendar/table_calendar.dart';
 
 class TouristEventCalendarScreen extends StatefulWidget {
   const TouristEventCalendarScreen({super.key});
@@ -26,6 +25,7 @@ class _TouristEventCalendarScreenState extends State<TouristEventCalendarScreen>
   List<Event> _events = [];
   bool _isLoading = true;
   Map<DateTime, List<Event>> _eventMarkers = {};
+  final EventRepository _eventRepository = EventRepository();
 
   late TabController _tabController;
   CalendarFormat _calendarFormat = CalendarFormat.month;
@@ -48,16 +48,8 @@ class _TouristEventCalendarScreenState extends State<TouristEventCalendarScreen>
 
   Future<void> _loadEvents() async {
     setState(() => _isLoading = true);
-    List<Event> events = [];
-    try {
-      events = await EventService.getAllEvents();
-      // Cache on success
-      await OfflineCacheService.saveEvents(events);
-    } catch (_) {
-      // Offline fallback
-      events = await OfflineCacheService.loadEvents();
-    }
-    // final now = DateTime.now();
+    final raw = await _eventRepository.getAllEventsOnce();
+    final events = raw.map((m) => Event.fromMap(m, m['id'] ?? '')).toList();
 
     for (var event in events) {
       DateTime current = DateTime(
@@ -107,10 +99,13 @@ class _TouristEventCalendarScreenState extends State<TouristEventCalendarScreen>
     if (_selectedDay == null) return;
 
     final selected = _selectedDay!;
-    final eventsOnSelectedDay = _events.where((event) {
-      return selected.isAfter(event.startDate.subtract(const Duration(days: 1))) &&
-            selected.isBefore(event.endDate.add(const Duration(days: 1)));
-    }).toList();
+    final eventsOnSelectedDay =
+        _events.where((event) {
+          return selected.isAfter(
+                event.startDate.subtract(const Duration(days: 1)),
+              ) &&
+              selected.isBefore(event.endDate.add(const Duration(days: 1)));
+        }).toList();
 
     showModalBottomSheet(
       context: context,
@@ -134,7 +129,7 @@ class _TouristEventCalendarScreenState extends State<TouristEventCalendarScreen>
                     fontSize: 18,
                   ),
                 ),
-                const SizedBox(height: 8, width: 350,),
+                const SizedBox(height: 8, width: 350),
                 if (eventsOnSelectedDay.isEmpty)
                   const Text('No events on this day.')
                 else
@@ -146,19 +141,22 @@ class _TouristEventCalendarScreenState extends State<TouristEventCalendarScreen>
                       final event = eventsOnSelectedDay[index];
                       return ListTile(
                         contentPadding: EdgeInsets.zero,
-                        leading: event.thumbnailUrl != null
-                          ? ClipRRect(
-                              borderRadius: BorderRadius.circular(8),
-                              child: Image.network(
-                                event.thumbnailUrl!,
-                                width: 50,
-                                height: 50,
-                                fit: BoxFit.cover,
-                              ),
-                            )
-                          : const Icon(Icons.event, color: Colors.blue),
+                        leading:
+                            event.thumbnailUrl != null
+                                ? ClipRRect(
+                                  borderRadius: BorderRadius.circular(8),
+                                  child: Image.network(
+                                    event.thumbnailUrl!,
+                                    width: 50,
+                                    height: 50,
+                                    fit: BoxFit.cover,
+                                  ),
+                                )
+                                : const Icon(Icons.event, color: Colors.blue),
                         title: Text(event.title),
-                        subtitle: Text('${event.location}, ${event.municipality}'),
+                        subtitle: Text(
+                          '${event.location}, ${event.municipality}',
+                        ),
                         trailing: Text(
                           event.status.toUpperCase(),
                           style: TextStyle(
@@ -172,11 +170,15 @@ class _TouristEventCalendarScreenState extends State<TouristEventCalendarScreen>
                             context: context,
                             isScrollControlled: true,
                             backgroundColor: Colors.transparent,
-                            builder: (_) => EventDetailModal(
-                              event: event,
-                              currentUserId: FirebaseAuth.instance.currentUser?.uid ?? '',
-                              userRole: 'BusinessOwner', status: '',
-                            ),
+                            builder:
+                                (_) => EventDetailModal(
+                                  event: event,
+                                  currentUserId:
+                                      FirebaseAuth.instance.currentUser?.uid ??
+                                      '',
+                                  userRole: 'Tourist',
+                                  status: '',
+                                ),
                           );
                         },
                       );
@@ -197,7 +199,10 @@ class _TouristEventCalendarScreenState extends State<TouristEventCalendarScreen>
     final double rowHeightVar = isSmallDevice ? 36 : 44;
     final double markerSizeVar = isSmallDevice ? 5 : 7;
     final double headerFontSize = isSmallDevice ? 16 : 18;
-    final double dayFontSize = isSmallDevice ? AppConstants.calendarDayFontSize - 1 : AppConstants.calendarDayFontSize;
+    final double dayFontSize =
+        isSmallDevice
+            ? AppConstants.calendarDayFontSize - 1
+            : AppConstants.calendarDayFontSize;
 
     return Scaffold(
       appBar: AppBar(
@@ -207,6 +212,7 @@ class _TouristEventCalendarScreenState extends State<TouristEventCalendarScreen>
           style: TextStyle(color: Colors.white),
         ),
         backgroundColor: AppColors.primaryTeal,
+
         /// Commented since Tourist Cannot Create Events
         // elevation: 1,
         // iconTheme: const IconThemeData(color: Colors.white),
@@ -231,7 +237,10 @@ class _TouristEventCalendarScreenState extends State<TouristEventCalendarScreen>
           child: Column(
             children: [
               Container(
-                margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                margin: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
                   color: Colors.white.withOpacity(0.9),
@@ -273,7 +282,9 @@ class _TouristEventCalendarScreenState extends State<TouristEventCalendarScreen>
                   calendarStyle: CalendarStyle(
                     markersMaxCount: 3,
                     markerSize: markerSizeVar,
-                    cellMargin: EdgeInsets.symmetric(vertical: isSmallDevice ? 6 : 10),
+                    cellMargin: EdgeInsets.symmetric(
+                      vertical: isSmallDevice ? 6 : 10,
+                    ),
                     markerMargin: const EdgeInsets.symmetric(horizontal: 1),
                     todayDecoration: const BoxDecoration(
                       color: AppColors.homeTrendingColor,
@@ -296,9 +307,20 @@ class _TouristEventCalendarScreenState extends State<TouristEventCalendarScreen>
                   headerStyle: HeaderStyle(
                     titleCentered: true,
                     formatButtonVisible: false,
-                    titleTextStyle: TextStyle(color: Colors.black, fontSize: headerFontSize),
-                    leftChevronIcon: const Icon(Icons.chevron_left, color: Colors.grey, size: 24),
-                    rightChevronIcon: const Icon(Icons.chevron_right, color: Colors.grey, size: 24),
+                    titleTextStyle: TextStyle(
+                      color: Colors.black,
+                      fontSize: headerFontSize,
+                    ),
+                    leftChevronIcon: const Icon(
+                      Icons.chevron_left,
+                      color: Colors.grey,
+                      size: 24,
+                    ),
+                    rightChevronIcon: const Icon(
+                      Icons.chevron_right,
+                      color: Colors.grey,
+                      size: 24,
+                    ),
                   ),
                   rowHeight: rowHeightVar,
                   calendarBuilders: CalendarBuilders(
@@ -319,27 +341,30 @@ class _TouristEventCalendarScreenState extends State<TouristEventCalendarScreen>
                       return bars.isEmpty
                           ? const SizedBox()
                           : Padding(
-                              padding: const EdgeInsets.only(top: 2),
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: bars.map((color) {
-                                  return Container(
-                                    margin: const EdgeInsets.symmetric(vertical: 1),
-                                    height: isSmallDevice ? 2.0 : 2.5,
-                                    width: isSmallDevice ? 22 : 30,
-                                    decoration: BoxDecoration(
-                                      color: color,
-                                      borderRadius: BorderRadius.circular(2),
-                                    ),
-                                  );
-                                }).toList(),
-                              ),
-                            );
+                            padding: const EdgeInsets.only(top: 2),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children:
+                                  bars.map((color) {
+                                    return Container(
+                                      margin: const EdgeInsets.symmetric(
+                                        vertical: 1,
+                                      ),
+                                      height: isSmallDevice ? 2.0 : 2.5,
+                                      width: isSmallDevice ? 22 : 30,
+                                      decoration: BoxDecoration(
+                                        color: color,
+                                        borderRadius: BorderRadius.circular(2),
+                                      ),
+                                    );
+                                  }).toList(),
+                            ),
+                          );
                     },
                   ),
                 ),
               ),
-              
+
               const SizedBox(height: 16),
 
               _isLoading
@@ -367,15 +392,27 @@ class _TouristEventCalendarScreenState extends State<TouristEventCalendarScreen>
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Padding(
-                                padding: const EdgeInsets.only(top: 12, bottom: 8),
+                                padding: const EdgeInsets.only(
+                                  top: 12,
+                                  bottom: 8,
+                                ),
                                 child: Wrap(
                                   spacing: 16,
                                   runSpacing: 8,
                                   alignment: WrapAlignment.center,
                                   children: [
-                                    _buildLegendItem(Colors.blue.shade700, 'Provincial'),
-                                    _buildLegendItem(Colors.green, 'Municipals'),
-                                    _buildLegendItem(Colors.yellow[700]!, 'Businesses'),
+                                    _buildLegendItem(
+                                      Colors.blue.shade700,
+                                      'Provincial',
+                                    ),
+                                    _buildLegendItem(
+                                      Colors.green,
+                                      'Municipals',
+                                    ),
+                                    _buildLegendItem(
+                                      Colors.yellow[700]!,
+                                      'Businesses',
+                                    ),
                                   ],
                                 ),
                               ),
@@ -384,11 +421,13 @@ class _TouristEventCalendarScreenState extends State<TouristEventCalendarScreen>
                                 indicatorColor: AppColors.primaryTeal,
                                 indicatorWeight: 3,
                                 labelColor: AppColors.black,
-                                unselectedLabelColor: AppColors.black.withOpacity(0.5),
+                                unselectedLabelColor: AppColors.black
+                                    .withOpacity(0.5),
                                 tabs: [
                                   Tab(
                                     child: Row(
-                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
                                         const Icon(Icons.event, size: 18),
@@ -397,7 +436,9 @@ class _TouristEventCalendarScreenState extends State<TouristEventCalendarScreen>
                                           child: Text(
                                             'Events',
                                             overflow: TextOverflow.ellipsis,
-                                            style: const TextStyle(fontSize: 13),
+                                            style: const TextStyle(
+                                              fontSize: 13,
+                                            ),
                                           ),
                                         ),
                                         if (_newEvents.isNotEmpty) ...[
@@ -409,7 +450,8 @@ class _TouristEventCalendarScreenState extends State<TouristEventCalendarScreen>
                                             ),
                                             decoration: BoxDecoration(
                                               color: AppColors.primaryOrange,
-                                              borderRadius: BorderRadius.circular(10),
+                                              borderRadius:
+                                                  BorderRadius.circular(10),
                                             ),
                                             child: Text(
                                               '${_newEvents.length}',
@@ -426,16 +468,22 @@ class _TouristEventCalendarScreenState extends State<TouristEventCalendarScreen>
                                   ),
                                   Tab(
                                     child: Row(
-                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        const Icon(Icons.archive_rounded, size: 18),
+                                        const Icon(
+                                          Icons.archive_rounded,
+                                          size: 18,
+                                        ),
                                         const SizedBox(width: 4),
                                         Flexible(
                                           child: Text(
                                             'Ended Events',
                                             overflow: TextOverflow.ellipsis,
-                                            style: const TextStyle(fontSize: 13),
+                                            style: const TextStyle(
+                                              fontSize: 13,
+                                            ),
                                           ),
                                         ),
                                         if (_pastEvents.isNotEmpty) ...[
@@ -447,7 +495,8 @@ class _TouristEventCalendarScreenState extends State<TouristEventCalendarScreen>
                                             ),
                                             decoration: BoxDecoration(
                                               color: AppColors.textLight,
-                                              borderRadius: BorderRadius.circular(10),
+                                              borderRadius:
+                                                  BorderRadius.circular(10),
                                             ),
                                             child: Text(
                                               '${_pastEvents.length}',
@@ -487,29 +536,29 @@ class _TouristEventCalendarScreenState extends State<TouristEventCalendarScreen>
   }
 
   Widget _buildLegendItem(Color color, String label) {
-  return Row(
-    mainAxisSize: MainAxisSize.min,
-    children: [
-      Container(
-        width: 16,
-        height: 8,
-        decoration: BoxDecoration(
-          color: color,
-          borderRadius: BorderRadius.circular(2),
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 16,
+          height: 8,
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(2),
+          ),
         ),
-      ),
-      const SizedBox(width: 6),
-      Text(
-        label,
-        style: const TextStyle(
-          fontSize: 13,
-          fontWeight: FontWeight.w500,
-          color: Colors.black,
+        const SizedBox(width: 6),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w500,
+            color: Colors.black,
+          ),
         ),
-      ),
-    ],
-  );
-}
+      ],
+    );
+  }
 
   Widget _buildNewEventsList() {
     if (_newEvents.isEmpty) {
@@ -565,18 +614,25 @@ class _TouristEventCalendarScreenState extends State<TouristEventCalendarScreen>
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: ListTile(
         contentPadding: const EdgeInsets.all(10),
-        leading: event.thumbnailUrl != null
-            ? ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: Image.network(
-                  event.thumbnailUrl!,
-                  width: 50,
-                  height: 50,
-                  fit: BoxFit.cover,
-                ),
-              )
-            : const Icon(Icons.event, color: Colors.blue),
-        title: Text(event.title, style: TextStyle(fontStyle: FontStyle.italic, fontWeight: FontWeight.bold),),
+        leading:
+            event.thumbnailUrl != null
+                ? ClipRRect(
+                  borderRadius: BorderRadius.circular(8),
+                  child: Image.network(
+                    event.thumbnailUrl!,
+                    width: 50,
+                    height: 50,
+                    fit: BoxFit.cover,
+                  ),
+                )
+                : const Icon(Icons.event, color: Colors.blue),
+        title: Text(
+          event.title,
+          style: TextStyle(
+            fontStyle: FontStyle.italic,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
 
         subtitle: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -620,17 +676,18 @@ class _TouristEventCalendarScreenState extends State<TouristEventCalendarScreen>
             context: context,
             isScrollControlled: true,
             backgroundColor: Colors.transparent,
-            builder: (_) => EventDetailModal(
-              event: event,
-              currentUserId: '',
-              userRole: 'Tourist', status: '',
-            ),
+            builder:
+                (_) => EventDetailModal(
+                  event: event,
+                  currentUserId: '',
+                  userRole: 'Tourist',
+                  status: '',
+                ),
           );
         },
       ),
     );
   }
-
 
   Color _getStatusColor(String status) {
     switch (status.toLowerCase()) {
