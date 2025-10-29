@@ -1323,15 +1323,6 @@
       ]
     },
     {
-      "name": "image_picker_android",
-      "version": "0.8.13+5",
-      "dependencies": [
-        "flutter",
-        "flutter_plugin_android_lifecycle",
-        "image_picker_platform_interface"
-      ]
-    },
-    {
       "name": "file_selector_linux",
       "version": "0.9.3+2",
       "dependencies": [
@@ -1383,6 +1374,15 @@
         "flutter_web_plugins",
         "permission_handler_platform_interface",
         "web"
+      ]
+    },
+    {
+      "name": "image_picker_android",
+      "version": "0.8.13+7",
+      "dependencies": [
+        "flutter",
+        "flutter_plugin_android_lifecycle",
+        "image_picker_platform_interface"
       ]
     },
     {
