@@ -1,19 +1,70 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Allow authenticated users to read/write their own user document
-    match /Users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+    function isSignedIn() {
+      return request.auth != null;
     }
-    
-    // Allow authenticated users to read all user documents (for role checking)
-    match /Users/{userId} {
-      allow read: if request.auth != null;
+
+    function userRole() {
+      return get(/databases/$(database)/documents/Users/$(request.auth.uid)).data.role;
     }
-    
-    // Allow access to other collections for authenticated users
+
+    function isAdmin() {
+      let r = userRole();
+      return r == 'Administrator' || r == 'Super Administrator';
+    }
+
+    // Users collection
+    match /Users/{userId} {
+      // Everyone signed in can read user docs (app depends on it)
+      allow read: if isSignedIn();
+
+      // Users can create their own doc
+      allow create: if isSignedIn() && request.auth.uid == userId;
+
+      // Users can update their own doc, but cannot escalate privileges or change protected fields
+      allow update: if isSignedIn() && request.auth.uid == userId
+        && !('role' in request.resource.data.diff(resource.data).changedKeys())
+        && !('admin_type' in request.resource.data.diff(resource.data).changedKeys())
+        && !('admin_status' in request.resource.data.diff(resource.data).changedKeys());
+
+      // Admins can update restricted fields on any user (e.g., approvals), but cannot set themselves as super admin via this path
+      allow update: if isSignedIn() && isAdmin();
+
+      // Deleting user docs by the owner; admins also allowed
+      allow delete: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+    }
+
+    // Events collection (supporting both 'events' and 'Events')
+    match /{eventsCol=(events|Events)}/{eventId} {
+      allow read: if true; // public events
+
+      // Create: must be signed in and set created_by == uid
+      allow create: if isSignedIn()
+        && request.resource.data.created_by == request.auth.uid;
+
+      // Update/Delete: creator or admin
+      allow update, delete: if isSignedIn() && (
+        resource.data.created_by == request.auth.uid || isAdmin()
+      );
+    }
+
+    // Destination collection: only admins can create/update/delete
+    match /destination/{docId} {
+      allow read: if true; // public
+      allow create, update, delete: if isSignedIn() && isAdmin();
+    }
+
+    // Notifications: admins only write; read allowed to signed-in admins
+    match /notifications/{docId} {
+      allow read: if isSignedIn() && isAdmin();
+      allow create, update, delete: if isSignedIn() && isAdmin();
+    }
+
+    // Default deny for other paths
     match /{document=**} {
-      allow read, write: if request.auth != null;
+      allow read: if false;
+      allow write: if false;
     }
   }
-} 
+}

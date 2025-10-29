@@ -831,32 +831,26 @@ class _TripsScreenState extends State<TripsScreen>
                       ),
                       const SizedBox(height: 16),
                       DropdownButtonFormField<String>(
-                        value:
-                            transportation.isNotEmpty ? transportation : null,
-                        items:
-                            _transportationOptions
-                                .map(
-                                  (t) => DropdownMenuItem(
-                                    value: t,
-                                    child: Row(
-                                      children: [
-                                        Icon(
-                                          _getTransportationIcon(t),
-                                          color: AppColors.primaryTeal,
-                                          size: 20,
-                                        ),
-                                        const SizedBox(width: 12),
-                                        Text(
-                                          t,
-                                          style: TextStyle(
-                                            color: AppColors.textDark,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
+                        value: transportation.isNotEmpty ? transportation : null,
+                        items: ['Car', 'Plane', 'Bus', 'Boat', 'Train']
+                            .map((t) => DropdownMenuItem(
+                                  value: t,
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        _getTransportationIcon(t),
+                                        color: AppColors.primaryTeal,
+                                        size: 20,
+                                      ),
+                                      const SizedBox(width: 12),
+                                      Text(
+                                        t,
+                                        style: TextStyle(color: AppColors.textDark),
+                                      ),
+                                    ],
                                   ),
-                                )
-                                .toList(),
+                                ))
+                            .toList(),
                         onChanged: (val) {
                           if (val != null) {
                             setState(() {
