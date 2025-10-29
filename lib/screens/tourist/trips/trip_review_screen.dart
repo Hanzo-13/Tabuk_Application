@@ -7,7 +7,7 @@ import 'package:intl/intl.dart';
 import 'package:capstone_app/utils/colors.dart';
 import 'package:capstone_app/models/trip_model.dart';
 import 'package:capstone_app/services/trip_service.dart';
-import 'trip_basic_info_screen.dart';
+import 'trip_info_creation_screen.dart';
 import 'transportation_selection_screen.dart';
 import 'destination_selection_screen.dart';
 
