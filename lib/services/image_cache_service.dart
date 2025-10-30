@@ -1,4 +1,4 @@
-import 'package:flutter/foundation.dart';
+import 'package:flutter/foundation.dart' show kIsWeb, debugPrint, Uint8List;
 import 'package:hive/hive.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
@@ -8,6 +8,13 @@ class ImageCacheService {
 
   /// Initializes Hive for image caching
   static Future<void> init() async {
+    if (kIsWeb) {
+      // Hive on web uses IndexedDB; no path_provider
+      if (!Hive.isBoxOpen(_boxName)) {
+        await Hive.openBox<Uint8List>(_boxName);
+      }
+      return;
+    }
     final dir = await getApplicationDocumentsDirectory();
     Hive.init(dir.path);
     if (!Hive.isBoxOpen(_boxName)) {

@@ -3,6 +3,9 @@
 
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter_web_plugins/url_strategy.dart';
+import 'package:flutter/gestures.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -18,6 +21,11 @@ import 'package:capstone_app/screens/login_screen.dart';
 import 'package:capstone_app/screens/splash_screen.dart';
 import 'package:capstone_app/screens/tourist/main_tourist_screen.dart';
 import 'firebase_options.dart';
+import 'package:capstone_app/widgets/responsive_wrapper.dart';
+
+// Create a global Future that will hold the result of our initialization.
+// This is done once and can be awaited in the UI.
+final Future<void> appInitialization = _initializeApp();
 
 final Future<void> appInitialization = _initializeApp();
 
@@ -34,7 +42,9 @@ Future<void> _initializeApp() async {
   
   // This can still be deferred until after the first frame for performance.
   WidgetsBinding.instance.addPostFrameCallback((_) {
-    ImageCacheService.init();
+    if (!kIsWeb) {
+      ImageCacheService.init();
+    }
   });
 }
 
@@ -74,6 +84,7 @@ void main() async {
   runApp(const TabukRoot());
 }
 
+// Your TabukRoot class and its State are UNCHANGED. They contain your connectivity logic.
 class TabukRoot extends StatefulWidget {
   const TabukRoot({super.key});
   @override
@@ -128,14 +139,17 @@ class _TabukRootState extends State<TabukRoot> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
-    return const MaterialApp(
+    return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: AppConstants.appName,
-      home: AuthChecker(),
+      scrollBehavior: const _AppScrollBehavior(),
+      builder: (context, child) => ResponsiveWrapper(child: child),
+      home: const AuthChecker(),
     );
   }
 }
 
+// AuthChecker now waits for the initialization to finish before checking the auth state.
 class AuthChecker extends StatelessWidget {
   const AuthChecker({super.key});
 
@@ -214,6 +228,9 @@ class AuthChecker extends StatelessWidget {
             if (snapshot.connectionState == ConnectionState.waiting) {
               return const SplashScreen();
             }
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const SplashScreen();
+            }
 
             if (user == null) return const LoginScreen();
             if (user.isAnonymous) return const MainTouristScreen();
@@ -237,7 +254,12 @@ class AuthChecker extends StatelessWidget {
 
                 if (role.isEmpty) return const LoginScreen();
                 if (!formCompleted) return const LoginScreen();
+                if (role.isEmpty) return const LoginScreen();
+                if (!formCompleted) return const LoginScreen();
 
+                return _RedirectByRole(role: role);
+              },
+            );
                 return _RedirectByRole(role: role);
               },
             );
@@ -248,6 +270,7 @@ class AuthChecker extends StatelessWidget {
   }
 }
 
+// Your other classes (_RedirectByRole, LoadingScreen, _AppScrollBehavior) are UNCHANGED.
 class _RedirectByRole extends StatefulWidget {
   final String role;
   const _RedirectByRole({required this.role});
@@ -279,4 +302,16 @@ class LoadingScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return const Scaffold(body: Center(child: CircularProgressIndicator()));
   }
+}
+
+class _AppScrollBehavior extends MaterialScrollBehavior {
+  const _AppScrollBehavior();
+
+  @override
+  Set<PointerDeviceKind> get dragDevices => {
+        PointerDeviceKind.touch,
+        PointerDeviceKind.mouse,
+        PointerDeviceKind.trackpad,
+        PointerDeviceKind.stylus,
+      };
 }

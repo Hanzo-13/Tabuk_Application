@@ -81,25 +81,40 @@ class _TripReviewScreenState extends State<TripReviewScreen> {
         title: const Text('Review Trip', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
         centerTitle: true,
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (_hasOverlap) _buildOverlapWarning(),
-            if (_checkingOverlap && !_hasOverlap) _buildOverlapChecking(),
-            _buildSectionTitle('Overview'),
-            const SizedBox(height: 8),
-            _buildOverviewCard(duration),
-            const SizedBox(height: 16),
-            _buildSectionTitle('Spots'),
-            const SizedBox(height: 8),
-            _buildSpotsList(),
-            const SizedBox(height: 16),
-            _buildEditRow(context),
-            const Spacer(),
-            _buildActions(context),
-          ],
+      body: SafeArea(
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            return SingleChildScrollView(
+              child: ConstrainedBox(
+                constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (_hasOverlap) _buildOverlapWarning(),
+                      if (_checkingOverlap && !_hasOverlap) _buildOverlapChecking(),
+                      _buildSectionTitle('Overview'),
+                      const SizedBox(height: 8),
+                      _buildOverviewCard(duration),
+                      const SizedBox(height: 16),
+                      _buildSectionTitle('Spots'),
+                      const SizedBox(height: 8),
+                      _buildSpotsList(),
+                      const SizedBox(height: 16),
+                      _buildEditRow(context),
+                      const SizedBox(height: 16),
+                      Align(
+                        alignment: Alignment.bottomCenter,
+                        child: _buildActions(context),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
         ),
       ),
     );

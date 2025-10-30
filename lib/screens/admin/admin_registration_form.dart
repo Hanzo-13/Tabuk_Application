@@ -26,7 +26,6 @@ class _AdminSurveyScreenState extends State<AdminSurveyScreen> {
   final _formKey = GlobalKey<FormState>();
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _usernameController = TextEditingController();
-  final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _contactController = TextEditingController();
   final TextEditingController _departmentController = TextEditingController();
   final TextEditingController _locationController = TextEditingController();
@@ -35,7 +34,6 @@ class _AdminSurveyScreenState extends State<AdminSurveyScreen> {
   String _adminType = 'Municipal Administrator';
   bool _isLoading = false;
   bool _isExisting = false;
-  bool _isPasswordVisible = false;
 
   @override
   void initState() {
@@ -56,7 +54,6 @@ class _AdminSurveyScreenState extends State<AdminSurveyScreen> {
     final data = doc.data()!;
     _nameController.text = data['name'] ?? '';
     _usernameController.text = data['username'] ?? '';
-    _passwordController.text = data['password'] ?? '';
     _contactController.text = data['contact'] ?? '';
     _departmentController.text = data['department'] ?? '';
     _locationController.text = data['location'] ?? '';
@@ -74,18 +71,32 @@ class _AdminSurveyScreenState extends State<AdminSurveyScreen> {
     if (user == null) return;
 
     try {
+      if (!user.emailVerified) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Please verify your email before submitting.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+        return;
+      }
       final uid = user.uid;
 
       // Check if the user is already registered as an admin
       final updates = <String, dynamic>{
         'name': _nameController.text.trim(),
         'username': _usernameController.text.trim(),
-        'password': _passwordController.text.trim(),
+        // Never store plaintext passwords in Firestore
         'contact': _contactController.text.trim(),
         'department': _departmentController.text.trim(),
         'location': _locationController.text.trim(),
         'status': _status,
-        'admin_type': _adminType,
+        // Store only vetted values for admin_type
+        'admin_type': (_adminType == 'Municipal Administrator' || _adminType == 'Provincial Administrator')
+            ? _adminType
+            : 'Municipal Administrator',
         'form_completed': true,
         'admin_status': 'pending',
         'updated_at': FieldValue.serverTimestamp(),
@@ -184,32 +195,29 @@ class _AdminSurveyScreenState extends State<AdminSurveyScreen> {
               _buildTextField(_usernameController, 'username'),
               const SizedBox(height: 12),
               
-              // Password field with visibility toggle
-              TextFormField(
-              controller: _passwordController,
-              obscureText: !_isPasswordVisible,
-              decoration: InputDecoration(
-                labelText: 'Password',
-                suffixIcon: IconButton(
-                  icon: Icon(
-                    _isPasswordVisible ? Icons.visibility : Icons.visibility_off,
-                  ),
-                  onPressed: () {
-                    setState(() {
-                      _isPasswordVisible = !_isPasswordVisible;
-                    });
-                  },
-                ),
-              ),
-              validator: (value) =>
-                  value == null || value.isEmpty ? 'Please enter a password' : null,
-            ),
-              const SizedBox(height: 12),
+              // Removed password collection/storage (handled by Firebase Auth only)
               // Contact number field
-              _buildTextField(_contactController, 'Contact Number'),
+              TextFormField(
+                controller: _contactController,
+                decoration: const InputDecoration(labelText: 'Contact Number'),
+                keyboardType: TextInputType.phone,
+                validator: (value) {
+                  final v = (value ?? '').trim();
+                  if (v.isEmpty) return 'Required';
+                  final digits = v.replaceAll(RegExp(r'[^0-9+]'), '');
+                  if (digits.length < 10) return 'Enter a valid contact number';
+                  return null;
+                },
+              ),
               const SizedBox(height: 12),
               // Department field
-              _buildTextField(_departmentController, 'Department'),
+              TextFormField(
+                controller: _departmentController,
+                decoration: const InputDecoration(labelText: 'Department'),
+                validator: (value) => (value == null || value.trim().isEmpty)
+                    ? 'Required'
+                    : null,
+              ),
               const SizedBox(height: 15),
 
               // Dropdown for status selection
@@ -225,7 +233,7 @@ class _AdminSurveyScreenState extends State<AdminSurveyScreen> {
                     DropdownMenuItem(value: 'Active', child: Text('Active')),
                     DropdownMenuItem(value: 'Not Active',child: Text('Not Active'),),
                   ],
-                  onChanged:(value) => setState(() => _status = value ?? _status),)
+                  onChanged:(value) => setState(() => _status = (value == 'Active' || value == 'Not Active') ? value! : _status),)
               ),
               const SizedBox(height: 15),
 
@@ -279,7 +287,11 @@ class _AdminSurveyScreenState extends State<AdminSurveyScreen> {
                   DropdownMenuItem(value: 'Provincial Administrator',child: Text('Provincial Administrator')),
                 ],
                 onChanged:
-                  (value) => setState(() => _adminType = value ?? _adminType),
+                  (value) => setState(() => _adminType = (value == null)
+                      ? _adminType
+                      : (value == 'Municipal Administrator' || value == 'Provincial Administrator')
+                          ? value
+                          : _adminType),
                 ),
               ),
               const SizedBox(height: 24),

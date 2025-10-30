@@ -320,17 +320,35 @@ class NavigationService {
 
       // Convert transportation mode to API-compatible mode
       final apiMode = _convertToApiMode(mode);
+      // Try proxy first; fall back to Google API directly on web if proxy is unavailable
+      Future<Map<String, dynamic>?> tryFetch(String url) async {
+        try {
+          final resp = await http.get(Uri.parse(url));
+          if (resp.statusCode == 200) {
+            return json.decode(resp.body) as Map<String, dynamic>;
+          }
+        } catch (_) {}
+        return null;
+      }
 
-      final url = ApiEnvironment.getDirectionsUrl(
+      final proxyUrl = ApiEnvironment.getDirectionsUrl(
         '${origin.latitude},${origin.longitude}',
         '${destination.latitude},${destination.longitude}',
         mode: apiMode,
       );
+      Map<String, dynamic>? body = await tryFetch(proxyUrl);
 
-      final response = await http.get(Uri.parse(url));
-      if (response.statusCode != 200) return null;
+      if (body == null) {
+        // Direct Google fallback
+        final directUrl = '${ApiEnvironment.directionsBaseUrl}'
+            '?origin=${origin.latitude},${origin.longitude}'
+            '&destination=${destination.latitude},${destination.longitude}'
+            '&key=${ApiEnvironment.googleDirectionsApiKey}'
+            '&mode=$apiMode&overview=full&units=metric&alternatives=false&region=ph';
+        body = await tryFetch(directUrl);
+        if (body == null) return null;
+      }
 
-      final body = json.decode(response.body);
       if (body['status'] != 'OK' ||
           body['routes'] == null ||
           body['routes'].isEmpty) {

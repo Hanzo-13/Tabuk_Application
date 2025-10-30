@@ -22,7 +22,7 @@ dependencies {
 
 android {
     namespace = "com.example.capstone_app"
-    compileSdk = 35  // Updated to match plugin requirements
+    compileSdk = 36  // Updated to match plugin requirements
     ndkVersion = "27.0.12077973"
 
     compileOptions {
@@ -40,7 +40,11 @@ android {
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion
+<<<<<<< HEAD
         targetSdk = 35  // Updated to match plugin requirements
+=======
+        targetSdk = 36  // Updated to match plugin requirements
+>>>>>>> 7a65d091cb376df10c4113b0edea5a5c0ca58f59
         versionCode = 1  // Fixed version instead of flutter.versionCode
         versionName = "1.0"  // Fixed version instead of flutter.versionName
         // Enable multidex for large apps
