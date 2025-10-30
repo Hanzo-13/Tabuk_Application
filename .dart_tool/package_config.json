@@ -63,15 +63,9 @@
     },
     {
       "name": "build_daemon",
-<<<<<<< HEAD
-      "rootUri": "file:///Users/user/.pub-cache/hosted/pub.dev/build_daemon-4.1.0",
-      "packageUri": "lib/",
-      "languageVersion": "3.7"
-=======
       "rootUri": "file:///Users/user/.pub-cache/hosted/pub.dev/build_daemon-4.0.4",
       "packageUri": "lib/",
       "languageVersion": "3.6"
->>>>>>> 7a65d091cb376df10c4113b0edea5a5c0ca58f59
     },
     {
       "name": "build_resolvers",
@@ -267,15 +261,9 @@
     },
     {
       "name": "file_selector_macos",
-<<<<<<< HEAD
-      "rootUri": "file:///Users/user/.pub-cache/hosted/pub.dev/file_selector_macos-0.9.4+5",
-      "packageUri": "lib/",
-      "languageVersion": "3.9"
-=======
       "rootUri": "file:///Users/user/.pub-cache/hosted/pub.dev/file_selector_macos-0.9.4+4",
       "packageUri": "lib/",
       "languageVersion": "3.7"
->>>>>>> 7a65d091cb376df10c4113b0edea5a5c0ca58f59
     },
     {
       "name": "file_selector_platform_interface",
@@ -315,11 +303,7 @@
     },
     {
       "name": "firebase_core_platform_interface",
-<<<<<<< HEAD
-      "rootUri": "file:///Users/user/.pub-cache/hosted/pub.dev/firebase_core_platform_interface-6.0.2",
-=======
       "rootUri": "file:///Users/user/.pub-cache/hosted/pub.dev/firebase_core_platform_interface-6.0.1",
->>>>>>> 7a65d091cb376df10c4113b0edea5a5c0ca58f59
       "packageUri": "lib/",
       "languageVersion": "3.2"
     },
@@ -385,15 +369,9 @@
     },
     {
       "name": "flutter_plugin_android_lifecycle",
-<<<<<<< HEAD
-      "rootUri": "file:///Users/user/.pub-cache/hosted/pub.dev/flutter_plugin_android_lifecycle-2.0.32",
-      "packageUri": "lib/",
-      "languageVersion": "3.9"
-=======
       "rootUri": "file:///Users/user/.pub-cache/hosted/pub.dev/flutter_plugin_android_lifecycle-2.0.30",
       "packageUri": "lib/",
       "languageVersion": "3.7"
->>>>>>> 7a65d091cb376df10c4113b0edea5a5c0ca58f59
     },
     {
       "name": "flutter_polyline_points",
@@ -529,15 +507,9 @@
     },
     {
       "name": "google_maps_flutter_android",
-<<<<<<< HEAD
-      "rootUri": "file:///Users/user/.pub-cache/hosted/pub.dev/google_maps_flutter_android-2.18.4",
-      "packageUri": "lib/",
-      "languageVersion": "3.9"
-=======
       "rootUri": "file:///Users/user/.pub-cache/hosted/pub.dev/google_maps_flutter_android-2.18.2",
       "packageUri": "lib/",
       "languageVersion": "3.7"
->>>>>>> 7a65d091cb376df10c4113b0edea5a5c0ca58f59
     },
     {
       "name": "google_maps_flutter_ios",
@@ -655,11 +627,7 @@
     },
     {
       "name": "image_picker_android",
-<<<<<<< HEAD
-      "rootUri": "file:///Users/user/.pub-cache/hosted/pub.dev/image_picker_android-0.8.13+7",
-=======
       "rootUri": "file:///Users/user/.pub-cache/hosted/pub.dev/image_picker_android-0.8.13+3",
->>>>>>> 7a65d091cb376df10c4113b0edea5a5c0ca58f59
       "packageUri": "lib/",
       "languageVersion": "3.9"
     },
@@ -671,15 +639,9 @@
     },
     {
       "name": "image_picker_ios",
-<<<<<<< HEAD
-      "rootUri": "file:///Users/user/.pub-cache/hosted/pub.dev/image_picker_ios-0.8.13+1",
-      "packageUri": "lib/",
-      "languageVersion": "3.9"
-=======
       "rootUri": "file:///Users/user/.pub-cache/hosted/pub.dev/image_picker_ios-0.8.13",
       "packageUri": "lib/",
       "languageVersion": "3.6"
->>>>>>> 7a65d091cb376df10c4113b0edea5a5c0ca58f59
     },
     {
       "name": "image_picker_linux",
@@ -689,17 +651,6 @@
     },
     {
       "name": "image_picker_macos",
-<<<<<<< HEAD
-      "rootUri": "file:///Users/user/.pub-cache/hosted/pub.dev/image_picker_macos-0.2.2+1",
-      "packageUri": "lib/",
-      "languageVersion": "3.9"
-    },
-    {
-      "name": "image_picker_platform_interface",
-      "rootUri": "file:///Users/user/.pub-cache/hosted/pub.dev/image_picker_platform_interface-2.11.1",
-      "packageUri": "lib/",
-      "languageVersion": "3.7"
-=======
       "rootUri": "file:///Users/user/.pub-cache/hosted/pub.dev/image_picker_macos-0.2.2",
       "packageUri": "lib/",
       "languageVersion": "3.6"
@@ -709,7 +660,6 @@
       "rootUri": "file:///Users/user/.pub-cache/hosted/pub.dev/image_picker_platform_interface-2.11.0",
       "packageUri": "lib/",
       "languageVersion": "3.6"
->>>>>>> 7a65d091cb376df10c4113b0edea5a5c0ca58f59
     },
     {
       "name": "image_picker_windows",
@@ -857,17 +807,6 @@
     },
     {
       "name": "path_provider_android",
-<<<<<<< HEAD
-      "rootUri": "file:///Users/user/.pub-cache/hosted/pub.dev/path_provider_android-2.2.20",
-      "packageUri": "lib/",
-      "languageVersion": "3.9"
-    },
-    {
-      "name": "path_provider_foundation",
-      "rootUri": "file:///Users/user/.pub-cache/hosted/pub.dev/path_provider_foundation-2.4.3",
-      "packageUri": "lib/",
-      "languageVersion": "3.9"
-=======
       "rootUri": "file:///Users/user/.pub-cache/hosted/pub.dev/path_provider_android-2.2.18",
       "packageUri": "lib/",
       "languageVersion": "3.7"
@@ -877,7 +816,6 @@
       "rootUri": "file:///Users/user/.pub-cache/hosted/pub.dev/path_provider_foundation-2.4.2",
       "packageUri": "lib/",
       "languageVersion": "3.7"
->>>>>>> 7a65d091cb376df10c4113b0edea5a5c0ca58f59
     },
     {
       "name": "path_provider_linux",
@@ -995,17 +933,6 @@
     },
     {
       "name": "shared_preferences_android",
-<<<<<<< HEAD
-      "rootUri": "file:///Users/user/.pub-cache/hosted/pub.dev/shared_preferences_android-2.4.15",
-      "packageUri": "lib/",
-      "languageVersion": "3.9"
-    },
-    {
-      "name": "shared_preferences_foundation",
-      "rootUri": "file:///Users/user/.pub-cache/hosted/pub.dev/shared_preferences_foundation-2.5.5",
-      "packageUri": "lib/",
-      "languageVersion": "3.9"
-=======
       "rootUri": "file:///Users/user/.pub-cache/hosted/pub.dev/shared_preferences_android-2.4.13",
       "packageUri": "lib/",
       "languageVersion": "3.7"
@@ -1015,7 +942,6 @@
       "rootUri": "file:///Users/user/.pub-cache/hosted/pub.dev/shared_preferences_foundation-2.5.4",
       "packageUri": "lib/",
       "languageVersion": "3.4"
->>>>>>> 7a65d091cb376df10c4113b0edea5a5c0ca58f59
     },
     {
       "name": "shared_preferences_linux",
@@ -1199,11 +1125,7 @@
     },
     {
       "name": "watcher",
-<<<<<<< HEAD
-      "rootUri": "file:///Users/user/.pub-cache/hosted/pub.dev/watcher-1.1.4",
-=======
       "rootUri": "file:///Users/user/.pub-cache/hosted/pub.dev/watcher-1.1.3",
->>>>>>> 7a65d091cb376df10c4113b0edea5a5c0ca58f59
       "packageUri": "lib/",
       "languageVersion": "3.1"
     },
@@ -1227,11 +1149,7 @@
     },
     {
       "name": "win32",
-<<<<<<< HEAD
-      "rootUri": "file:///Users/user/.pub-cache/hosted/pub.dev/win32-5.15.0",
-=======
       "rootUri": "file:///Users/user/.pub-cache/hosted/pub.dev/win32-5.14.0",
->>>>>>> 7a65d091cb376df10c4113b0edea5a5c0ca58f59
       "packageUri": "lib/",
       "languageVersion": "3.8"
     },
