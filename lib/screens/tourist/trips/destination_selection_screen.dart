@@ -459,7 +459,7 @@ class _DestinationSelectionScreenState extends State<DestinationSelectionScreen>
             contentPadding: const EdgeInsets.fromLTRB(16.0, 20.0, 16.0, 0.0), // Adjust padding
             // =================== THE FIX IS HERE ===================
             // We replace the rigid SizedBox with a properly constrained Container.
-            content: Container(
+            content: SizedBox(
               width: double.maxFinite, // Make the content use the dialog's full width
               height: 300,             // Give it a fixed height to prevent rendering errors
               child: ListView.builder(

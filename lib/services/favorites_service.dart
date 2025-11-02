@@ -5,7 +5,7 @@
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/foundation.dart' show kDebugMode, debugPrint;
 import '../models/favorite_model.dart';
 import '../models/destination_model.dart';
 
@@ -49,9 +49,7 @@ class FavoritesService {
 
       return true;
     } catch (e) {
-      if (kDebugMode) {
-        print('Error adding to favorites: $e');
-      }
+      if (kDebugMode) debugPrint('Error adding to favorites: $e');
       return false;
     }
   }
@@ -78,9 +76,7 @@ class FavoritesService {
 
       return false;
     } catch (e) {
-      if (kDebugMode) {
-        print('Error removing from favorites: $e');
-      }
+      if (kDebugMode) debugPrint('Error removing from favorites: $e');
       return false;
     }
   }
@@ -102,9 +98,7 @@ class FavoritesService {
 
       return doc.docs.isNotEmpty;
     } catch (e) {
-      if (kDebugMode) {
-        print('Error checking favorite status: $e');
-      }
+      if (kDebugMode) debugPrint('Error checking favorite status: $e');
       return false;
     }
   }
@@ -130,9 +124,7 @@ class FavoritesService {
         return list;
       });
     } catch (e) {
-      if (kDebugMode) {
-        print('Error getting user favorites: $e');
-      }
+      if (kDebugMode) debugPrint('Error getting user favorites: $e');
       return Stream.value([]);
     }
   }
@@ -156,9 +148,7 @@ class FavoritesService {
                     .toSet(),
           );
     } catch (e) {
-      if (kDebugMode) {
-        print('Error getting favorite hotspot IDs: $e');
-      }
+      if (kDebugMode) debugPrint('Error getting favorite hotspot IDs: $e');
       return Stream.value({});
     }
   }
@@ -177,9 +167,7 @@ class FavoritesService {
           .snapshots()
           .map((snapshot) => snapshot.docs.length);
     } catch (e) {
-      if (kDebugMode) {
-        print('Error getting favorites count: $e');
-      }
+      if (kDebugMode) debugPrint('Error getting favorites count: $e');
       return Stream.value(0);
     }
   }
@@ -206,9 +194,7 @@ class FavoritesService {
       await batch.commit();
       return true;
     } catch (e) {
-      if (kDebugMode) {
-        print('Error clearing favorites: $e');
-      }
+      if (kDebugMode) debugPrint('Error clearing favorites: $e');
       return false;
     }
   }

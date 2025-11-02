@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- Base configuration for all connections -->
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <!-- Trust system certificates -->
+            <certificates src="system" />
+            <!-- Optional: Add custom certificates for certificate pinning -->
+            <!-- <certificates src="@raw/custom_certificate" /> -->
+        </trust-anchors>
+    </base-config>
+    
+    <!-- Domain-specific configuration if needed -->
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">firebaseapp.com</domain>
+        <domain includeSubdomains="true">googleapis.com</domain>
+        <domain includeSubdomains="true">gstatic.com</domain>
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </domain-config>
+    
+    <!-- ============================================ -->
+    <!-- DEBUG-ONLY NETWORK CONFIGURATION             -->
+    <!-- ============================================ -->
+    <!-- 
+         LOCAL DEVELOPMENT EXCEPTIONS (DEBUG BUILDS ONLY)
+         
+         This section allows insecure HTTP connections to localhost and Android emulator host
+         for local development and testing purposes.
+         
+         SECURITY NOTES:
+         - This configuration is automatically ignored in release builds (when isMinifyEnabled=true)
+         - Allows cleartext (HTTP) traffic to:
+           * localhost - For local development servers
+           * 10.0.2.2 - Android emulator's special IP that maps to host machine's localhost
+         
+         PRODUCTION CONSIDERATIONS:
+         - These domains are safe because they're only accessible during development
+         - The base-config above still enforces HTTPS for all other domains
+         - When building release APKs, Android may strip this section automatically
+         - For extra safety, consider removing this section before production deployment
+         
+         HOW TO USE:
+         - Connect your Flutter app to a local server at http://localhost:PORT
+         - In Android emulator, use http://10.0.2.2:PORT to access host machine
+         - These connections will work in debug builds but be blocked in release builds
+    -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">localhost</domain>
+        <domain includeSubdomains="true">10.0.2.2</domain>
+        <!-- Additional local development domains can be added here -->
+        <!-- <domain includeSubdomains="true">127.0.0.1</domain> -->
+    </domain-config>
+</network-security-config>

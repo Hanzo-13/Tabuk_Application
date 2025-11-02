@@ -23,4 +23,7 @@ class ConnectivityInfo {
     required this.message,
     this.isMobileDataWithoutInternet = false,
   });
+
+  /// Check if device is connected to the internet
+  bool get isConnected => status == ConnectionStatus.connected;
 }

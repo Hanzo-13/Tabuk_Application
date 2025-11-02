@@ -1,7 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:capstone_app/models/review_model.dart';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/foundation.dart' show kDebugMode, debugPrint;
 
 class ReviewService {
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -62,9 +62,7 @@ class ReviewService {
 
       return true;
     } catch (e) {
-      if (kDebugMode) {
-        print('Error adding review: $e');
-      }
+      if (kDebugMode) debugPrint('Error adding review: $e');
       return false;
     }
   }
@@ -83,9 +81,7 @@ class ReviewService {
           .map((doc) => Review.fromMap(doc.data(), doc.id))
           .toList();
     } catch (e) {
-      if (kDebugMode) {
-        print('Error fetching reviews: $e');
-      }
+      if (kDebugMode) debugPrint('Error fetching reviews: $e');
       return [];
     }
   }
@@ -106,9 +102,7 @@ class ReviewService {
 
       return snapshot.docs.isNotEmpty;
     } catch (e) {
-      if (kDebugMode) {
-        print('Error checking user review: $e');
-      }
+      if (kDebugMode) debugPrint('Error checking user review: $e');
       return false;
     }
   }
@@ -132,9 +126,7 @@ class ReviewService {
       }
       return null;
     } catch (e) {
-      if (kDebugMode) {
-        print('Error getting user review: $e');
-      }
+      if (kDebugMode) debugPrint('Error getting user review: $e');
       return null;
     }
   }
@@ -181,9 +173,7 @@ class ReviewService {
 
       return true;
     } catch (e) {
-      if (kDebugMode) {
-        print('Error updating review: $e');
-      }
+      if (kDebugMode) debugPrint('Error updating review: $e');
       return false;
     }
   }
@@ -214,9 +204,7 @@ class ReviewService {
 
       return true;
     } catch (e) {
-      if (kDebugMode) {
-        print('Error deleting review: $e');
-      }
+      if (kDebugMode) debugPrint('Error deleting review: $e');
       return false;
     }
   }
@@ -252,9 +240,7 @@ class ReviewService {
         'review_count': reviewCount,
       });
     } catch (e) {
-      if (kDebugMode) {
-        print('Error updating business rating: $e');
-      }
+      if (kDebugMode) debugPrint('Error updating business rating: $e');
     }
   }
 
@@ -269,9 +255,7 @@ class ReviewService {
         'review_count': data?['review_count'] ?? 0,
       };
     } catch (e) {
-      if (kDebugMode) {
-        print('Error getting business rating summary: $e');
-      }
+      if (kDebugMode) debugPrint('Error getting business rating summary: $e');
       return {
         'average_rating': 0.0,
         'review_count': 0,

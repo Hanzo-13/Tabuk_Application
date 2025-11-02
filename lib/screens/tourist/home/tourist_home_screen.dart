@@ -5,7 +5,7 @@ import 'dart:math' as math;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/foundation.dart' show kDebugMode, debugPrint;
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 
@@ -84,7 +84,11 @@ class _TouristHomeScreenState extends State<TouristHomeScreen>
 
     _animationController.forward();
     Future.delayed(const Duration(milliseconds: 600), () {
-      _eventSliderController.forward();
+      if (!mounted) return;
+      if (_eventSliderController.status == AnimationStatus.dismissed ||
+          _eventSliderController.status == AnimationStatus.reverse) {
+        _eventSliderController.forward();
+      }
     });
   }
 
@@ -143,7 +147,7 @@ class _TouristHomeScreenState extends State<TouristHomeScreen>
         });
       }
     } catch (e) {
-      if (kDebugMode) print('Error loading events: $e');
+      if (kDebugMode) debugPrint('Error loading events: $e');
     }
   }
 
@@ -191,7 +195,7 @@ class _TouristHomeScreenState extends State<TouristHomeScreen>
         }
       }
     } catch (e) {
-      if (kDebugMode) print('Error checking user status: $e');
+      if (kDebugMode) debugPrint('Error checking user status: $e');
       if (mounted) {
         setState(() {
           _isUserLoggedIn = false;
@@ -281,7 +285,7 @@ class _TouristHomeScreenState extends State<TouristHomeScreen>
       _userPosition = await _locationService.getCurrentPosition();
       await _loadRecommendations();
     } catch (e) {
-      if (kDebugMode) print('Error fetching location and recommendations: $e');
+      if (kDebugMode) debugPrint('Error fetching location and recommendations: $e');
     }
   }
 
@@ -298,12 +302,13 @@ class _TouristHomeScreenState extends State<TouristHomeScreen>
             forceRefresh: true,
           );
 
+      if (!mounted) return;
       setState(() {
         _recommendations.clear();
         _recommendations.addAll(recommendations);
       });
     } catch (e) {
-      if (kDebugMode) print('Error loading recommendations: $e');
+      if (kDebugMode) debugPrint('Error loading recommendations: $e');
     }
   }
 

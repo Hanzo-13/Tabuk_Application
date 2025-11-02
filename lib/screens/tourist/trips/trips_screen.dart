@@ -634,359 +634,970 @@ class _TripsScreenState extends State<TripsScreen>
     );
   }
 
-  /// Shows the edit trip form/modal and saves changes
-/// Shows the edit trip form/modal and saves changes
-
   Future<void> _editTrip(firestoretrip.Trip trip) async {
     final TextEditingController nameController = TextEditingController(
       text: trip.title,
     );
+    final TextEditingController spotSearchController = TextEditingController();
     DateTime startDate = trip.startDate;
     DateTime endDate = trip.endDate;
     String transportation = trip.transportation;
     List<String> spots = List<String>.from(trip.spots);
     final formKey = GlobalKey<FormState>();
+    
+    // For search functionality
+    List<Map<String, dynamic>> allDestinations = [];
+    List<Map<String, dynamic>> filteredDestinations = [];
+    bool isSearching = false;
+    bool isLoadingDestinations = false;
+
+    // Load destinations from Firestore
+    Future<void> loadDestinations() async {
+      isLoadingDestinations = true;
+      try {
+        final snapshot = await FirebaseFirestore.instance
+            .collection('tourist_destinations')
+            .get();
+        
+        allDestinations = snapshot.docs.map((doc) {
+          final data = doc.data();
+          return {
+            'id': doc.id,
+            'name': data['name'] ?? '',
+            'location': data['location'] ?? '',
+            'category': data['category'] ?? '',
+          };
+        }).toList();
+      } catch (e) {
+        print('Error loading destinations: $e');
+      }
+      isLoadingDestinations = false;
+    }
 
     await showDialog(
       context: context,
       builder: (dialogContext) {
         return StatefulBuilder(
           builder: (context, setState) {
-            return AlertDialog(
-              backgroundColor: AppColors.cardBackground,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              title: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: AppColors.homeForYouColor.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(8),
+            // Filter destinations based on search
+            void filterDestinations(String query) {
+              if (query.isEmpty) {
+                filteredDestinations = [];
+                isSearching = false;
+              } else {
+                isSearching = true;
+                filteredDestinations = allDestinations
+                    .where((dest) {
+                      final name = dest['name'].toString().toLowerCase();
+                      final location = dest['location'].toString().toLowerCase();
+                      final searchLower = query.toLowerCase();
+                      // Exclude already added spots
+                      final isAlreadyAdded = spots.contains(dest['name']);
+                      return !isAlreadyAdded &&
+                            (name.contains(searchLower) || location.contains(searchLower));
+                    })
+                    .toList();
+              }
+            }
+
+            return Dialog(
+              backgroundColor: Colors.transparent,
+              insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+              child: Container(
+                constraints: const BoxConstraints(maxWidth: 500),
+                decoration: BoxDecoration(
+                  color: AppColors.cardBackground,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 20,
+                      offset: const Offset(0, 10),
                     ),
-                    child: Icon(
-                      Icons.edit_rounded,
-                      color: AppColors.homeForYouColor,
-                      size: 20,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Text(
-                    'Edit Trip',
-                    style: TextStyle(
-                      color: AppColors.textDark,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
-              ),
-              content: SingleChildScrollView(
-                child: Form(
-                  key: formKey,
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      TextFormField(
-                        controller: nameController,
-                        decoration: InputDecoration(
-                          labelText: 'Destination',
-                          labelStyle: TextStyle(color: AppColors.textLight),
-                          prefixIcon: Icon(
-                            Icons.location_on_rounded,
-                            color: AppColors.primaryTeal,
-                          ),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(
-                              color: AppColors.inputBorder,
-                            ),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(
-                              color: AppColors.primaryTeal,
-                              width: 2,
-                            ),
-                          ),
+                  ],
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Header
+                    Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            AppColors.primaryTeal,
+                            AppColors.primaryTeal.withOpacity(0.8),
+                          ],
                         ),
-                        validator:
-                            (value) =>
-                                value == null || value.isEmpty
-                                    ? 'Please enter a destination'
-                                    : null,
+                        borderRadius: const BorderRadius.only(
+                          topLeft: Radius.circular(20),
+                          topRight: Radius.circular(20),
+                        ),
                       ),
-                      const SizedBox(height: 16),
-                      Row(
+                      child: Row(
                         children: [
-                          Expanded(
-                            child: InkWell(
-                              onTap: () async {
-                                final picked = await showDatePicker(
-                                  context: context,
-                                  initialDate: startDate,
-                                  firstDate: DateTime(2000),
-                                  lastDate: DateTime(2100),
-                                  builder: (context, child) {
-                                    return Theme(
-                                      data: Theme.of(context).copyWith(
-                                        colorScheme: ColorScheme.light(
-                                          primary: AppColors.primaryTeal,
-                                          onPrimary: AppColors.white,
-                                          onSurface: AppColors.textDark,
-                                        ),
-                                      ),
-                                      child: child!,
-                                    );
-                                  },
-                                );
-                                if (picked != null) {
-                                  setState(() {
-                                    startDate = picked;
-                                    if (endDate.isBefore(startDate)) {
-                                      endDate = startDate.add(
-                                        const Duration(days: 1),
-                                      );
-                                    }
-                                  });
-                                }
-                              },
-                              child: InputDecorator(
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: AppColors.white.withOpacity(0.2),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Icon(
+                              Icons.edit_rounded,
+                              color: AppColors.white,
+                              size: 24,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          const Expanded(
+                            child: Text(
+                              'Edit Trip Details',
+                              style: TextStyle(
+                                color: AppColors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 20,
+                              ),
+                            ),
+                          ),
+                          IconButton(
+                            icon: const Icon(Icons.close, color: AppColors.white),
+                            onPressed: () => Navigator.of(context).pop(),
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    // Content
+                    Flexible(
+                      child: SingleChildScrollView(
+                        padding: const EdgeInsets.all(20),
+                        child: Form(
+                          key: formKey,
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              // Destination Section
+                              _buildSectionLabel('Destination', Icons.location_on_rounded),
+                              const SizedBox(height: 8),
+                              TextFormField(
+                                controller: nameController,
                                 decoration: InputDecoration(
-                                  labelText: 'Start Date',
-                                  labelStyle: TextStyle(
-                                    color: AppColors.textLight,
-                                  ),
+                                  hintText: 'Where are you going?',
+                                  hintStyle: TextStyle(color: AppColors.textLight.withOpacity(0.5)),
                                   prefixIcon: Icon(
-                                    Icons.calendar_today_rounded,
-                                    color: AppColors.primaryOrange,
+                                    Icons.place_rounded,
+                                    color: AppColors.primaryTeal,
                                   ),
+                                  filled: true,
+                                  fillColor: AppColors.white,
                                   border: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(12),
+                                    borderSide: BorderSide.none,
+                                  ),
+                                  enabledBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
                                     borderSide: BorderSide(
-                                      color: AppColors.inputBorder,
+                                      color: Colors.grey.shade200,
                                     ),
                                   ),
+                                  focusedBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: BorderSide(
+                                      color: AppColors.primaryTeal,
+                                      width: 2,
+                                    ),
+                                  ),
+                                  errorBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: BorderSide(
+                                      color: AppColors.errorRed,
+                                    ),
+                                  ),
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 16,
+                                  ),
                                 ),
-                                child: Text(
-                                  DateFormat('MMM dd, yyyy').format(startDate),
-                                  style: TextStyle(color: AppColors.textDark),
+                                validator: (value) =>
+                                    value == null || value.isEmpty
+                                        ? 'Please enter a destination'
+                                        : null,
+                              ),
+
+                              const SizedBox(height: 24),
+
+                              // Dates Section
+                              _buildSectionLabel('Travel Dates', Icons.calendar_today_rounded),
+                              const SizedBox(height: 8),
+                              Row(
+                                children: [
+                                  Expanded(
+                                    child: _buildDateField(
+                                      context: context,
+                                      label: 'Start Date',
+                                      date: startDate,
+                                      icon: Icons.flight_takeoff_rounded,
+                                      onTap: () async {
+                                        final picked = await showDatePicker(
+                                          context: context,
+                                          initialDate: startDate,
+                                          firstDate: DateTime(2000),
+                                          lastDate: DateTime(2100),
+                                          builder: (context, child) {
+                                            return Theme(
+                                              data: Theme.of(context).copyWith(
+                                                colorScheme: ColorScheme.light(
+                                                  primary: AppColors.primaryTeal,
+                                                  onPrimary: AppColors.white,
+                                                  onSurface: AppColors.textDark,
+                                                ),
+                                              ),
+                                              child: child!,
+                                            );
+                                          },
+                                        );
+                                        if (picked != null) {
+                                          setState(() {
+                                            startDate = picked;
+                                            if (endDate.isBefore(startDate)) {
+                                              endDate = startDate.add(
+                                                const Duration(days: 1),
+                                              );
+                                            }
+                                          });
+                                        }
+                                      },
+                                    ),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: _buildDateField(
+                                      context: context,
+                                      label: 'End Date',
+                                      date: endDate,
+                                      icon: Icons.flight_land_rounded,
+                                      onTap: () async {
+                                        final picked = await showDatePicker(
+                                          context: context,
+                                          initialDate: endDate,
+                                          firstDate: startDate,
+                                          lastDate: DateTime(2100),
+                                          builder: (context, child) {
+                                            return Theme(
+                                              data: Theme.of(context).copyWith(
+                                                colorScheme: ColorScheme.light(
+                                                  primary: AppColors.primaryTeal,
+                                                  onPrimary: AppColors.white,
+                                                  onSurface: AppColors.textDark,
+                                                ),
+                                              ),
+                                              child: child!,
+                                            );
+                                          },
+                                        );
+                                        if (picked != null) {
+                                          setState(() {
+                                            endDate = picked;
+                                          });
+                                        }
+                                      },
+                                    ),
+                                  ),
+                                ],
+                              ),
+
+                              // Trip Duration Indicator
+                              const SizedBox(height: 12),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 8,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: AppColors.primaryTeal.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      Icons.schedule_rounded,
+                                      size: 16,
+                                      color: AppColors.primaryTeal,
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Text(
+                                      'Duration: ${_getTripDuration(startDate, endDate)} day${_getTripDuration(startDate, endDate) != 1 ? 's' : ''}',
+                                      style: TextStyle(
+                                        color: AppColors.primaryTeal,
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+
+                              const SizedBox(height: 24),
+
+                              // Transportation Section
+                              _buildSectionLabel('Transportation', Icons.directions_rounded),
+                              const SizedBox(height: 8),
+                              DropdownButtonFormField<String>(
+                                value: transportation.isNotEmpty ? transportation : null,
+                                decoration: InputDecoration(
+                                  hintText: 'Select transportation',
+                                  hintStyle: TextStyle(color: AppColors.textLight.withOpacity(0.5)),
+                                  filled: true,
+                                  fillColor: AppColors.white,
+                                  border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: BorderSide.none,
+                                  ),
+                                  enabledBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: BorderSide(
+                                      color: Colors.grey.shade200,
+                                    ),
+                                  ),
+                                  focusedBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: BorderSide(
+                                      color: AppColors.primaryTeal,
+                                      width: 2,
+                                    ),
+                                  ),
+                                  contentPadding: const EdgeInsets.symmetric(
+                                    horizontal: 16,
+                                    vertical: 16,
+                                  ),
+                                ),
+                                items: _transportationOptions
+                                    .map(
+                                      (t) => DropdownMenuItem(
+                                        value: t,
+                                        child: Row(
+                                          children: [
+                                            Icon(
+                                              _getTransportationIcon(t),
+                                              color: AppColors.primaryTeal,
+                                              size: 20,
+                                            ),
+                                            const SizedBox(width: 12),
+                                            Text(
+                                              t,
+                                              style: TextStyle(
+                                                color: AppColors.textDark,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    )
+                                    .toList(),
+                                onChanged: (val) {
+                                  if (val != null) {
+                                    setState(() {
+                                      transportation = val;
+                                    });
+                                  }
+                                },
+                              ),
+
+                              const SizedBox(height: 24),
+
+                              // Places Section with Search
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  _buildSectionLabel('Places to Visit', Icons.place_rounded),
+                                  if (spots.isNotEmpty)
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 10,
+                                        vertical: 4,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: AppColors.homeForYouColor.withOpacity(0.15),
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                      child: Text(
+                                        '${spots.length} place${spots.length != 1 ? 's' : ''}',
+                                        style: TextStyle(
+                                          color: AppColors.homeForYouColor,
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                              const SizedBox(height: 12),
+
+                              // Search Input with Autocomplete
+                              Column(
+                                children: [
+                                  TextFormField(
+                                    controller: spotSearchController,
+                                    decoration: InputDecoration(
+                                      hintText: 'Search destinations from database...',
+                                      hintStyle: TextStyle(
+                                        color: AppColors.textLight.withOpacity(0.5),
+                                      ),
+                                      prefixIcon: Icon(
+                                        Icons.search_rounded,
+                                        color: AppColors.primaryTeal,
+                                        size: 20,
+                                      ),
+                                      suffixIcon: isLoadingDestinations
+                                          ? Padding(
+                                              padding: const EdgeInsets.all(12),
+                                              child: SizedBox(
+                                                width: 20,
+                                                height: 20,
+                                                child: CircularProgressIndicator(
+                                                  strokeWidth: 2,
+                                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                                    AppColors.primaryTeal,
+                                                  ),
+                                                ),
+                                              ),
+                                            )
+                                          : spotSearchController.text.isNotEmpty
+                                              ? IconButton(
+                                                  icon: const Icon(Icons.clear_rounded),
+                                                  onPressed: () {
+                                                    setState(() {
+                                                      spotSearchController.clear();
+                                                      filteredDestinations = [];
+                                                      isSearching = false;
+                                                    });
+                                                  },
+                                                )
+                                              : null,
+                                      filled: true,
+                                      fillColor: AppColors.white,
+                                      border: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                        borderSide: BorderSide.none,
+                                      ),
+                                      enabledBorder: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                        borderSide: BorderSide(
+                                          color: Colors.grey.shade200,
+                                        ),
+                                      ),
+                                      focusedBorder: OutlineInputBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                        borderSide: BorderSide(
+                                          color: AppColors.primaryTeal,
+                                          width: 2,
+                                        ),
+                                      ),
+                                      contentPadding: const EdgeInsets.symmetric(
+                                        horizontal: 16,
+                                        vertical: 14,
+                                      ),
+                                    ),
+                                    onTap: () async {
+                                      if (allDestinations.isEmpty && !isLoadingDestinations) {
+                                        setState(() {
+                                          isLoadingDestinations = true;
+                                        });
+                                        await loadDestinations();
+                                        setState(() {
+                                          isLoadingDestinations = false;
+                                        });
+                                      }
+                                    },
+                                    onChanged: (value) {
+                                      setState(() {
+                                        filterDestinations(value);
+                                      });
+                                    },
+                                  ),
+                                  
+                                  // Search Results Dropdown
+                                  if (isSearching && filteredDestinations.isNotEmpty)
+                                    Container(
+                                      margin: const EdgeInsets.only(top: 8),
+                                      constraints: const BoxConstraints(maxHeight: 200),
+                                      decoration: BoxDecoration(
+                                        color: AppColors.white,
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(
+                                          color: Colors.grey.shade200,
+                                        ),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: Colors.black.withOpacity(0.05),
+                                            blurRadius: 10,
+                                            offset: const Offset(0, 4),
+                                          ),
+                                        ],
+                                      ),
+                                      child: ListView.builder(
+                                        shrinkWrap: true,
+                                        padding: const EdgeInsets.all(4),
+                                        itemCount: filteredDestinations.length,
+                                        itemBuilder: (context, index) {
+                                          final dest = filteredDestinations[index];
+                                          return ListTile(
+                                            dense: true,
+                                            leading: Icon(
+                                              Icons.place_rounded,
+                                              color: AppColors.primaryTeal,
+                                              size: 20,
+                                            ),
+                                            title: Text(
+                                              dest['name'],
+                                              style: TextStyle(
+                                                color: AppColors.textDark,
+                                                fontWeight: FontWeight.w500,
+                                                fontSize: 14,
+                                              ),
+                                            ),
+                                            subtitle: Text(
+                                              dest['location'],
+                                              style: TextStyle(
+                                                color: AppColors.textLight,
+                                                fontSize: 12,
+                                              ),
+                                            ),
+                                            trailing: Container(
+                                              padding: const EdgeInsets.symmetric(
+                                                horizontal: 8,
+                                                vertical: 4,
+                                              ),
+                                              decoration: BoxDecoration(
+                                                color: AppColors.primaryTeal.withOpacity(0.1),
+                                                borderRadius: BorderRadius.circular(6),
+                                              ),
+                                              child: Text(
+                                                dest['category'],
+                                                style: TextStyle(
+                                                  color: AppColors.primaryTeal,
+                                                  fontSize: 10,
+                                                  fontWeight: FontWeight.w600,
+                                                ),
+                                              ),
+                                            ),
+                                            onTap: () {
+                                              setState(() {
+                                                spots.add(dest['name']);
+                                                spotSearchController.clear();
+                                                filteredDestinations = [];
+                                                isSearching = false;
+                                              });
+                                            },
+                                          );
+                                        },
+                                      ),
+                                    ),
+                                  
+                                  // No results message
+                                  if (isSearching && 
+                                      filteredDestinations.isEmpty && 
+                                      spotSearchController.text.isNotEmpty &&
+                                      !isLoadingDestinations)
+                                    Container(
+                                      margin: const EdgeInsets.only(top: 8),
+                                      padding: const EdgeInsets.all(16),
+                                      decoration: BoxDecoration(
+                                        color: Colors.orange.shade50,
+                                        borderRadius: BorderRadius.circular(12),
+                                        border: Border.all(
+                                          color: Colors.orange.shade200,
+                                        ),
+                                      ),
+                                      child: Row(
+                                        children: [
+                                          Icon(
+                                            Icons.search_off_rounded,
+                                            color: Colors.orange.shade700,
+                                            size: 20,
+                                          ),
+                                          const SizedBox(width: 12),
+                                          Expanded(
+                                            child: Text(
+                                              'No destinations found matching "${spotSearchController.text}"',
+                                              style: TextStyle(
+                                                color: Colors.orange.shade700,
+                                                fontSize: 13,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                ],
+                              ),
+
+                              const SizedBox(height: 12),
+
+                              // Places List (Reorderable)
+                              if (spots.isEmpty)
+                                Container(
+                                  padding: const EdgeInsets.all(24),
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey.shade50,
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: Colors.grey.shade200,
+                                      style: BorderStyle.solid,
+                                    ),
+                                  ),
+                                  child: Column(
+                                    children: [
+                                      Icon(
+                                        Icons.location_off_rounded,
+                                        size: 40,
+                                        color: AppColors.textLight.withOpacity(0.5),
+                                      ),
+                                      const SizedBox(height: 8),
+                                      Text(
+                                        'No places added yet',
+                                        style: TextStyle(
+                                          color: AppColors.textLight,
+                                          fontSize: 13,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        'Search and select destinations above',
+                                        style: TextStyle(
+                                          color: AppColors.textLight.withOpacity(0.7),
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                )
+                              else
+                                Container(
+                                  constraints: const BoxConstraints(maxHeight: 300),
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey.shade50,
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: Colors.grey.shade200,
+                                    ),
+                                  ),
+                                  child: ReorderableListView.builder(
+                                    shrinkWrap: true,
+                                    padding: const EdgeInsets.all(8),
+                                    itemCount: spots.length,
+                                    onReorder: (oldIndex, newIndex) {
+                                      setState(() {
+                                        if (newIndex > oldIndex) {
+                                          newIndex -= 1;
+                                        }
+                                        final item = spots.removeAt(oldIndex);
+                                        spots.insert(newIndex, item);
+                                      });
+                                    },
+                                    itemBuilder: (context, index) {
+                                      return Container(
+                                        key: ValueKey(spots[index] + index.toString()),
+                                        margin: const EdgeInsets.only(bottom: 8),
+                                        decoration: BoxDecoration(
+                                          color: AppColors.white,
+                                          borderRadius: BorderRadius.circular(10),
+                                          border: Border.all(
+                                            color: Colors.grey.shade200,
+                                          ),
+                                        ),
+                                        child: ListTile(
+                                          contentPadding: const EdgeInsets.symmetric(
+                                            horizontal: 12,
+                                            vertical: 4,
+                                          ),
+                                          leading: Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(
+                                                Icons.drag_indicator_rounded,
+                                                color: AppColors.textLight,
+                                                size: 20,
+                                              ),
+                                              const SizedBox(width: 8),
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(
+                                                  horizontal: 8,
+                                                  vertical: 4,
+                                                ),
+                                                decoration: BoxDecoration(
+                                                  color: AppColors.primaryTeal.withOpacity(0.1),
+                                                  borderRadius: BorderRadius.circular(6),
+                                                ),
+                                                child: Text(
+                                                  '${index + 1}',
+                                                  style: TextStyle(
+                                                    color: AppColors.primaryTeal,
+                                                    fontWeight: FontWeight.bold,
+                                                    fontSize: 12,
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                          title: Text(
+                                            spots[index],
+                                            style: TextStyle(
+                                              color: AppColors.textDark,
+                                              fontWeight: FontWeight.w500,
+                                              fontSize: 14,
+                                            ),
+                                          ),
+                                          trailing: IconButton(
+                                            icon: Icon(
+                                              Icons.close_rounded,
+                                              color: AppColors.errorRed,
+                                              size: 20,
+                                            ),
+                                            onPressed: () {
+                                              setState(() {
+                                                spots.removeAt(index);
+                                              });
+                                            },
+                                            tooltip: 'Remove',
+                                            padding: EdgeInsets.zero,
+                                            constraints: const BoxConstraints(),
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  ),
+                                ),
+                              
+                              if (spots.isNotEmpty) ...[
+                                const SizedBox(height: 8),
+                                Row(
+                                  children: [
+                                    Icon(
+                                      Icons.info_outline_rounded,
+                                      size: 14,
+                                      color: AppColors.textLight,
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Expanded(
+                                      child: Text(
+                                        'Drag and drop to reorder places',
+                                        style: TextStyle(
+                                          color: AppColors.textLight,
+                                          fontSize: 11,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    // Action Buttons
+                    Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade50,
+                        borderRadius: const BorderRadius.only(
+                          bottomLeft: Radius.circular(20),
+                          bottomRight: Radius.circular(20),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: TextButton(
+                              onPressed: () => Navigator.of(context).pop(),
+                              style: TextButton.styleFrom(
+                                padding: const EdgeInsets.symmetric(vertical: 14),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  side: BorderSide(
+                                    color: Colors.grey.shade300,
+                                  ),
+                                ),
+                              ),
+                              child: Text(
+                                'Cancel',
+                                style: TextStyle(
+                                  color: AppColors.textLight,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 15,
                                 ),
                               ),
                             ),
                           ),
                           const SizedBox(width: 12),
                           Expanded(
-                            child: InkWell(
-                              onTap: () async {
-                                final picked = await showDatePicker(
-                                  context: context,
-                                  initialDate: endDate,
-                                  firstDate: startDate,
-                                  lastDate: DateTime(2100),
-                                  builder: (context, child) {
-                                    return Theme(
-                                      data: Theme.of(context).copyWith(
-                                        colorScheme: ColorScheme.light(
-                                          primary: AppColors.primaryTeal,
-                                          onPrimary: AppColors.white,
-                                          onSurface: AppColors.textDark,
-                                        ),
-                                      ),
-                                      child: child!,
+                            flex: 2,
+                            child: ElevatedButton(
+                              onPressed: () async {
+                                if (formKey.currentState?.validate() ?? false) {
+                                  try {
+                                    // Preserve visited spots when editing
+                                    final validVisitedSpots = trip.visitedSpots
+                                        .where((index) => index < spots.length)
+                                        .toList();
+
+                                    final updatedTrip = firestoretrip.Trip(
+                                      tripPlanId: trip.tripPlanId,
+                                      title: nameController.text.trim(),
+                                      startDate: startDate,
+                                      endDate: endDate,
+                                      transportation: transportation,
+                                      spots: spots,
+                                      userId: _userId ?? '',
+                                      status: trip.status,
+                                      visitedSpots: validVisitedSpots,
                                     );
-                                  },
-                                );
-                                if (picked != null) {
-                                  setState(() {
-                                    endDate = picked;
-                                  });
+                                    await TripService.saveTrip(updatedTrip);
+
+                                    if (context.mounted) {
+                                      Navigator.of(context).pop();
+                                    }
+
+                                    if (mounted) {
+                                      _showSnackBar(
+                                        'Trip updated successfully!',
+                                        AppColors.homeNearbyColor,
+                                      );
+                                    }
+                                  } catch (e) {
+                                    if (context.mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text('Failed to update trip'),
+                                          backgroundColor: AppColors.errorRed,
+                                        ),
+                                      );
+                                    }
+                                  }
                                 }
                               },
-                              child: InputDecorator(
-                                decoration: InputDecoration(
-                                  labelText: 'End Date',
-                                  labelStyle: TextStyle(
-                                    color: AppColors.textLight,
-                                  ),
-                                  prefixIcon: Icon(
-                                    Icons.event_rounded,
-                                    color: AppColors.primaryOrange,
-                                  ),
-                                  border: OutlineInputBorder(
-                                    borderRadius: BorderRadius.circular(12),
-                                    borderSide: BorderSide(
-                                      color: AppColors.inputBorder,
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: AppColors.primaryTeal,
+                                foregroundColor: AppColors.white,
+                                padding: const EdgeInsets.symmetric(vertical: 14),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                elevation: 0,
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: const [
+                                  Icon(Icons.check_rounded, size: 20),
+                                  SizedBox(width: 8),
+                                  Text(
+                                    'Save Changes',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 15,
                                     ),
                                   ),
-                                ),
-                                child: Text(
-                                  DateFormat('MMM dd, yyyy').format(endDate),
-                                  style: TextStyle(color: AppColors.textDark),
-                                ),
+                                ],
                               ),
                             ),
                           ),
                         ],
                       ),
-                      const SizedBox(height: 16),
-                      DropdownButtonFormField<String>(
-                        value: transportation.isNotEmpty ? transportation : null,
-                        items: ['Car', 'Plane', 'Bus', 'Boat', 'Train']
-                            .map((t) => DropdownMenuItem(
-                                  value: t,
-                                  child: Row(
-                                    children: [
-                                      Icon(
-                                        _getTransportationIcon(t),
-                                        color: AppColors.primaryTeal,
-                                        size: 20,
-                                      ),
-                                      const SizedBox(width: 12),
-                                      Text(
-                                        t,
-                                        style: TextStyle(color: AppColors.textDark),
-                                      ),
-                                    ],
-                                  ),
-                                ))
-                            .toList(),
-                        onChanged: (val) {
-                          if (val != null) {
-                            setState(() {
-                              transportation = val;
-                            });
-                          }
-                        },
-                        decoration: InputDecoration(
-                          labelText: 'Transportation',
-                          labelStyle: TextStyle(color: AppColors.textLight),
-                          prefixIcon: Icon(
-                            Icons.directions_rounded,
-                            color: AppColors.homeTrendingColor,
-                          ),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(
-                              color: AppColors.inputBorder,
-                            ),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(
-                              color: AppColors.primaryTeal,
-                              width: 2,
-                            ),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      TextFormField(
-                        initialValue: spots.join(', '),
-                        decoration: InputDecoration(
-                          labelText: 'Spots (comma separated)',
-                          labelStyle: TextStyle(color: AppColors.textLight),
-                          prefixIcon: Icon(
-                            Icons.place_rounded,
-                            color: AppColors.homeSeasonalColor,
-                          ),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(
-                              color: AppColors.inputBorder,
-                            ),
-                          ),
-                          focusedBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(12),
-                            borderSide: BorderSide(
-                              color: AppColors.primaryTeal,
-                              width: 2,
-                            ),
-                          ),
-                        ),
-                        maxLines: 3,
-                        onChanged: (val) {
-                          spots =
-                              val
-                                  .split(',')
-                                  .map((e) => e.trim())
-                                  .where((e) => e.isNotEmpty)
-                                  .toList();
-                        },
-                      ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.of(context).pop(),
-                  style: TextButton.styleFrom(
-                    foregroundColor: AppColors.textLight,
-                  ),
-                  child: const Text('Cancel'),
-                ),
-                ElevatedButton(
-                  onPressed: () async {
-                    if (formKey.currentState?.validate() ?? false) {
-                      try {
-                        // Preserve visited spots when editing
-                        // Filter out indices that are now out of bounds if spots were removed
-                        final validVisitedSpots = trip.visitedSpots
-                            .where((index) => index < spots.length)
-                            .toList();
-                        
-                        final updatedTrip = firestoretrip.Trip(
-                          tripPlanId: trip.tripPlanId,
-                          title: nameController.text.trim(),
-                          startDate: startDate,
-                          endDate: endDate,
-                          transportation: transportation,
-                          spots: spots,
-                          userId: _userId ?? '',
-                          status: trip.status,
-                          visitedSpots: validVisitedSpots, // Preserve visited spots
-                        );
-                        await TripService.saveTrip(updatedTrip);
-
-                        if (context.mounted) {
-                          Navigator.of(context).pop();
-                        }
-
-                        if (mounted) {
-                          _showSnackBar(
-                            'Trip updated successfully!',
-                            AppColors.homeNearbyColor,
-                          );
-                        }
-                      } catch (e) {
-                        if (context.mounted) {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(
-                              content: Text('Failed to update trip: $e'),
-                              backgroundColor: AppColors.errorRed,
-                            ),
-                          );
-                        }
-                      }
-                    }
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primaryTeal,
-                    foregroundColor: AppColors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  child: const Text('Save Changes'),
-                ),
-              ],
             );
           },
         );
       },
     );
   }
+
+  // Helper method for section labels
+  Widget _buildSectionLabel(String label, IconData icon) {
+    return Row(
+      children: [
+        Icon(
+          icon,
+          size: 18,
+          color: AppColors.primaryTeal,
+        ),
+        const SizedBox(width: 8),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 15,
+            fontWeight: FontWeight.bold,
+            color: AppColors.textDark,
+          ),
+        ),
+      ],
+    );
+  }
+
+  // Helper method for date fields
+  Widget _buildDateField({
+    required BuildContext context,
+    required String label,
+    required DateTime date,
+    required IconData icon,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: AppColors.white,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: Colors.grey.shade200,
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  icon,
+                  size: 16,
+                  color: AppColors.primaryTeal,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: AppColors.textLight,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              DateFormat('MMM dd, yyyy').format(date),
+              style: TextStyle(
+                fontSize: 15,
+                color: AppColors.textDark,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
 
   Widget _buildTripCard(firestoretrip.Trip trip, bool isArchived) {
     final daysUntil = _getDaysUntilTrip(trip.startDate);
@@ -1343,7 +1954,7 @@ class _TripsScreenState extends State<TripsScreen>
     );
   }
 
-  /// Builds the trip list for active or archived trips
+  /// Legacy alternative list builder removed during cleanup
 //   Widget _buildTripList(List<firestoretrip.Trip> trips, bool isArchived) {
 //     if (trips.isEmpty) {
 //       return Center(

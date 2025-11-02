@@ -5,13 +5,12 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Replace with your actual Google Directions API key
-const GOOGLE_API_KEY = 'AIzaSyCHDrbJrZHSeMFG40A-hQPB37nrmA6rUKE';
+const GOOGLE_API_KEY = 'AIzaSyDEeIzEOXmrCFNYt7f2QHM43lcq8fZtTsE';
 
 app.use(cors());
 
-<<<<<<< HEAD
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
-=======
+
 // Add a root route to handle GET /
 app.get('/', (req, res) => {
   res.json({
@@ -26,7 +25,6 @@ app.get('/', (req, res) => {
     }
   });
 });
->>>>>>> f8571ed39f47cd68bf0ade3d4dc0786eebc1377a
 
 app.get('/directions', async (req, res) => {
   const { origin, destination, mode = 'driving', overview = 'full', units = 'metric' } = req.query;

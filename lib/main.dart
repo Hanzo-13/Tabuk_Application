@@ -4,9 +4,9 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:flutter/gestures.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:hive_flutter/hive_flutter.dart';
@@ -27,7 +27,6 @@ import 'package:capstone_app/widgets/responsive_wrapper.dart';
 // This is done once and can be awaited in the UI.
 final Future<void> appInitialization = _initializeApp();
 
-// This function contains all the async work that needs to be done before the app is fully ready.
 Future<void> _initializeApp() async {
   await AuthService.initializeAuthState();
 
@@ -40,15 +39,10 @@ Future<void> _initializeApp() async {
     // We can safely ignore this error.
   }
 
-  // Hive needs a different initialization path for web vs. mobile.
-  if (kIsWeb) {
-    await Hive.initFlutter();
-  } else {
-    final appDir = await getApplicationDocumentsDirectory();
-    await Hive.initFlutter(appDir.path);
-  }
-
-  // Defer non-critical initializations until after the first frame to improve startup time.
+  final appDir = await getApplicationDocumentsDirectory();
+  await Hive.initFlutter(appDir.path);
+  
+  // This can still be deferred until after the first frame for performance.
   WidgetsBinding.instance.addPostFrameCallback((_) {
     if (!kIsWeb) {
       ImageCacheService.init();

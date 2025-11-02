@@ -2,7 +2,7 @@ import 'dart:math';
 import 'dart:math' as math;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/foundation.dart' show kDebugMode, debugPrint;
 import 'package:geolocator/geolocator.dart';
 import '../models/destination_model.dart';
 
@@ -71,7 +71,7 @@ class ContentRecommenderService {
       _updateCache(cacheKey, recommendations);
       return recommendations;
     } catch (e) {
-      if (kDebugMode) print('Error getting For You recommendations: $e');
+      if (kDebugMode) debugPrint('Error getting For You recommendations: $e');
       return [];
     }
   }
@@ -109,7 +109,7 @@ class ContentRecommenderService {
       _updateCache(cacheKey, recommendations);
       return recommendations;
     } catch (e) {
-      if (kDebugMode) print('Error getting Popular recommendations: $e');
+      if (kDebugMode) debugPrint('Error getting Popular recommendations: $e');
       return [];
     }
   }
@@ -172,7 +172,7 @@ class ContentRecommenderService {
       _updateCache(cacheKey, recommendations);
       return recommendations;
     } catch (e) {
-      if (kDebugMode) print('Error getting Nearby recommendations: $e');
+      if (kDebugMode) debugPrint('Error getting Nearby recommendations: $e');
       return [];
     }
   }
@@ -207,7 +207,7 @@ class ContentRecommenderService {
       _updateCache(cacheKey, recommendations);
       return recommendations;
     } catch (e) {
-      if (kDebugMode) print('Error getting Discover recommendations: $e');
+      if (kDebugMode) debugPrint('Error getting Discover recommendations: $e');
       return [];
     }
   }
@@ -245,7 +245,7 @@ class ContentRecommenderService {
         'discover': futures[3],
       };
     } catch (e) {
-      if (kDebugMode) print('Error getting all recommendations: $e');
+      if (kDebugMode) debugPrint('Error getting all recommendations: $e');
       return {
         'forYou': [],
         'popular': [],
@@ -265,7 +265,7 @@ class ContentRecommenderService {
           .get();
       return doc.data();
     } catch (e) {
-      if (kDebugMode) print('Error getting user preferences: $e');
+      if (kDebugMode) debugPrint('Error getting user preferences: $e');
       return null;
     }
   }
@@ -281,7 +281,7 @@ class ContentRecommenderService {
           .map((doc) => doc.data()['hotspotId'] as String)
           .toList();
     } catch (e) {
-      if (kDebugMode) print('Error getting user favorites: $e');
+      if (kDebugMode) debugPrint('Error getting user favorites: $e');
       return [];
     }
   }
@@ -306,7 +306,7 @@ class ContentRecommenderService {
       _allHotspotsCacheTimestamp = now;
       return hotspots;
     } catch (e) {
-      if (kDebugMode) print('Error getting all hotspots: $e');
+      if (kDebugMode) debugPrint('Error getting all hotspots: $e');
       return _allHotspotsCache ?? [];
     }
   }
@@ -527,7 +527,7 @@ class ContentRecommenderService {
       _favoritesCountCacheTimestamp = now;
       return map;
     } catch (e) {
-      if (kDebugMode) print('Error aggregating favorites: $e');
+      if (kDebugMode) debugPrint('Error aggregating favorites: $e');
       return _favoritesCountCache ?? <String, int>{};
     }
   }

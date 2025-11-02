@@ -6,13 +6,15 @@ import 'package:capstone_app/utils/colors.dart';
 class UniversalSearchBar extends StatefulWidget {
   final ValueChanged<String> onChanged;
   final VoidCallback onClear;
-  final VoidCallback onFilterTap;
+  final VoidCallback? onFilterTap;
+  final String hintText;
 
   const UniversalSearchBar({
     super.key,
     required this.onChanged,
     required this.onClear,
-    required this.onFilterTap,
+    this.onFilterTap,
+    this.hintText = 'Search Destinations...',
   });
 
   @override
@@ -23,18 +25,26 @@ class _UniversalSearchBarState extends State<UniversalSearchBar> {
   final TextEditingController _searchController = TextEditingController();
 
   @override
+  void initState() {
+    super.initState();
+    _searchController.addListener(() {
+      setState(() {});
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     return SafeArea(
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 12, 12, 0),
+        padding: const EdgeInsets.fromLTRB(12, 12, 16, 0),
         child: Material(
-          elevation: 4,
+          elevation: 6,
           borderRadius: BorderRadius.circular(30),
           child: TextField(
             controller: _searchController,
             onChanged: widget.onChanged,
             decoration: InputDecoration(
-              hintText: 'Search Destinations...',
+              hintText: widget.hintText,
               hintStyle: TextStyle(
                 color: Colors.grey.shade500,
                 fontSize: 16,
@@ -55,12 +65,15 @@ class _UniversalSearchBarState extends State<UniversalSearchBar> {
                       onPressed: () {
                         _searchController.clear();
                         widget.onClear();
+                        widget.onChanged('');
                       },
                     ),
-                  IconButton(
-                    icon: const Icon(Icons.filter_list, color: AppColors.primaryTeal),
-                    onPressed: widget.onFilterTap,
-                  ),
+                  // This now conditionally shows the filter button
+                  if (widget.onFilterTap != null)
+                    IconButton(
+                      icon: const Icon(Icons.filter_list, color: AppColors.primaryTeal),
+                      onPressed: widget.onFilterTap,
+                    ),
                 ],
               ),
               border: OutlineInputBorder(

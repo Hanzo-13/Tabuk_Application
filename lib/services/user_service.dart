@@ -6,7 +6,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart' as auth;
 import 'package:capstone_app/models/user_model.dart';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/foundation.dart' show kDebugMode, debugPrint;
 
 /// Service for user-related operations.
 class UserService {
@@ -24,9 +24,7 @@ class UserService {
 
       return User.fromFirestore(doc.data()!, doc.id);
     } catch (e) {
-      if (kDebugMode) {
-        print('Error getting current user: $e');
-      }
+      if (kDebugMode) debugPrint('Error getting current user: $e');
       return null;
     }
   }
@@ -56,9 +54,7 @@ class UserService {
       await _firestore.collection('Users').doc(firebaseUser.uid).update(updateData);
       return true;
     } catch (e) {
-      if (kDebugMode) {
-        print('Error updating user profile: $e');
-      }
+      if (kDebugMode) debugPrint('Error updating user profile: $e');
       return false;
     }
   }
@@ -75,9 +71,7 @@ class UserService {
       });
       return true;
     } catch (e) {
-      if (kDebugMode) {
-        print('Error updating profile photo: $e');
-      }
+      if (kDebugMode) debugPrint('Error updating profile photo: $e');
       return false;
     }
   }
@@ -109,9 +103,7 @@ class UserService {
       await _firestore.collection('Users').doc(userId).set(userData);
       return true;
     } catch (e) {
-      if (kDebugMode) {
-        print('Error creating user: $e');
-      }
+      if (kDebugMode) debugPrint('Error creating user: $e');
       return false;
     }
   }
@@ -124,9 +116,7 @@ class UserService {
 
       return User.fromFirestore(doc.data()!, doc.id);
     } catch (e) {
-      if (kDebugMode) {
-        print('Error getting user by ID: $e');
-      }
+      if (kDebugMode) debugPrint('Error getting user by ID: $e');
       return null;
     }
   }
@@ -137,9 +127,7 @@ class UserService {
       final doc = await _firestore.collection('Users').doc(userId).get();
       return doc.exists;
     } catch (e) {
-      if (kDebugMode) {
-        print('Error checking if user exists: $e');
-      }
+      if (kDebugMode) debugPrint('Error checking if user exists: $e');
       return false;
     }
   }
@@ -166,9 +154,7 @@ class UserService {
       }
       return true;
     } catch (e) {
-      if (kDebugMode) {
-        print('Error ensuring user document: $e');
-      }
+      if (kDebugMode) debugPrint('Error ensuring user document: $e');
       return false;
     }
   }
@@ -179,9 +165,7 @@ class UserService {
       await _firestore.collection('Users').doc(userId).delete();
       return true;
     } catch (e) {
-      if (kDebugMode) {
-        print('Error deleting user: $e');
-      }
+      if (kDebugMode) debugPrint('Error deleting user: $e');
       return false;
     }
   }

@@ -8,7 +8,7 @@ import 'package:capstone_app/utils/colors.dart';
 import 'package:capstone_app/widgets/cached_image.dart';
 import 'package:capstone_app/widgets/review_form_modal.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/foundation.dart';
+import 'package:flutter/foundation.dart' show kDebugMode, debugPrint;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:async';
@@ -180,22 +180,20 @@ class _BusinessDetailsModalState extends State<BusinessDetailsModal> {
           businessData['longitude'] ?? businessData['location']?['lng'];
 
       if (currentLat == null || currentLng == null) {
-        if (kDebugMode) print('No coordinates found for current location');
+        if (kDebugMode) debugPrint('No coordinates found for current location');
         if (mounted) {
           setState(() => _isLoadingNearby = false);
         }
         return;
       }
 
-      if (kDebugMode) {
-        print('Fetching nearby places from: $currentLat, $currentLng');
-        print('Business data keys: ${businessData.keys.toList()}');
-      }
+      if (kDebugMode) debugPrint('Fetching nearby places from: $currentLat, $currentLng');
+      if (kDebugMode) debugPrint('Business data keys: ${businessData.keys.toList()}');
 
       final snapshot =
           await FirebaseFirestore.instance.collection('destination').get();
 
-      if (kDebugMode) print('Found ${snapshot.docs.length} total destinations');
+      if (kDebugMode) debugPrint('Found ${snapshot.docs.length} total destinations');
 
       final places = <Map<String, dynamic>>[];
       final currentPosition = LatLng(
@@ -220,17 +218,13 @@ class _BusinessDetailsModalState extends State<BusinessDetailsModal> {
           final currentHotspotId =
               businessData['hotspot_id'] ?? businessData['id']?.toString();
           if (distance <= 10.0 && doc.id != currentHotspotId) {
-            if (kDebugMode) {
-              print(
-                'Adding nearby place: ${data['business_name'] ?? data['name']} at ${distance.toStringAsFixed(2)} km',
-              );
-            }
+            if (kDebugMode) debugPrint('Adding nearby place: ${data['business_name'] ?? data['name']} at ${distance.toStringAsFixed(2)} km');
             places.add({...data, 'hotspot_id': doc.id, 'distance': distance});
           }
         }
       }
 
-      if (kDebugMode) print('Found ${places.length} places within 10km');
+      if (kDebugMode) debugPrint('Found ${places.length} places within 10km');
 
       // Sort by distance and take top 5
       places.sort(
@@ -244,16 +238,9 @@ class _BusinessDetailsModalState extends State<BusinessDetailsModal> {
         });
       }
 
-      if (kDebugMode) {
-        print('Final nearby places: ${_nearbyPlaces.length}');
-        for (final place in _nearbyPlaces) {
-          print(
-            '  - ${place['business_name'] ?? place['name']}: ${(place['distance'] as double).toStringAsFixed(2)} km',
-          );
-        }
-      }
+      if (kDebugMode) debugPrint('Final nearby places: ${_nearbyPlaces.length}');
     } catch (e) {
-      if (kDebugMode) print('Error fetching nearby places: $e');
+      if (kDebugMode) debugPrint('Error fetching nearby places: $e');
       if (mounted) {
         setState(() => _isLoadingNearby = false);
       }
@@ -1480,9 +1467,7 @@ class _BusinessDetailsModalState extends State<BusinessDetailsModal> {
         setState(() {});
       }
     } catch (e) {
-      if (kDebugMode) {
-        print('Error refreshing business data: $e');
-      }
+      if (kDebugMode) debugPrint('Error refreshing business data: $e');
     }
   }
 

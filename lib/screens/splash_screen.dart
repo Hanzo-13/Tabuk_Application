@@ -1,5 +1,5 @@
 // ===========================================
-// lib/screens/splash_screen.dart
+// lib/screens/splash_screen.dart (Corrected)
 // ===========================================
 
 // ignore_for_file: use_build_context_synchronously
@@ -17,6 +17,9 @@ import 'package:capstone_app/utils/constants.dart';
 import 'package:capstone_app/utils/navigation_helper.dart';
 import 'package:capstone_app/widgets/app_logo_widget.dart';
 import 'package:capstone_app/widgets/connectivity_widget.dart';
+
+// Import the LoginScreen to navigate to it directly
+import 'package:capstone_app/screens/login_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -102,7 +105,12 @@ class _SplashScreenState extends State<SplashScreen> {
       } else {
         debugPrint('[SplashScreen] No session or auth. Redirecting to login...');
         await SessionService.clearSession();
-        Navigator.pushReplacementNamed(context, AppConstants.loginRoute);
+
+        // ========== THE FIX IS HERE ==========
+        // Replaced pushReplacementNamed with a direct MaterialPageRoute
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (context) => const LoginScreen()),
+        );
       }
     } catch (e) {
       debugPrint('[SplashScreen] ERROR during splash logic: $e');
@@ -110,7 +118,11 @@ class _SplashScreenState extends State<SplashScreen> {
 
       // Fallback: force to login on any error
       await SessionService.clearSession();
-      Navigator.pushReplacementNamed(context, AppConstants.loginRoute);
+
+      // ========== AND THE FIX IS HERE, TOO ==========
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (context) => const LoginScreen()),
+      );
     }
   }
 
