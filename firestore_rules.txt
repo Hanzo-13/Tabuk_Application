@@ -1,6 +1,9 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    
+    // ==================== Helper Functions ====================
+    
     function isSignedIn() {
       return request.auth != null;
     }
@@ -14,7 +17,8 @@ service cloud.firestore {
       return r == 'Administrator' || r == 'Super Administrator';
     }
 
-    // Users collection
+    // ==================== Users Collection ====================
+    
     match /Users/{userId} {
       // Everyone signed in can read user docs (app depends on it)
       allow read: if isSignedIn();
@@ -28,16 +32,18 @@ service cloud.firestore {
         && !('admin_type' in request.resource.data.diff(resource.data).changedKeys())
         && !('admin_status' in request.resource.data.diff(resource.data).changedKeys());
 
-      // Admins can update restricted fields on any user (e.g., approvals), but cannot set themselves as super admin via this path
+      // Admins can update restricted fields on any user (e.g., approvals)
       allow update: if isSignedIn() && isAdmin();
 
       // Deleting user docs by the owner; admins also allowed
       allow delete: if isSignedIn() && (request.auth.uid == userId || isAdmin());
     }
 
-    // Events collection (supporting both 'events' and 'Events')
+    // ==================== Events Collection ====================
+    
     match /{eventsCol=(events|Events)}/{eventId} {
-      allow read: if true; // public events
+      // Public events - anyone can read
+      allow read: if true;
 
       // Create: must be signed in and set created_by == uid
       allow create: if isSignedIn()
@@ -49,22 +55,54 @@ service cloud.firestore {
       );
     }
 
-    // Destination collection: only admins can create/update/delete
+    // ==================== Destination Collection ====================
+    
     match /destination/{docId} {
-      allow read: if true; // public
+      // Public read access
+      allow read: if true;
+      
+      // Only admins can modify
       allow create, update, delete: if isSignedIn() && isAdmin();
     }
 
-    // Notifications: admins only write; read allowed to signed-in admins
+    // ==================== Notifications Collection ====================
+    
     match /notifications/{docId} {
+      // Only admins can read and modify
       allow read: if isSignedIn() && isAdmin();
       allow create, update, delete: if isSignedIn() && isAdmin();
     }
 
-    // Default deny for other paths
+    // ==================== Arrivals Collection ====================
+    
+    match /Arrivals/{docId} {
+      // Users can only read their own arrivals
+      allow read: if isSignedIn() && request.auth.uid == resource.data.userId;
+      
+      // Users can create arrivals for themselves only
+      allow create: if isSignedIn() && request.auth.uid == request.resource.data.userId;
+      
+      // Users can delete their own arrivals; admins can delete any
+      allow delete: if isSignedIn() && (request.auth.uid == resource.data.userId || isAdmin());
+    }
+
+    // ==================== DestinationHistory Collection ====================
+    
+    match /DestinationHistory/{docId} {
+      // Users can only read their own history
+      allow read: if isSignedIn() && request.auth.uid == resource.data.userId;
+      
+      // Users can create history for themselves only
+      allow create: if isSignedIn() && request.auth.uid == request.resource.data.userId;
+      
+      // Users can delete their own history; admins can delete any
+      allow delete: if isSignedIn() && (request.auth.uid == resource.data.userId || isAdmin());
+    }
+
+    // ==================== Default Deny ====================
+    
     match /{document=**} {
-      allow read: if false;
-      allow write: if false;
+      allow read, write: if false;
     }
   }
 }
