@@ -2,6 +2,7 @@
 // lib/services/auth_service.dart (FIXED VERSION)
 // ===========================================
 
+import 'package:capstone_app/services/secure_session_service.dart';
 import 'package:capstone_app/services/session_services.dart';
 import 'package:capstone_app/utils/constants.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -78,7 +79,7 @@ class AuthService {
                 .get();
         final role = userDoc.data()?['role'] ?? '';
 
-        await SessionService.storeSession(
+        await SecureSessionService.storeSession(
           userCredential.user!.uid,
           userCredential.user!.email ?? '',
           role,
@@ -149,7 +150,7 @@ class AuthService {
         }
 
         // Store login state in SharedPreferences as backup
-        await SessionService.storeSession(
+        await SecureSessionService.storeSession(
           userCredential.user!.uid,
           userCredential.user!.email ?? '',
           role,
@@ -205,7 +206,7 @@ class AuthService {
   static Future<void> signOutWithPersistence() async {
     try {
       await _clearLoginState();
-      await SessionService.clearSession();
+      await SecureSessionService.clearSession();
       if (kIsWeb) {
         await _auth.signOut();
       } else {
@@ -493,7 +494,7 @@ class AuthService {
         'role': role,
         'username': username ?? '',
         'email': email,
-        'password': password ?? '',
+        // 'password': password ?? '',
         'created_at': FieldValue.serverTimestamp(),
         'app_email_verified': appEmailVerified,
       }, SetOptions(merge: true));
@@ -811,7 +812,7 @@ class AuthService {
     String? email,
     String? role,
     String? username,
-    String? password,
+    // String? password,
     String? municipality,
     String? status,
     String? profilePhoto,
@@ -822,7 +823,7 @@ class AuthService {
         'role': role,
         'username': username ?? '',
         'email': email,
-        'password': password ?? '',
+        // 'password': password ?? '',
         'municipality': municipality ?? '',
         'status': status ?? '',
         'profile_photo': profilePhoto ?? '',

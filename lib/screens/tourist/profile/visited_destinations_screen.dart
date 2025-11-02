@@ -279,20 +279,26 @@ class _VisitedDestinationsScreenState extends State<VisitedDestinationsScreen> w
 
   Widget _buildAllVisitsTab() {
     return StreamBuilder<List<Map<String, dynamic>>>(
-      stream: ArrivalService.streamUserArrivals(),
+      stream: ArrivalService.streamUserDestinationHistory(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
           return const Center(child: CircularProgressIndicator());
         }
 
+        // Check for actual errors, but don't treat empty data as an error
         if (snapshot.hasError) {
+          print('Error in streamUserDestinationHistory: ${snapshot.error}');
           return _buildErrorState();
         }
 
+        // Handle both null and empty list cases
         final arrivals = snapshot.data ?? [];
 
         if (arrivals.isEmpty) {
-          return _buildEmptyState('No Visits Recorded', 'Your visit history will appear here once you start exploring!');
+          return _buildEmptyState(
+            'No Visits Recorded',
+            'Your visit history will appear here once you start exploring!'
+          );
         }
 
         // Sort arrivals by timestamp (newest first)
@@ -309,7 +315,10 @@ class _VisitedDestinationsScreenState extends State<VisitedDestinationsScreen> w
             final arrival = arrivals[index];
             final hotspotId = arrival['hotspotId'] ?? 'Unknown Location';
             final timestamp = arrival['timestamp']?.toDate() ?? DateTime.now();
-            final businessName = arrival['business_name'] ?? arrival['businessName'] ?? hotspotId;
+            final businessName = arrival['destinationName'] ?? 
+                                arrival['business_name'] ?? 
+                                arrival['businessName'] ?? 
+                                hotspotId;
 
             return _buildVisitCard(arrival, businessName, timestamp);
           },

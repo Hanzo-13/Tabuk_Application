@@ -1,4 +1,6 @@
 import 'package:capstone_app/services/trip_service.dart';
+import 'package:capstone_app/services/arrival_service.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../../models/trip_model.dart' as firestoretrip;
@@ -16,7 +18,6 @@ class TripDetailsScreen extends StatefulWidget {
 class _TripDetailsScreenState extends State<TripDetailsScreen> {
   // Track visited spots (persisted to Firestore)
   late Set<int> visitedSpots;
-  final TripService _tripService = TripService();
 
   @override
   void initState() {
@@ -27,6 +28,7 @@ class _TripDetailsScreenState extends State<TripDetailsScreen> {
 
   void _toggleVisited(int index) async {
     final wasChecked = visitedSpots.contains(index);
+    final spotName = widget.trip.spots[index];
     
     setState(() {
       if (visitedSpots.contains(index)) {
@@ -65,6 +67,11 @@ class _TripDetailsScreenState extends State<TripDetailsScreen> {
         visitedSpots: visitedSpots.toList(),
       );
       await TripService.saveTrip(updatedTrip);
+
+      // If marking as visited (not unchecking), save to ArrivalService/DestinationHistory
+      if (!wasChecked) {
+        await _saveVisitToDestinationHistory(spotName);
+      }
 
       if (mounted) {
         // Show celebration when completing
@@ -123,6 +130,118 @@ class _TripDetailsScreenState extends State<TripDetailsScreen> {
           ),
         );
       }
+    }
+  }
+
+  /// Fetch destination details from Firestore and save visit to DestinationHistory
+  Future<void> _saveVisitToDestinationHistory(String destinationName) async {
+    try {
+      // Search for destination in Firestore by name
+      final destinationSnapshot = await FirebaseFirestore.instance
+          .collection('destination')
+          .where('business_name', isEqualTo: destinationName)
+          .limit(1)
+          .get();
+
+      Map<String, dynamic>? destinationData;
+
+      if (destinationSnapshot.docs.isNotEmpty) {
+        // Found by business_name
+        final doc = destinationSnapshot.docs.first;
+        destinationData = Map<String, dynamic>.from(doc.data());
+        destinationData['hotspot_id'] = doc.id;
+      } else {
+        // Try searching by name field
+        final nameSnapshot = await FirebaseFirestore.instance
+            .collection('destination')
+            .where('name', isEqualTo: destinationName)
+            .limit(1)
+            .get();
+
+        if (nameSnapshot.docs.isNotEmpty) {
+          final doc = nameSnapshot.docs.first;
+          destinationData = Map<String, dynamic>.from(doc.data());
+          destinationData['hotspot_id'] = doc.id;
+        } else {
+          // Try case-insensitive partial match
+          final allDestinations = await FirebaseFirestore.instance
+              .collection('destination')
+              .get();
+
+          for (var doc in allDestinations.docs) {
+            final data = doc.data();
+            final businessName = data['business_name']?.toString().toLowerCase() ?? '';
+            final name = data['name']?.toString().toLowerCase() ?? '';
+            final searchName = destinationName.toLowerCase();
+
+            if (businessName == searchName || 
+                name == searchName ||
+                businessName.contains(searchName) ||
+                name.contains(searchName)) {
+              destinationData = Map<String, dynamic>.from(data);
+              destinationData['hotspot_id'] = doc.id;
+              break;
+            }
+          }
+        }
+      }
+
+      // Only save if we found valid destination data
+      // Don't save with unknown/null values
+      if (destinationData != null && 
+          (destinationData['hotspot_id'] != null || destinationData['id'] != null)) {
+        
+        // Extract hotspot ID
+        final hotspotId = destinationData['hotspot_id']?.toString() ?? 
+                          destinationData['id']?.toString();
+        
+        // Get coordinates (required fields)
+        final lat = (destinationData['latitude'] as num?)?.toDouble();
+        final lng = (destinationData['longitude'] as num?)?.toDouble();
+        
+        // Only save if we have valid coordinates
+        if (hotspotId != null && lat != null && lng != null) {
+          await ArrivalService.saveArrival(
+            hotspotId: hotspotId,
+            latitude: lat,
+            longitude: lng,
+            businessName: destinationData['business_name'] ?? 
+                          destinationData['name'] ?? 
+                          destinationData['destinationName'] ??
+                          destinationName,
+            destinationName: destinationData['destinationName'] ??
+                             destinationData['business_name'] ?? 
+                             destinationData['name'] ?? 
+                             destinationName,
+            destinationCategory: destinationData['destinationCategory'] ??
+                                 destinationData['category']?.toString(),
+            destinationType: destinationData['destinationType'] ??
+                             destinationData['type']?.toString(),
+            destinationDistrict: destinationData['destinationDistrict'] ??
+                                destinationData['district']?.toString(),
+            destinationMunicipality: destinationData['destinationMunicipality'] ??
+                                     destinationData['municipality']?.toString(),
+            destinationImages: destinationData['destinationImages'] != null
+                ? (destinationData['destinationImages'] as List).map((e) => e.toString()).toList()
+                : destinationData['images'] != null
+                    ? (destinationData['images'] as List).map((e) => e.toString()).toList()
+                    : destinationData['imageUrl'] != null
+                        ? [destinationData['imageUrl'].toString()]
+                        : null,
+            destinationDescription: destinationData['destinationDescription'] ??
+                                   destinationData['description']?.toString(),
+          );
+        } else {
+          print('Cannot save visit: Missing coordinates for destination: $destinationName');
+        }
+      } else {
+        print('Cannot save visit: Destination not found in database: $destinationName');
+        // Don't save with unknown data - it's better to skip than create bad records
+      }
+    } catch (e) {
+      // Log error but don't block the UI update
+      print('Error saving visit to destination history: $e');
+      // Don't try to save with minimal data - better to skip than create bad records
     }
   }
 

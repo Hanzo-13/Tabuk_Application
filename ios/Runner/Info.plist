@@ -2,12 +2,29 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Tabuk needs your location to show you on the map.
+Tabuk needs your location to show you on the map.
+Tabuk needs your location to show you on the map.</string>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<!-- Remove NSAllowsArbitraryLoads -->
+		<!-- Allow specific exceptions if needed -->
+		<!-- No exception domains - all connections must use HTTPS -->
+		<!-- Require TLS 1.2 minimum -->
+		<key>NSTLSExceptionMinimumTLSVersion</key>
+		<string>TLSv1.2</string>
+	</dict>
+	<key>NSLocationAlwaysAndWhenInUseUsageDescription</key>
+	<string>Tabuk needs your location to show nearby places.</string>
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
+	<key>GOOGLE_MAPS_API_KEY</key>
+	<string>AIzaSyATZftO3SXnK0-sWqq3-5Ew5eHcUvGAhL8</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
 	<key>CFBundleDisplayName</key>
-	<string>Capstone App</string>
+	<string>Tabuk App</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>

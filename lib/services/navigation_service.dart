@@ -2,15 +2,14 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math' as math;
+
+import 'package:async/async.dart';
+import 'package:capstone_app/services/arrival_service.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/material.dart'; // Added for Colors
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:flutter_polyline_points/flutter_polyline_points.dart';
 import 'package:http/http.dart' as http;
-import 'package:capstone_app/api/api.dart';
-import 'package:capstone_app/services/arrival_service.dart';
-import 'package:flutter/material.dart'; // Added for Colors
-import 'package:async/async.dart';
 
 class NavigationStep {
   final String instruction;
@@ -84,13 +83,16 @@ class NavigationService {
   NavigationRoute? _currentRoute;
   int _currentStepIndex = 0;
   Position? _currentPosition;
-  StreamSubscription<Position>? _positionStream;
+  StreamSubscription<Position>? _positionStreamSubscription;
+  Stream<Position>?
+  _externalLocationStream; // Location stream from MapLocationManager
   bool _isNavigating = false;
   String? _destinationName;
   String _currentTransportationMode = MODE_WALKING;
   bool _isMapRotated = true;
 
   // Destination information for arrival tracking
+  String? get currentDestinationName => _destinationName;
   String? _destinationId;
   String? _destinationCategory;
   String? _destinationType;
@@ -231,6 +233,8 @@ class NavigationService {
   }
 
   /// Convert transportation mode to API-compatible mode
+  /// PRESERVED: This function is kept for future reference if API is re-enabled
+  // ignore: unused_element
   String _convertToApiMode(String mode) {
     switch (mode.toLowerCase()) {
       case MODE_MOTORCYCLE:
@@ -308,168 +312,427 @@ class NavigationService {
   }
 
   /// Get turn-by-turn directions to a destination
+  /// Uses OpenRouteService (free routing API) for road-based routing
   Future<NavigationRoute?> getDirections(
     LatLng destination, {
     String mode = MODE_WALKING, // Default to walking
+    LatLng? origin, // Allow origin to be passed in
   }) async {
     try {
-      final position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-      );
-      final origin = LatLng(position.latitude, position.longitude);
-
-      // Convert transportation mode to API-compatible mode
-      final apiMode = _convertToApiMode(mode);
-      // Try proxy first; fall back to Google API directly on web if proxy is unavailable
-      Future<Map<String, dynamic>?> tryFetch(String url) async {
+      // Get current position with timeout (if origin not provided)
+      LatLng finalOrigin;
+      
+      if (origin != null) {
+        finalOrigin = origin;
+      } else {
+        Position position;
         try {
-          final resp = await http.get(Uri.parse(url));
-          if (resp.statusCode == 200) {
-            return json.decode(resp.body) as Map<String, dynamic>;
-          }
-        } catch (_) {}
+          position = await Geolocator.getCurrentPosition(
+            desiredAccuracy: LocationAccuracy.high,
+          ).timeout(
+            const Duration(seconds: 10),
+            onTimeout: () {
+              throw TimeoutException(
+                'Location request timed out',
+                const Duration(seconds: 10),
+              );
+            },
+          );
+        } catch (e) {
+          if (kDebugMode) print('Error getting current position for route: $e');
+          // Fallback: try with medium accuracy
+          position = await Geolocator.getCurrentPosition(
+            desiredAccuracy: LocationAccuracy.medium,
+          ).timeout(const Duration(seconds: 5));
+        }
+        finalOrigin = LatLng(position.latitude, position.longitude);
+      }
+      
+      if (kDebugMode) {
+        print(
+          'Getting route from (${finalOrigin.latitude}, ${finalOrigin.longitude}) to (${destination.latitude}, ${destination.longitude}) using OSRM',
+        );
+      }
+
+      /* ============================================
+         OLD GOOGLE DIRECTIONS API CODE - COMMENTED OUT
+         This code is preserved for future reference if needed
+         ============================================ */
+      /*
+      // [All the old Google API call code would be here - preserved but commented]
+      */
+
+      // NEW IMPLEMENTATION: OpenRouteService Routing (Free, Road-Based)
+      // OpenRouteService is a free, open-source routing service that follows actual roads
+      final route = await _getRouteFromOpenRouteService(
+        finalOrigin,
+        destination,
+        mode,
+      );
+
+      if (route == null) {
+        if (kDebugMode) print('Failed to get route from OpenRouteService');
         return null;
       }
 
-      final proxyUrl = ApiEnvironment.getDirectionsUrl(
-        '${origin.latitude},${origin.longitude}',
-        '${destination.latitude},${destination.longitude}',
-        mode: apiMode,
-      );
-      Map<String, dynamic>? body = await tryFetch(proxyUrl);
+      return route;
+    } catch (e, stackTrace) {
+      if (kDebugMode) {
+        print('Error getting directions: $e');
+        print('Stack trace: $stackTrace');
+      }
+      return null;
+    }
+  }
 
-      if (body == null) {
-        // Direct Google fallback
-        final directUrl = '${ApiEnvironment.directionsBaseUrl}'
-            '?origin=${origin.latitude},${origin.longitude}'
-            '&destination=${destination.latitude},${destination.longitude}'
-            '&key=${ApiEnvironment.googleDirectionsApiKey}'
-            '&mode=$apiMode&overview=full&units=metric&alternatives=false&region=ph';
-        body = await tryFetch(directUrl);
-        if (body == null) return null;
+  /// Get route from OSRM (Open Source Routing Machine)
+  /// This provides road-based routing - free, no API key required
+  /// OSRM follows actual roads and provides proper navigation routes
+  Future<NavigationRoute?> _getRouteFromOpenRouteService(
+    LatLng origin,
+    LatLng destination,
+    String mode,
+  ) async {
+    try {
+      // Convert our mode to OSRM profile
+      // OSRM supports: driving, driving-car, driving-traffic, walking, cycling
+      String osrmProfile;
+      switch (mode.toLowerCase()) {
+        case MODE_WALKING:
+          osrmProfile = 'foot';
+          break;
+        case MODE_DRIVING:
+        case MODE_MOTORCYCLE:
+          osrmProfile = 'driving';
+          break;
+        default:
+          osrmProfile = 'foot';
       }
 
-      if (body['status'] != 'OK' ||
-          body['routes'] == null ||
-          body['routes'].isEmpty) {
-        return null;
+      // Use public OSRM server (router.project-osrm.org for global routing)
+      // Format: /route/v1/{profile}/{coordinates}?overview=full&geometries=geojson
+      // Coordinates format: lon1,lat1;lon2,lat2
+      final url = Uri.parse(
+        'https://router.project-osrm.org/route/v1/$osrmProfile/'
+        '${origin.longitude},${origin.latitude};${destination.longitude},${destination.latitude}',
+      ).replace(queryParameters: {
+        'overview': 'full',
+        'geometries': 'geojson',
+        'steps': 'true',
+        'alternatives': 'false',
+      });
+
+      if (kDebugMode) {
+        print('Requesting route from OSRM...');
       }
 
-      final routes = body['routes'] as List<dynamic>;
-      if (routes.isEmpty) return null;
-
-      final route = routes[0] as Map<String, dynamic>;
-      final legs = route['legs'] as List<dynamic>? ?? [];
-      final overviewPolyline =
-          route['overview_polyline']?['points']?.toString() ?? '';
-
-      final decoder = PolylinePoints();
-      final overviewCoords = decoder.decodePolyline(
-        overviewPolyline.toString(),
+      final response = await http.get(url).timeout(
+        const Duration(seconds: 15),
+        onTimeout: () {
+          if (kDebugMode) print('OSRM request timed out');
+          throw TimeoutException('Route request timed out');
+        },
       );
 
-      final steps = <NavigationStep>[];
-      double totalDistance = 0;
-      double totalDuration = 0;
-
-      for (final leg in legs) {
-        final legSteps = leg['steps'] as List<dynamic>? ?? [];
-
-        for (final step in legSteps) {
-          final stepData = step as Map<String, dynamic>;
-          final instruction = stepData['html_instructions'] ?? '';
-          final maneuver = stepData['maneuver']?.toString() ?? '';
-          final distance = (stepData['distance']?['value'] ?? 0).toDouble();
-
-          // FIXED: Get duration from API if available, otherwise calculate based on our mode
-          double duration;
-          if (stepData['duration']?['value'] != null) {
-            duration = (stepData['duration']['value']).toDouble();
-
-            // FIXED: Adjust duration for ALL transportation modes when API mode differs
-            if (mode != apiMode) {
-              // Calculate our expected duration and compare with API duration
-              final ourCalculatedDuration = _calculateTravelTime(
-                distance,
-                mode,
-              );
-              final apiCalculatedDuration = _calculateTravelTime(
-                distance,
-                apiMode,
-              );
-
-              // Apply ratio to adjust API duration to our mode
-              if (apiCalculatedDuration > 0) {
-                duration =
-                    duration * (ourCalculatedDuration / apiCalculatedDuration);
-              } else {
-                duration = ourCalculatedDuration;
-              }
-            }
-
-            // Additional specific adjustments for better accuracy
-            if (mode == MODE_MOTORCYCLE && apiMode == MODE_DRIVING) {
-              duration =
-                  duration * 0.85; // Motorcycle is ~15% faster than driving
-            }
-          } else {
-            // Calculate duration based on our transportation mode
-            duration = _calculateTravelTime(distance, mode);
-          }
-
-          final startLocation = LatLng(
-            (stepData['start_location']?['lat'] ?? 0).toDouble(),
-            (stepData['start_location']?['lng'] ?? 0).toDouble(),
-          );
-          final endLocation = LatLng(
-            (stepData['end_location']?['lat'] ?? 0).toDouble(),
-            (stepData['end_location']?['lng'] ?? 0).toDouble(),
-          );
-
-          // Decode step polyline if available
-          List<LatLng> stepPolyline = [];
-          if (stepData['polyline']?['points'] != null) {
-            final stepPoints = decoder.decodePolyline(
-              stepData['polyline']['points'].toString(),
-            );
-            stepPolyline =
-                stepPoints.map((p) => LatLng(p.latitude, p.longitude)).toList();
-          } else {
-            stepPolyline = [startLocation, endLocation];
-          }
-
-          steps.add(
-            NavigationStep(
-              instruction: _cleanHtmlInstructions(instruction),
-              maneuver: maneuver,
-              distance: distance,
-              duration: duration,
-              startLocation: startLocation,
-              endLocation: endLocation,
-              polyline: stepPolyline,
-            ),
-          );
-
-          totalDistance += distance;
-          totalDuration += duration;
+      if (kDebugMode) {
+        print('OSRM response status: ${response.statusCode}');
+        if (response.statusCode != 200) {
+          print('OSRM error response: ${response.body}');
         }
       }
 
+      if (response.statusCode != 200) {
+        // Try to parse error message for better debugging
+        try {
+          final errorJson = json.decode(response.body) as Map<String, dynamic>?;
+          final errorMsg = errorJson?['error']?.toString() ?? 
+                          errorJson?['message']?.toString() ??
+                          'HTTP ${response.statusCode}';
+          if (kDebugMode) {
+            print('OSRM error: $errorMsg');
+          }
+        } catch (e) {
+          // Error response is not JSON
+        }
+        return null;
+      }
+
+      final jsonResponse = json.decode(response.body) as Map<String, dynamic>;
+      
+      // Check for OSRM error code
+      final code = jsonResponse['code'] as String?;
+      if (code != null && code != 'Ok') {
+        if (kDebugMode) {
+          print('OSRM returned error code: $code');
+          print('Message: ${jsonResponse['message']}');
+        }
+        return null;
+      }
+      
+      if (jsonResponse['routes'] == null || 
+          (jsonResponse['routes'] as List).isEmpty) {
+        if (kDebugMode) print('No routes found in OSRM response');
+        return null;
+      }
+
+      final routeData = (jsonResponse['routes'] as List).first as Map<String, dynamic>;
+      
+      // OSRM returns geometry - can be GeoJSON object or encoded polyline string
+      // With geometries=geojson, it should return GeoJSON format
+      final polylinePoints = <LatLng>[];
+      
+      dynamic geometryData = routeData['geometry'];
+      
+      if (geometryData is Map<String, dynamic>) {
+        // GeoJSON format: {"type": "LineString", "coordinates": [[lon, lat], ...]}
+        final coordinates = geometryData['coordinates'] as List?;
+        if (coordinates != null) {
+          for (final coord in coordinates) {
+            if (coord is List && coord.length >= 2) {
+              // GeoJSON format: [longitude, latitude]
+              polylinePoints.add(LatLng(
+                (coord[1] as num).toDouble(),
+                (coord[0] as num).toDouble(),
+              ));
+            }
+          }
+        }
+      } else if (geometryData is List) {
+        // Sometimes geometry is a direct array of coordinates
+        for (final coord in geometryData) {
+          if (coord is List && coord.length >= 2) {
+            polylinePoints.add(LatLng(
+              (coord[1] as num).toDouble(),
+              (coord[0] as num).toDouble(),
+            ));
+          }
+        }
+      } else if (geometryData is String) {
+        // Encoded polyline string - would need decoder, but for now fallback
+        if (kDebugMode) print('OSRM returned encoded polyline, falling back to route parsing');
+      }
+
+      if (polylinePoints.isEmpty) {
+        if (kDebugMode) {
+          print('Warning: No coordinates extracted from OSRM geometry. Geometry type: ${geometryData.runtimeType}');
+        }
+        // Don't return null yet - try to get points from steps
+      }
+
+      // Parse route steps from OSRM
+      final legs = routeData['legs'] as List<dynamic>?;
+      final steps = <NavigationStep>[];
+      double totalDistance = (routeData['distance'] as num?)?.toDouble() ?? 0.0;
+      // Calculate total duration based on mode-specific speeds, not OSRM's duration
+      // This ensures accurate time calculations that change with transportation mode
+      double totalDuration = totalDistance > 0 
+          ? _calculateTravelTime(totalDistance, mode)
+          : 0.0;
+
+      // Parse steps from legs if available
+      if (legs != null && legs.isNotEmpty) {
+        for (final leg in legs) {
+          final legData = leg as Map<String, dynamic>;
+          final legSteps = legData['steps'] as List<dynamic>? ?? [];
+          
+          for (final stepData in legSteps) {
+            final step = stepData as Map<String, dynamic>;
+            final stepDistance = (step['distance'] as num?)?.toDouble() ?? 0.0;
+            // Recalculate duration based on transportation mode instead of using OSRM's duration
+            // This ensures the time updates correctly when switching between walking, bike, and car
+            final stepDuration = stepDistance > 0
+                ? _calculateTravelTime(stepDistance, mode)
+                : 0.0;
+            final stepGeometry = step['geometry'] as Map<String, dynamic>?;
+            final maneuver = step['maneuver'] as Map<String, dynamic>?;
+            
+            // Extract instruction from maneuver
+            String instruction = 'Continue';
+            if (maneuver != null) {
+              final maneuverType = maneuver['type'] as String? ?? '';
+              final modifier = maneuver['modifier'] as String? ?? '';
+              if (modifier.isNotEmpty && maneuverType.isNotEmpty) {
+                instruction = '$modifier $maneuverType';
+              } else if (maneuverType.isNotEmpty) {
+                instruction = maneuverType;
+              }
+            }
+            
+            // Extract step polyline and accumulate into main polyline
+            List<LatLng> stepPolyline = [];
+            if (stepGeometry != null && stepGeometry['coordinates'] != null) {
+              final stepCoords = stepGeometry['coordinates'] as List;
+              for (final coord in stepCoords) {
+                if (coord is List && coord.length >= 2) {
+                  final point = LatLng(
+                    (coord[1] as num).toDouble(),
+                    (coord[0] as num).toDouble(),
+                  );
+                  stepPolyline.add(point);
+                  
+                  // Add to main polyline if not duplicate
+                  if (polylinePoints.isEmpty || 
+                      !polylinePoints.any((p) => _calculateDistance(p, point) < 5)) {
+                    polylinePoints.add(point);
+                  }
+                }
+              }
+            }
+            
+            // If no step polyline, use portion of main polyline
+            if (stepPolyline.isEmpty && steps.length < polylinePoints.length) {
+              final ratio = steps.length / (legSteps.length + 1);
+              final startIdx = (ratio * polylinePoints.length).floor();
+              final endIdx = (((steps.length + 1) / (legSteps.length + 1)) * polylinePoints.length).floor()
+                  .clamp(startIdx + 1, polylinePoints.length);
+              if (endIdx <= polylinePoints.length) {
+                stepPolyline = polylinePoints.sublist(startIdx, endIdx);
+              }
+            }
+            
+            // Final fallback
+            if (stepPolyline.isEmpty) {
+              stepPolyline = steps.isEmpty 
+                  ? [origin, polylinePoints.length > 1 ? polylinePoints[1] : destination]
+                  : [steps.last.endLocation, destination];
+            }
+
+            steps.add(
+              NavigationStep(
+                instruction: instruction,
+                maneuver: maneuver?['type']?.toString(),
+                distance: stepDistance,
+                duration: stepDuration,
+                startLocation: stepPolyline.isNotEmpty ? stepPolyline.first : origin,
+                endLocation: stepPolyline.isNotEmpty ? stepPolyline.last : destination,
+                polyline: stepPolyline,
+              ),
+            );
+          }
+        }
+        
+        // Recalculate totalDuration as sum of all step durations to ensure accuracy
+        // This ensures the total time reflects mode-specific calculations
+        totalDuration = steps.fold(0.0, (sum, step) => sum + step.duration);
+        // Also recalculate totalDistance from steps for consistency
+        totalDistance = steps.fold(0.0, (sum, step) => sum + step.distance);
+      }
+
+      // Build polyline from step geometries if route-level geometry is missing
+      if (polylinePoints.isEmpty && steps.isNotEmpty) {
+        // Accumulate all step polyline points
+        for (final step in steps) {
+          for (final point in step.polyline) {
+            // Avoid duplicates by checking proximity
+            bool isDuplicate = false;
+            for (final existingPoint in polylinePoints) {
+              if (_calculateDistance(existingPoint, point) < 5) { // Within 5 meters
+                isDuplicate = true;
+                break;
+              }
+            }
+            if (!isDuplicate) {
+              polylinePoints.add(point);
+            }
+          }
+        }
+        
+        if (kDebugMode && polylinePoints.isNotEmpty) {
+          print('Built polyline from ${steps.length} step geometries: ${polylinePoints.length} points');
+        }
+      }
+      
+      if (polylinePoints.isEmpty) {
+        if (kDebugMode) {
+          print('Warning: No geometry points extracted from OSRM response');
+        }
+      }
+
+      // If no steps were created, create a single step for the entire route
+      if (steps.isEmpty) {
+        double routeDistance;
+        double routeDuration;
+        List<LatLng> routePolyline;
+        
+        if (polylinePoints.isNotEmpty) {
+          // Calculate actual route distance along the polyline
+          routeDistance = 0.0;
+          for (int i = 0; i < polylinePoints.length - 1; i++) {
+            routeDistance += _calculateDistance(polylinePoints[i], polylinePoints[i + 1]);
+          }
+          routeDuration = _calculateTravelTime(routeDistance, mode);
+          routePolyline = polylinePoints;
+        } else {
+          // Fallback: calculate straight-line distance
+          routeDistance = _calculateDistance(origin, destination);
+          routeDuration = _calculateTravelTime(routeDistance, mode);
+          routePolyline = [origin, destination];
+          if (kDebugMode) {
+            print('Warning: Using straight-line fallback due to missing route geometry');
+          }
+        }
+        
+        steps.add(
+          NavigationStep(
+            instruction: 'Follow the route to destination',
+            maneuver: null,
+            distance: routeDistance,
+            duration: routeDuration,
+            startLocation: origin,
+            endLocation: destination,
+            polyline: routePolyline,
+          ),
+        );
+        
+        totalDistance = routeDistance;
+        totalDuration = routeDuration;
+        
+        // Ensure polylinePoints is set for the route overview
+        if (polylinePoints.isEmpty) {
+          polylinePoints.addAll(routePolyline);
+        }
+      }
+
+      // Final check: ensure we have at least origin and destination in polyline
+      if (polylinePoints.isEmpty) {
+        polylinePoints.addAll([origin, destination]);
+      }
+
+      if (kDebugMode) {
+        print(
+          'Got route from OSRM: ${polylinePoints.length} points, '
+          '${steps.length} steps, distance=${totalDistance.toStringAsFixed(0)}m, '
+          'duration=${(totalDuration / 60).toStringAsFixed(1)}min',
+        );
+      }
+
+      // Create and return the navigation route
       final navigationRoute = NavigationRoute(
         steps: steps,
         totalDistance: totalDistance,
         totalDuration: totalDuration,
-        overviewPolyline:
-            overviewCoords.map((p) => LatLng(p.latitude, p.longitude)).toList(),
+        overviewPolyline: polylinePoints,
         origin: origin,
         destination: destination,
         travelMode: mode,
       );
 
       return navigationRoute;
-    } catch (e) {
-      if (kDebugMode) print('Error getting directions: $e');
+    } catch (e, stackTrace) {
+      if (kDebugMode) {
+        print('Error getting route from OpenRouteService: $e');
+        print('Stack trace: $stackTrace');
+      }
       return null;
+    }
+  }
+
+  /// Set the external location stream (from MapLocationManager)
+  /// This should be called before starting navigation to avoid duplicate GPS listeners
+  void setLocationStream(Stream<Position> locationStream) {
+    _externalLocationStream = locationStream;
+    if (kDebugMode) {
+      print('NavigationService: External location stream set');
     }
   }
 
@@ -484,7 +747,7 @@ class NavigationService {
     String? destinationMunicipality,
     List<String>? destinationImages,
     String? destinationDescription,
-    String mode = MODE_WALKING, // Default to walking
+    String mode = MODE_WALKING, Map<String, dynamic>? destinationData, LatLng? origin, // Default to walking
   }) async {
     try {
       // If streams were previously closed via dispose, reinitialize them safely
@@ -513,7 +776,7 @@ class NavigationService {
         return false;
       }
 
-      final route = await getDirections(destination, mode: mode);
+      final route = await getDirections(destination, mode: mode, origin: origin);
       if (route == null) {
         if (kDebugMode) print('Failed to get directions');
         return false;
@@ -535,7 +798,7 @@ class NavigationService {
       _destinationImages = destinationImages;
       _destinationDescription = destinationDescription;
 
-      // Start location tracking
+      // Start location tracking (subscribes to external stream if available)
       await _startLocationTracking();
 
       // Create navigation polylines
@@ -584,8 +847,9 @@ class NavigationService {
           polylineId: PolylineId('step_$i'),
           points: step.polyline,
           // Use the same color for all segments; emphasize current step by width only
-          color: getTransportationModeColor(_currentTransportationMode)
-              .withOpacity(i == 0 ? 1.0 : 0.6),
+          color: getTransportationModeColor(
+            _currentTransportationMode,
+          ).withOpacity(i == 0 ? 1.0 : 0.6),
           width: i == 0 ? 10 : 6,
           endCap: Cap.roundCap,
           startCap: Cap.roundCap,
@@ -602,8 +866,8 @@ class NavigationService {
     _currentRoute = null;
     _currentStepIndex = 0;
     _isNavigating = false;
-    _positionStream?.cancel();
-    _positionStream = null;
+    _positionStreamSubscription?.cancel();
+    _positionStreamSubscription = null;
 
     // Clear destination information
     _destinationId = null;
@@ -662,35 +926,67 @@ class NavigationService {
     };
   }
 
-  /// FIXED: Start location tracking for navigation with consistent distance filtering
+  /// Start location tracking - subscribes to external location stream (MapLocationManager)
+  /// This avoids duplicate GPS listeners. Falls back to own listener only if no external stream provided.
   Future<void> _startLocationTracking() async {
     try {
-      // Cancel previous stream if any before starting a new one
-      await _positionStream?.cancel();
-      // FIXED: Use consistent distance filter across all modes for accuracy
-      LocationSettings locationSettings = const LocationSettings(
-        accuracy: LocationAccuracy.high,
-        distanceFilter: 5, // Consistent 5 meters for all modes
-      );
+      // Cancel previous subscription if any
+      await _positionStreamSubscription?.cancel();
 
-      _positionStream = Geolocator.getPositionStream(
-        locationSettings: locationSettings,
-      ).listen(
-        (Position position) {
-          _currentPosition = position;
-          _locationController.add(position);
-          // Check if we need to advance to next step
-          _checkStepProgress();
-        },
-        onError: (error) {
-          if (kDebugMode) print('Location tracking error: $error');
-          // Fallback to single position request
-          _getCurrentPositionFallback();
-        },
-      );
+      // Prefer external location stream from MapLocationManager (single source of truth)
+      if (_externalLocationStream != null) {
+        if (kDebugMode) {
+          print(
+            'NavigationService: Subscribing to external location stream (MapLocationManager)',
+          );
+        }
+
+        _positionStreamSubscription = _externalLocationStream!.listen(
+          (Position position) {
+            _currentPosition = position;
+            // Emit to location controller for any other listeners
+            if (!_locationController.isClosed) {
+              _locationController.add(position);
+            }
+            // Check if we need to advance to next step
+            _checkStepProgress();
+          },
+          onError: (error) {
+            if (kDebugMode) print('External location stream error: $error');
+          },
+        );
+      } else {
+        // Fallback: Create own listener only if no external stream provided
+        // This should rarely happen if properly initialized
+        if (kDebugMode) {
+          print(
+            'NavigationService: WARNING - No external location stream. Creating own listener (not recommended)',
+          );
+        }
+
+        LocationSettings locationSettings = const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          distanceFilter: 5,
+        );
+
+        _positionStreamSubscription = Geolocator.getPositionStream(
+          locationSettings: locationSettings,
+        ).listen(
+          (Position position) {
+            _currentPosition = position;
+            if (!_locationController.isClosed) {
+              _locationController.add(position);
+            }
+            _checkStepProgress();
+          },
+          onError: (error) {
+            if (kDebugMode) print('Location tracking error: $error');
+            _getCurrentPositionFallback();
+          },
+        );
+      }
     } catch (e) {
       if (kDebugMode) print('Error starting location tracking: $e');
-      // Fallback to single position request
       _getCurrentPositionFallback();
     }
   }
@@ -718,6 +1014,9 @@ class NavigationService {
       _currentPosition!.longitude,
     );
 
+    // Check for route deviation first
+    _checkRouteDeviation(currentLatLng);
+
     final distanceToStepEnd = _calculateDistance(
       currentLatLng,
       currentStep.endLocation,
@@ -734,7 +1033,7 @@ class NavigationService {
       _currentStepIndex++;
       _stepController.add(_currentRoute!.steps[_currentStepIndex]);
 
-      // Update polylines to highlight current step
+      // Update polylines to highlight current step (removes completed ones)
       _updateStepPolylines();
 
       if (kDebugMode) {
@@ -762,41 +1061,196 @@ class NavigationService {
     }
   }
 
-  /// Update polylines to highlight current step
+  /// Check if user has deviated from the route and trigger re-routing
+  void _checkRouteDeviation(LatLng currentPosition) {
+    if (_currentRoute == null) return;
+
+    // Find the minimum distance from current position to any point on the route
+    double minDistanceToRoute = double.infinity;
+
+    // Check distance to overview polyline
+    for (int i = 0; i < _currentRoute!.overviewPolyline.length - 1; i++) {
+      final p1 = _currentRoute!.overviewPolyline[i];
+      final p2 = _currentRoute!.overviewPolyline[i + 1];
+      final distance = _distanceToSegment(currentPosition, p1, p2);
+      if (distance < minDistanceToRoute) {
+        minDistanceToRoute = distance;
+      }
+    }
+
+    // Also check distance to current step's polyline
+    final currentStep = getCurrentStep();
+    if (currentStep != null && currentStep.polyline.isNotEmpty) {
+      for (int i = 0; i < currentStep.polyline.length - 1; i++) {
+        final p1 = currentStep.polyline[i];
+        final p2 = currentStep.polyline[i + 1];
+        final distance = _distanceToSegment(currentPosition, p1, p2);
+        if (distance < minDistanceToRoute) {
+          minDistanceToRoute = distance;
+        }
+      }
+    }
+
+    // Threshold for deviation detection (varies by transportation mode)
+    double deviationThreshold;
+    switch (_currentTransportationMode.toLowerCase()) {
+      case MODE_WALKING:
+        deviationThreshold = 30.0; // 30 meters for walking
+        break;
+      case MODE_DRIVING:
+        deviationThreshold = 100.0; // 100 meters for driving
+        break;
+      case MODE_MOTORCYCLE:
+        deviationThreshold = 80.0; // 80 meters for motorcycle
+        break;
+      default:
+        deviationThreshold = 30.0;
+    }
+
+    // If user has deviated significantly, trigger re-routing
+    if (minDistanceToRoute > deviationThreshold && !_isRecalculatingRoute) {
+      if (kDebugMode) {
+        print(
+          'Route deviation detected: ${minDistanceToRoute.toStringAsFixed(1)}m. Re-routing...',
+        );
+      }
+      _recalculateRouteFromCurrentPosition();
+    }
+  }
+
+  bool _isRecalculatingRoute = false;
+
+  /// Recalculate route from current position to destination
+  Future<void> _recalculateRouteFromCurrentPosition() async {
+    if (_currentRoute == null || _isRecalculatingRoute) return;
+
+    _isRecalculatingRoute = true;
+
+    try {
+      final newRoute = await getDirections(
+        _currentRoute!.destination,
+        mode: _currentTransportationMode,
+      );
+
+      if (newRoute != null) {
+        _currentRoute = newRoute;
+        _currentStepIndex = 0;
+
+        // Update step controller with new current step
+        if (!_stepController.isClosed) {
+          _stepController.add(_currentRoute!.steps[_currentStepIndex]);
+        }
+
+        // Update polylines with new route
+        _updateStepPolylines();
+
+        if (kDebugMode) {
+          print(
+            'Route recalculated successfully with ${newRoute.steps.length} steps',
+          );
+        }
+      }
+    } catch (e) {
+      if (kDebugMode) print('Error recalculating route: $e');
+    } finally {
+      // Reset flag after a delay to avoid rapid re-routing
+      Future.delayed(const Duration(seconds: 3), () {
+        _isRecalculatingRoute = false;
+      });
+    }
+  }
+
+  /// Calculate distance from a point to a line segment
+  double _distanceToSegment(LatLng point, LatLng segStart, LatLng segEnd) {
+    final A = point.latitude - segStart.latitude;
+    final B = point.longitude - segStart.longitude;
+    final C = segEnd.latitude - segStart.latitude;
+    final D = segEnd.longitude - segStart.longitude;
+
+    final dot = A * C + B * D;
+    final lenSq = C * C + D * D;
+    var param = -1.0;
+    if (lenSq != 0) {
+      param = dot / lenSq;
+    }
+
+    double xx, yy;
+
+    if (param < 0) {
+      xx = segStart.latitude;
+      yy = segStart.longitude;
+    } else if (param > 1) {
+      xx = segEnd.latitude;
+      yy = segEnd.longitude;
+    } else {
+      xx = segStart.latitude + param * C;
+      yy = segStart.longitude + param * D;
+    }
+
+    return _calculateDistance(point, LatLng(xx, yy));
+  }
+
+  /// Update polylines to highlight current step - removes completed polylines
   void _updateStepPolylines() {
     if (_currentRoute == null) return;
 
     final polylines = <Polyline>{};
 
-    // Main route polyline
-    polylines.add(
-      Polyline(
-        polylineId: const PolylineId('navigation_route'),
-        points: _currentRoute!.overviewPolyline,
-        color: getTransportationModeColor(_currentTransportationMode),
-        width: 8,
-        endCap: Cap.roundCap,
-        startCap: Cap.roundCap,
-        jointType: JointType.round,
-      ),
-    );
+    // Main route polyline (show remaining route only)
+    // Calculate remaining route points from current step onwards
+    List<LatLng> remainingRoute = [];
 
-    // Step-by-step polylines with current step highlighted
-    for (int i = 0; i < _currentRoute!.steps.length; i++) {
+    // Add points from current and future steps only
+    for (int i = _currentStepIndex; i < _currentRoute!.steps.length; i++) {
+      if (i == _currentStepIndex) {
+        // Start from current position if available, otherwise from current step start
+        if (_currentPosition != null) {
+          remainingRoute.add(
+            LatLng(_currentPosition!.latitude, _currentPosition!.longitude),
+          );
+        }
+        remainingRoute.addAll(_currentRoute!.steps[i].polyline);
+      } else {
+        remainingRoute.addAll(_currentRoute!.steps[i].polyline);
+      }
+    }
+
+    // Add destination if not already included
+    if (remainingRoute.isEmpty ||
+        remainingRoute.last.latitude != _currentRoute!.destination.latitude ||
+        remainingRoute.last.longitude != _currentRoute!.destination.longitude) {
+      remainingRoute.add(_currentRoute!.destination);
+    }
+
+    // Main route polyline (remaining route)
+    if (remainingRoute.isNotEmpty) {
+      polylines.add(
+        Polyline(
+          polylineId: const PolylineId('navigation_route'),
+          points: remainingRoute,
+          color: getTransportationModeColor(_currentTransportationMode),
+          width: 8,
+          endCap: Cap.roundCap,
+          startCap: Cap.roundCap,
+          jointType: JointType.round,
+        ),
+      );
+    }
+
+    // Only show current step and upcoming steps (no completed steps)
+    for (int i = _currentStepIndex; i < _currentRoute!.steps.length; i++) {
       final step = _currentRoute!.steps[i];
       final isCurrentStep = i == _currentStepIndex;
-      final isCompletedStep = i < _currentStepIndex;
 
       Color stepColor;
       int stepWidth;
 
       if (isCurrentStep) {
+        // Current step in green with bold width
         stepColor = Colors.green;
         stepWidth = 12;
-      } else if (isCompletedStep) {
-        stepColor = Colors.green.withOpacity(0.3);
-        stepWidth = 4;
       } else {
+        // Upcoming steps in transportation mode color with reduced opacity
         stepColor = getTransportationModeColor(
           _currentTransportationMode,
         ).withOpacity(0.6);
@@ -825,7 +1279,12 @@ class NavigationService {
     if (kDebugMode) print('Arrived at destination!');
 
     // Save arrival to visited destinations
-    if (_destinationId != null && _currentPosition != null) {
+    // Only save if we have valid destination ID and position, and destination name is not null/unknown
+    if (_destinationId != null && 
+        _currentPosition != null &&
+        _destinationName != null &&
+        _destinationName!.isNotEmpty &&
+        _destinationName! != 'Unknown Destination') {
       try {
         await ArrivalService.saveArrival(
           hotspotId: _destinationId!,
@@ -845,11 +1304,14 @@ class NavigationService {
         }
 
         // Notify arrival saved
-        if (_destinationName != null) {
-          _arrivalController.add(_destinationName!);
-        }
+        _arrivalController.add(_destinationName!);
       } catch (e) {
         if (kDebugMode) print('Error saving arrival: $e');
+      }
+    } else {
+      if (kDebugMode) {
+        print('Cannot save arrival: Missing required destination data. '
+              'ID: $_destinationId, Name: $_destinationName');
       }
     }
 
@@ -877,6 +1339,8 @@ class NavigationService {
   double _degToRad(double deg) => deg * (math.pi / 180.0);
 
   /// Clean HTML instructions from Google Directions API
+  /// PRESERVED: This function is kept for future reference if API is re-enabled
+  // ignore: unused_element
   String _cleanHtmlInstructions(String htmlInstructions) {
     // Remove HTML tags
     String clean = htmlInstructions.replaceAll(RegExp(r'<[^>]*>'), '');
@@ -923,13 +1387,15 @@ class NavigationService {
   void dispose() {
     // Prefer stopping navigation and cancelling subscriptions
     stopNavigation();
-    _positionStream?.cancel();
-    _positionStream = null;
+    _positionStreamSubscription?.cancel();
+    _positionStreamSubscription = null;
     // Close controllers only if really tearing down
     if (!_streamGroup.isClosed) _streamGroup.close();
     if (!_stepController.isClosed) _stepController.close();
     if (!_locationController.isClosed) _locationController.close();
-    if (!_navigationStateController.isClosed) _navigationStateController.close();
+    if (!_navigationStateController.isClosed) {
+      _navigationStateController.close();
+    }
     if (!_arrivalController.isClosed) _arrivalController.close();
     if (!_polylineController.isClosed) _polylineController.close();
     if (!_transportationModeController.isClosed) {

@@ -4,7 +4,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:flutter_web_plugins/url_strategy.dart';
 import 'package:flutter/gestures.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -14,6 +13,8 @@ import 'package:path_provider/path_provider.dart';
 import 'package:capstone_app/services/auth_service.dart';
 import 'package:capstone_app/services/image_cache_service.dart';
 import 'package:capstone_app/services/connectivity_service.dart';
+import 'package:capstone_app/services/offline_data_service.dart';
+import 'package:capstone_app/services/offline_sync_service.dart';
 import 'package:capstone_app/models/connectivity_info.dart';
 import 'package:capstone_app/utils/constants.dart';
 import 'package:capstone_app/utils/navigation_helper.dart';
@@ -27,8 +28,6 @@ import 'package:capstone_app/widgets/responsive_wrapper.dart';
 // This is done once and can be awaited in the UI.
 final Future<void> appInitialization = _initializeApp();
 
-final Future<void> appInitialization = _initializeApp();
-
 Future<void> _initializeApp() async {
   // All the async work from your original main() function is moved here.
   await AuthService.initializeAuthState();
@@ -39,6 +38,45 @@ Future<void> _initializeApp() async {
 
   final appDir = await getApplicationDocumentsDirectory();
   await Hive.initFlutter(appDir.path);
+  
+  // Initialize offline data service
+  try {
+    await OfflineDataService.initialize();
+    
+    // Auto-sync data in background if needed (non-blocking)
+    // This will sync if data is older than 24 hours
+    Future.microtask(() async {
+      try {
+        final user = FirebaseAuth.instance.currentUser;
+        if (user != null && !user.isAnonymous) {
+          // Check if sync is needed
+          final needsSync = OfflineSyncService.shouldSync(
+            maxAge: const Duration(hours: 24),
+            userId: user.uid,
+          );
+          
+          if (needsSync) {
+            // Check connectivity before syncing
+            final connectivityService = ConnectivityService();
+            final connectivity = await connectivityService.checkConnection();
+            
+            if (connectivity.isConnected) {
+              // Sync in background (without UI progress)
+              await OfflineSyncService.syncAllData(
+                userId: user.uid,
+                downloadImages: false, // Skip images for auto-sync to save bandwidth
+              );
+              debugPrint('Background sync completed');
+            }
+          }
+        }
+      } catch (e) {
+        debugPrint('Error during background sync: $e');
+      }
+    });
+  } catch (e) {
+    debugPrint('Error initializing offline data service: $e');
+  }
   
   // This can still be deferred until after the first frame for performance.
   WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -257,9 +295,6 @@ class AuthChecker extends StatelessWidget {
                 if (role.isEmpty) return const LoginScreen();
                 if (!formCompleted) return const LoginScreen();
 
-                return _RedirectByRole(role: role);
-              },
-            );
                 return _RedirectByRole(role: role);
               },
             );

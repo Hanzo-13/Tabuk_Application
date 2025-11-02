@@ -9,11 +9,14 @@
         android:name="${applicationName}"
         android:icon="@mipmap/launcher_icon"
         android:hardwareAccelerated="true"
-        android:largeHeap="true">
+        android:largeHeap="true"
+        android:networkSecurityConfig="@xml/network_security_config">
         
-        <!-- MOVED: Google Maps API Key should be directly inside application tag -->
-        <meta-data android:name="com.google.android.geo.API_KEY"
-           android:value="AIzaSyDEeIzEOXmrCFNYt7f2QHM43lcq8fZtTsE"/>
+        <!-- Google Maps API Key from manifestPlaceholders -->
+        <meta-data
+            android:name="com.google.android.geo.API_KEY"
+            android:value="${GOOGLE_MAPS_API_KEY}"/>
+        
         <meta-data
             android:name="com.google.android.gms.version"
             android:value="@integer/google_play_services_version" />
@@ -28,9 +31,9 @@
             android:hardwareAccelerated="true"
             android:windowSoftInputMode="adjustResize">
             <!-- Specifies an Android theme to apply to this Activity as soon as
-                 the Android process has started. This theme is visible to the user
-                 while the Flutter UI initializes. After that, this theme continues
-                 to determine the Window background behind the Flutter UI. -->
+                the Android process has started. This theme is visible to the user
+                While the Flutter UI initializes. After that, this theme continues
+                to determine the Window background behind the Flutter UI. -->
             <meta-data
               android:name="io.flutter.embedding.android.NormalTheme"
               android:resource="@style/NormalTheme"

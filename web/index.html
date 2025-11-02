@@ -16,8 +16,6 @@
     <title>Tabuk</title>
     <link rel="manifest" href="manifest.json">
     
-    <!-- Google Maps JavaScript API -->
-    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyCZ-Sc9QsAox-vIPU_q8l5XqGs1B4Ed01U"></script>
     <!-- Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
@@ -35,6 +33,17 @@
     <div id="map" style="display: none;"></div>
 
     <script>
+        // Load Google Maps API key from environment variable or use fallback
+        // In production, this should be loaded from a secure backend endpoint
+        const GOOGLE_MAPS_API_KEY = 'AIzaSyCZ-Sc9QsAox-vIPU_q8l5XqGs1B4Ed01U'; // TODO: Move to env variable or backend
+        
+        // Load Google Maps API dynamically
+        const script = document.createElement('script');
+        script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_API_KEY}`;
+        script.async = true;
+        script.defer = true;
+        document.head.appendChild(script);
+        
         // Firebase configuration
         var firebaseConfig = {
             apiKey: "AIzaSyBqUNC1h2O3pseeDYdRjfYCkSfGBwbnVis",

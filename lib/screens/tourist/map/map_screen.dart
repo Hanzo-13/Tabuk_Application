@@ -1,33 +1,27 @@
-// ignore_for_file: prefer_final_fields, avoid_print, unused_field, use_build_context_synchronously
+// ignore_for_file: prefer_final_fields, avoid_print, unused_field
 
 import 'dart:async';
-import 'dart:convert';
-import 'dart:math' as math;
-import 'dart:typed_data';
-import 'dart:ui' as ui;
+import 'dart:io' show Platform;
 
-import 'package:capstone_app/api/api.dart';
 import 'package:capstone_app/data/repositories/destination_repository.dart';
-import 'package:capstone_app/models/connectivity_info.dart';
-import 'package:capstone_app/models/destination_model.dart';
+import 'package:capstone_app/screens/tourist/map/map_location_manager.dart';
+import 'package:capstone_app/screens/tourist/map/map_marker_manager.dart';
+import 'package:capstone_app/screens/tourist/map/map_navigation_manager.dart';
+import 'package:capstone_app/screens/tourist/map/map_ui_components.dart';
 import 'package:capstone_app/services/arrival_service.dart';
 import 'package:capstone_app/services/connectivity_service.dart';
 import 'package:capstone_app/services/navigation_service.dart';
 import 'package:capstone_app/services/offline_cache_service.dart';
-import 'package:capstone_app/utils/colors.dart';
 import 'package:capstone_app/utils/constants.dart';
 import 'package:capstone_app/widgets/business_details_modal.dart';
 import 'package:capstone_app/widgets/common_search_bar.dart';
-import 'package:capstone_app/widgets/custom_map_marker.dart';
 import 'package:capstone_app/widgets/navigation_map_controller.dart';
 import 'package:capstone_app/widgets/navigation_overlay.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_polyline_points/flutter_polyline_points.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
-import 'package:http/http.dart' as http;
 
 class MapScreen extends StatefulWidget {
   const MapScreen({super.key});
@@ -36,295 +30,541 @@ class MapScreen extends StatefulWidget {
   State<MapScreen> createState() => _MapScreenState();
 }
 
-class _MapScreenState extends State<MapScreen> {
+class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
+  // Core Controllers
   final Completer<GoogleMapController> _controller = Completer();
   GoogleMapController? _mapController;
-  StreamSubscription<Position>? _positionStream;
-  Map<String, Map<String, dynamic>> _destinationData = {};
-  LatLng? _currentLatLng;
-  Position? _lastAcceptedPosition;
-  // Removed compass-related variables
 
-  Set<Marker> _markers = {};
-  Set<Marker> _allMarkers = {}; // ✅ Store all markers here
-  bool _isLoading = false;
-  final Set<Polyline> _polylines = {};
-  bool _isLoadingDirections = false;
-  final Set<Circle> _circles = {};
+  // Managers
+  late MapLocationManager _locationManager;
+  late MapMarkerManager _markerManager;
+  late MapNavigationManager _navigationManager;
 
-  // Smoothing config
-  final List<Position> _recentPositions = [];
-  DateTime? _lastOverlayUpdate;
-  static const int _smoothingWindow = 5;
-  static const double _maxJumpMeters = 100; // ignore >100m jump within 3s
-  static const Duration _jumpWindow = Duration(seconds: 3);
-  static const Duration _throttleInterval = Duration(milliseconds: 900); // ~1/s
-  static const double _recenterThresholdMeters = 20; // recenter if drift >20m
+  // In _MapScreenState
+  BitmapDescriptor? _userLocationDotIcon;
+  BitmapDescriptor? _userLocationChevronIcon;
 
-  // Navigation service
+  // Services
   final NavigationService _navigationService = NavigationService();
   final ConnectivityService _connectivityService = ConnectivityService();
   final DestinationRepository _destinationRepository = DestinationRepository();
+
+  // State
+  Set<Marker> _markers = {};
+  Set<Polyline> _polylines = {};
+  Set<Circle> _circles = {};
+  bool _isLoading = true;
   bool _isNavigating = false;
-
-  // Web/location UX
-  bool _showLocationBanner = false;
-  String _locationBannerText = 'Enable location to center the map on you.';
-
-  String _searchQuery = '';
   String _role = 'Tourist';
-  String _selectedCategory = 'All Categories';
-  String _selectedMunicipality = 'All Municipalities';
-  String _selectedType = 'All Types';
-
-  // Category-based marker icons
-  final Map<String, BitmapDescriptor> _categoryMarkerIcons = {};
-  bool _categoryIconsInitialized = false;
-  static const double _categoryMarkerSize = 80.0;
-  static const Map<String, IconData> _categoryIcons = {
-    'Natural Attraction': Icons.park,
-    'Cultural Site': Icons.museum,
-    'Adventure Spot': Icons.forest,
-    'Restaurant': Icons.restaurant,
-    'Accommodation': Icons.hotel,
-    'Shopping': Icons.shopping_cart,
-    'Entertainment': Icons.theater_comedy,
-  };
-  static const Map<String, Color> _categoryColors = {
-    'Natural Attraction': Colors.green,
-    'Cultural Site': Colors.purple,
-    'Adventure Spot': Colors.orange,
-    'Restaurant': Colors.red,
-    'Accommodation': Colors.blueGrey,
-    'Shopping': Colors.blue,
-    'Entertainment': Colors.pink,
-  };
-
-  // Offline guest overlay state
+  String _searchQuery = '';
   bool _isOfflineMode = false;
   List<Map<String, dynamic>> _cachedDestinations = [];
+
+  // Location State
+  LatLng? _currentLatLng;
+  double _currentBearing = 0.0;
+  bool _showLocationBanner = false;
+  String _locationBannerText = 'Enable location to use map features.';
+
+  // In _MapScreenState
+  String? _selectedFilterCategory;
+  String? _selectedFilterSubCategory;
+
+  
+
+  final Map<String, List<String>> _categories = {
+    'Natural Attractions': [
+      'Waterfalls',
+      'Mountains',
+      'Caves',
+      'Hot Springs',
+      'Cold Springs',
+      'Lakes',
+      'Rivers',
+      'Forests',
+      'Natural Pools',
+      'Nature Trails',
+    ],
+    'Recreational Facilities': [
+      'Resorts',
+      'Theme Parks',
+      'Sports Complexes',
+      'Adventure Parks',
+      'Entertainment Venues',
+      'Golf Courses',
+    ],
+    'Cultural & Historical': [
+      'Churches',
+      'Temples',
+      'Museums',
+      'Festivals',
+      'Heritage Sites',
+      'Archaeological Sites',
+    ],
+    'Agri-Tourism & Industrial': [
+      'Farms',
+      'Agro-Forestry',
+      'Industrial Tours',
+      'Ranches',
+    ],
+    'Culinary & Shopping': [
+      'Local Restaurants',
+      'Souvenir Shops',
+      'Food Festivals',
+      'Markets',
+    ],
+    'Events & Education': [
+      'Workshops',
+      'Educational Tours',
+      'Conferences',
+      'Local Events',
+    ],
+  };
 
   @override
   void initState() {
     super.initState();
-    _fetchAllData();
-    _startLocationStream(); // Start streaming location
-    _ensureLocationPermissionAndCenter();
-
-    // Listen to navigation state changes
-    _navigationService.navigationStateStream.listen((isNavigating) {
-      if (mounted) {
-        setState(() {
-          _isNavigating = isNavigating;
-        });
-      }
-    });
-
-    // Listen to navigation polylines
-    _navigationService.polylineStream.listen((polylines) {
-      if (mounted) {
-        setState(() {
-          _polylines.clear();
-          _polylines.addAll(polylines);
-        });
-      }
-    });
+    WidgetsBinding.instance.addObserver(this);
+    _initializeManagers();
+    _initMap();
   }
 
-  /// Fetch all data once in initState - no async calls in UI handlers
+  // In _MapScreenState
+  void _clearFilters() {
+    setState(() {
+      _selectedFilterCategory = null;
+      _selectedFilterSubCategory = null;
+    });
+    _filterMarkers();
+  }
+
+  void _initializeManagers() {
+    _locationManager = MapLocationManager(
+      onLocationUpdate: _handleLocationUpdate,
+      onPermissionDenied: _handlePermissionDenied,
+    );
+
+    // CRITICAL: Set NavigationService to use MapLocationManager's stream (single GPS listener)
+    // This prevents duplicate GPS listeners competing for updates
+    _navigationService.setLocationStream(_locationManager.locationStream);
+
+    _markerManager = MapMarkerManager(onMarkerTap: _handleMarkerTap);
+
+    _navigationManager = MapNavigationManager(
+      navigationService: _navigationService,
+      connectivityService: _connectivityService,
+      onNavigationStateChanged: (isNavigating) {
+        if (mounted) setState(() => _isNavigating = isNavigating);
+
+        if (isNavigating) {
+          _goToMyLocation();
+        }
+      },
+      onPolylinesChanged: (polylines) {
+        if (mounted) setState(() => _polylines = polylines);
+      },
+      onStateUpdated: () {
+        // <-- ADD THIS
+        if (mounted) setState(() {});
+      },
+    );
+    _navigationManager.init();
+  }
+
+  void _onMyLocationButtonPressed() {
+    // Check if the user is currently navigating.
+    if (_isNavigating) {
+      // If navigating, call the function that re-centers the map with bearing and tilt.
+      _recenterMap();
+    } else {
+      // If just browsing, call the function that finds the user's location and zooms in.
+      _goToMyLocation();
+    }
+  }
+
+  // Add this new function to _MapScreenState
+  Future<void> _initializeUserLocationIcons() async {
+    _userLocationDotIcon = await MapMarkerManager.createLocationDotBitmap();
+    _userLocationChevronIcon =
+        await MapMarkerManager.createLocationChevronBitmap();
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _initMap() async {
+    // 1. Fetch data first
+    await _fetchAllData();
+
+    // 2. Handle location permissions and start tracking
+    final hasPermission = await _locationManager.handleLocationPermission(
+      context,
+    );
+    if (!hasPermission) {
+      if (mounted) {
+        setState(() {
+          _showLocationBanner = true;
+          _locationBannerText =
+              'Location permission is required to use the map features.';
+        });
+      }
+      return;
+    }
+
+    // 3. Start location tracking
+    await _locationManager.startLocationTracking();
+
+    // 4. Setup navigation listeners
+    // _setupNavigationListeners();
+  }
+
   Future<void> _fetchAllData() async {
     await Future.wait([
-      _initializeCategoryMarkerIcons(),
+      _markerManager.initializeCategoryMarkerIcons(),
       _fetchUserRole(),
       _fetchDestinationPins(),
+      _initializeUserLocationIcons(),
     ]);
   }
 
-  @override
-  void dispose() {
-    _positionStream?.cancel();
-    _navigationService.dispose();
-    super.dispose();
+  void _handleLocationUpdate(Position position, LatLng latLng, double bearing) {
+    if (!mounted) return;
+
+    setState(() {
+      _currentLatLng = latLng;
+      _currentBearing = bearing;
+      _showLocationBanner = false;
+    });
+
+    _updateUserLocationMarker(position);
+    // _updateUserLocationCircle(latLng);
+    _checkProximityAndSaveArrival(position);
+
+    if (_isNavigating && _mapController != null) {
+      // We get the current step of the route from the navigation service
+      final currentStep = _navigationService.getCurrentStep();
+      double targetBearing =
+          position.heading; // Default to the direction of travel
+
+      // If there's a next step, calculate the bearing towards it for a smoother turn preview
+      if (currentStep != null) {
+        targetBearing = _locationManager.calculateBearing(
+          latLng,
+          currentStep.endLocation,
+        );
+      }
+
+      // Animate the camera to follow the user
+      _mapController!.animateCamera(
+        CameraUpdate.newCameraPosition(
+          CameraPosition(
+            target: latLng, // Center on the new location
+            zoom: 18.5, // A close zoom level for driving
+            bearing:
+                targetBearing, // Point the camera in the direction of the route
+            tilt: 60.0, // A 3D perspective for navigation
+          ),
+        ),
+      );
+    }
   }
 
-  void _startLocationStream() {
-    const locationSettings = LocationSettings(
-      accuracy: LocationAccuracy.high,
-      distanceFilter: 5, // meters before update
-    );
+  void _handlePermissionDenied() {
+    if (mounted) {
+      setState(() {
+        _showLocationBanner = true;
+        _locationBannerText =
+            'Location permission is required to use the map features.';
+      });
+    }
+  }
 
-    _positionStream = Geolocator.getPositionStream(
-      locationSettings: locationSettings,
-    ).listen((Position position) {
-      _handleIncomingPosition(position);
+  // ADD THIS NEW FUNCTION to _MapScreenState
+  void _updateUserLocationMarker(Position position) {
+    if (!mounted) return;
 
-      // Proximity check for arrivals
-      _checkProximityAndSaveArrival(position);
+    // Ensure icons are initialized - initialize synchronously if needed
+    if (_userLocationDotIcon == null || _userLocationChevronIcon == null) {
+      // Initialize icons asynchronously but update marker immediately with fallback
+      _initializeUserLocationIcons().then((_) {
+        if (mounted) {
+          // Re-update marker with proper icons once initialized
+          _updateUserLocationMarkerWithIcons(position);
+        }
+      });
+      return; // Exit early if icons aren't ready yet
+    }
+
+    _updateUserLocationMarkerWithIcons(position);
+  }
+
+  void _updateUserLocationMarkerWithIcons(Position position) {
+    if (!mounted) return;
+
+    final latLng = LatLng(position.latitude, position.longitude);
+    final bool isMoving = position.speed > 0.5;
+    final BitmapDescriptor? icon =
+        isMoving ? _userLocationChevronIcon : _userLocationDotIcon;
+
+    if (icon == null) return;
+
+    setState(() {
+      _circles.clear(); // We no longer use circles for the user location
+      _markers.removeWhere((m) => m.markerId.value == 'user_location_marker');
+
+      _markers.add(
+        Marker(
+          markerId: const MarkerId('user_location_marker'),
+          position: latLng,
+          icon: icon,
+          rotation:
+              isMoving ? (position.heading.isFinite ? position.heading : 0) : 0,
+          anchor: const Offset(0.5, 0.5),
+          flat: isMoving,
+          zIndex: 10,
+        ),
+      );
     });
   }
 
-  void _handleIncomingPosition(Position position) {
-    final now = DateTime.now();
-    if (_lastOverlayUpdate != null && now.difference(_lastOverlayUpdate!) < _throttleInterval) {
-      return; // throttle updates
-    }
+  // void _updateUserLocationCircle(LatLng position) {
+  //   const double dotRadius = 18;
+  //   _circles.removeWhere((c) => c.circleId.value == 'user_location');
+  //   _circles.add(
+  //     Circle(
+  //       circleId: const CircleId('user_location'),
+  //       center: position,
+  //       radius: dotRadius,
+  //       strokeColor: Colors.blue.withOpacity(0.3),
+  //       fillColor: Colors.blue.withOpacity(0.7),
+  //       strokeWidth: 2,
+  //       zIndex: 9999,
+  //     ),
+  //   );
+  // }
 
-    // Keep a small window of the most recent fixes
-    _recentPositions.add(position);
-    while (_recentPositions.length > _smoothingWindow) {
-      _recentPositions.removeAt(0);
-    }
-
-    // Pick the most accurate fix in the window
-    Position best = _recentPositions.reduce(
-      (a, b) => (a.accuracy <= b.accuracy) ? a : b,
-    );
-
-    // Anti-jump: if last accepted exists and time < 3s and jump >100m, ignore
-    if (_lastAcceptedPosition != null) {
-      final ts = _lastAcceptedPosition!.timestamp;
-      final tsMs = ts.millisecondsSinceEpoch;
-      final dt = now.difference(DateTime.fromMillisecondsSinceEpoch(tsMs));
-      final lastLatLng = LatLng(_lastAcceptedPosition!.latitude, _lastAcceptedPosition!.longitude);
-      final bestLatLng = LatLng(best.latitude, best.longitude);
-      final jump = _haversineDistanceMeters(lastLatLng, bestLatLng);
-      if (dt < _jumpWindow && jump > _maxJumpMeters) {
-        return; // discard spike
-      }
-    }
-
-    _lastAcceptedPosition = best;
-    _currentLatLng = LatLng(best.latitude, best.longitude);
-    _lastOverlayUpdate = now;
-
-    _updateUserLocationOverlay(best);
-
-    // Auto-recenter only when moved significantly to avoid jitter
-    if (_mapController != null) {
-      final camTarget = _currentLatLng!;
-      if (_lastCenter == null || _haversineDistanceMeters(_lastCenter!, camTarget) > _recenterThresholdMeters) {
-        _mapController!.animateCamera(CameraUpdate.newLatLng(camTarget));
-        _lastCenter = camTarget;
-      }
-    }
-    if (mounted) setState(() {});
-  }
-
-  LatLng? _lastCenter;
-
-  Future<void> _ensureLocationPermissionAndCenter() async {
+  Future<void> _fetchUserRole() async {
     try {
-      bool serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        final userDoc =
+            await FirebaseFirestore.instance
+                .collection('Users')
+                .doc(user.uid)
+                .get();
         if (mounted) {
           setState(() {
-            _showLocationBanner = true;
-            _locationBannerText = 'Location services are off. Turn them on, then tap Enable.';
+            _role = userDoc.data()?['role'] ?? 'Guest';
           });
         }
-        return; // Can't proceed if location services are disabled
       }
-
-      LocationPermission permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-      }
-      if (permission == LocationPermission.deniedForever ||
-          permission == LocationPermission.denied) {
-        if (mounted) {
-          setState(() {
-            _showLocationBanner = true;
-            _locationBannerText = 'Location permission denied. Tap Enable and allow in the browser.';
-          });
-        }
-        return; // User denied permissions
-      }
-
-      final pos = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-      );
-      _currentLatLng = LatLng(pos.latitude, pos.longitude);
-      _updateUserLocationOverlay(pos);
-      if (_mapController != null) {
-        await _mapController!.animateCamera(
-          CameraUpdate.newLatLngZoom(_currentLatLng!, 14),
-        );
-      }
+    } catch (e) {
       if (mounted) {
-        setState(() {
-          _showLocationBanner = false;
-        });
+        setState(() => _role = 'Guest');
       }
-    } catch (_) {
-      // Ignore errors; map will remain at default center
     }
   }
 
-  void _updateUserLocationOverlay(Position pos) {
-    final me = LatLng(pos.latitude, pos.longitude);
-    // Draw only a small blue dot circle (no pin/marker)
-    const double dotRadius = 18; // meters, purely visual
-    _circles.removeWhere((c) => c.circleId.value == 'me_accuracy');
-    _circles.add(
-      Circle(
-        circleId: const CircleId('me_accuracy'),
-        center: me,
-        radius: dotRadius,
-        strokeColor: Colors.transparent,
-        fillColor: Colors.blue.withOpacity(0.7),
-        strokeWidth: 0,
-        zIndex: 9998,
-      ),
-    );
-    // Rebuild markers from _allMarkers, but hide any destination marker overlapping the blue dot
-    _markers = _allMarkers.where((m) {
-      final d = _haversineDistanceMeters(me, m.position);
-      return d > 30; // hide markers within ~30m of user to avoid overlap
-    }).toSet();
-    if (mounted) setState(() {});
+  Future<void> _fetchDestinationPins() async {
+    try {
+      if (mounted) setState(() => _isLoading = true);
+
+      List<Map<String, dynamic>> rawDocs = [];
+
+      try {
+        final snapshot = await FirebaseFirestore.instance
+            .collection('destination')
+            .get()
+            .timeout(const Duration(seconds: 3));
+
+        rawDocs =
+            snapshot.docs.map((d) {
+              final m = Map<String, dynamic>.from(d.data());
+              if ((m['hotspot_id'] == null ||
+                      m['hotspot_id'].toString().isEmpty) &&
+                  (m['id'] == null || m['id'].toString().isEmpty)) {
+                m['hotspot_id'] = d.id;
+              }
+              return m;
+            }).toList();
+
+        await OfflineCacheService.saveDestinations(rawDocs);
+        _isOfflineMode = false;
+        _cachedDestinations = rawDocs;
+      } catch (_) {
+        rawDocs = await OfflineCacheService.loadDestinations();
+        _isOfflineMode = rawDocs.isNotEmpty;
+        _cachedDestinations = rawDocs;
+      }
+
+      final markers = await _markerManager.createMarkersFromDestinations(
+        rawDocs,
+      );
+
+      setState(() {
+        _markers = markers;
+      });
+    } catch (e) {
+      print('Error fetching destinations: $e');
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
+
+  void _handleMarkerTap(Map<String, dynamic> data) {
+    BusinessDetailsModal.show(
+      context: context,
+      businessData: data,
+      role: _role,
+      currentUserId: FirebaseAuth.instance.currentUser?.uid,
+      onNavigate: (lat, lng) {
+        _navigationManager.showNavigationPreview(
+          context,
+          LatLng(lat, lng),
+          data,
+        );
+      },
+    );
+  }
+
+  // Cooldown to prevent immediate arrival notifications when map opens
+  DateTime? _lastArrivalCheck;
+  static const _arrivalCheckCooldown = Duration(
+    seconds: 30,
+  ); // Increased to 30 seconds to prevent early false positives
 
   void _checkProximityAndSaveArrival(Position userPosition) async {
-    // Only check if markers are loaded
-    if (_allMarkers.isEmpty) return;
+    if (!mounted) return;
 
-    // Check location permissions first
+    // Only check for arrivals when navigating
+    if (!_isNavigating) return;
+
+    // Get the current navigation destination from NavigationService
+    final currentRoute = _navigationService.currentRoute;
+    if (currentRoute == null) return;
+
+    // Add cooldown to prevent immediate popup when navigation starts
+    final now = DateTime.now();
+    if (_lastArrivalCheck != null &&
+        now.difference(_lastArrivalCheck!) < _arrivalCheckCooldown) {
+      return;
+    }
+
+    // Check location permission - works on both iOS and Android
     final permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied ||
         permission == LocationPermission.deniedForever) {
-      return; // Skip proximity checking if no permission
+      return;
+    }
+
+    // Validate position accuracy - ensure we have a valid GPS fix
+    // Require higher accuracy for arrival detection (better than 50m)
+    if (userPosition.accuracy > 50) {
+      // Position accuracy too poor (>50m), skip arrival check
+      // This prevents false positives from inaccurate GPS readings
+      return;
     }
 
     final userLatLng = LatLng(userPosition.latitude, userPosition.longitude);
-    for (final marker in _allMarkers) {
-      final markerLatLng = marker.position;
-      final double distance = _haversineDistanceMeters(
-        userLatLng,
-        markerLatLng,
-      );
-      if (distance <= 50) {
-        // Get hotspotId from markerId
-        final hotspotId = marker.markerId.value;
-        // Check if already arrived today
-        final hasArrived = await ArrivalService.hasArrivedToday(hotspotId);
-        if (!hasArrived) {
-          // Get enhanced destination data
-          final destinationInfo = _destinationData[hotspotId];
-          await ArrivalService.saveArrival(
-            hotspotId: hotspotId,
-            latitude: markerLatLng.latitude,
-            longitude: markerLatLng.longitude,
-            destinationName: destinationInfo?['destinationName'],
-            destinationCategory: destinationInfo?['destinationCategory'],
-            destinationType: destinationInfo?['destinationType'],
-            destinationDistrict: destinationInfo?['destinationDistrict'],
-            destinationMunicipality:
-                destinationInfo?['destinationMunicipality'],
-            destinationImages:
-                destinationInfo?['destinationImages']?.cast<String>(),
-            destinationDescription: destinationInfo?['destinationDescription'],
-          );
+    final destination = currentRoute.destination;
+
+    // Calculate distance to the actual navigation destination (not all markers)
+    final distance = _locationManager.calculateDistance(
+      userLatLng,
+      destination,
+    );
+
+    // Arrival detection threshold: 30 meters (reduced for more accuracy)
+    // This works consistently on both iOS and Android
+    if (distance <= 30) {
+      // Find the marker for this destination (skip user location marker)
+      Marker? destinationMarker;
+      for (final marker in _markers) {
+        // Skip user location marker
+        if (marker.markerId.value == 'user_location_marker') continue;
+
+        final markerDistance = _locationManager.calculateDistance(
+          marker.position,
+          destination,
+        );
+
+        // Find the closest marker to the destination (within 100m)
+        if (markerDistance < 100) {
+          destinationMarker = marker;
+          break; // Found our destination marker
         }
+      }
+
+      // If no valid destination marker found, skip
+      if (destinationMarker == null ||
+          destinationMarker.markerId.value == 'user_location_marker') {
+        return;
+      }
+
+      final hotspotId = destinationMarker.markerId.value;
+
+      try {
+        // Check if already arrived today (checks both collections)
+        final hasArrived = await ArrivalService.hasArrivedToday(hotspotId);
+
+        if (!hasArrived && mounted) {
+          final destinationInfo = _markerManager.getDestinationData(hotspotId);
+
+          // Only save arrival if we have valid destination data
+          // Don't save if all we have is null/unknown values
+          if (destinationInfo != null &&
+              destinationInfo['destinationName'] != null &&
+              destinationInfo['destinationName'] != 'Unknown Destination') {
+            // Update cooldown to prevent duplicate saves
+            _lastArrivalCheck = now;
+
+            // Save arrival with complete destination data
+            await ArrivalService.saveArrival(
+              hotspotId: hotspotId,
+              latitude: destination.latitude,
+              longitude: destination.longitude,
+              businessName:
+                  destinationInfo['destinationName'] ??
+                  destinationInfo['business_name'] ??
+                  destinationInfo['name'],
+              destinationName:
+                  destinationInfo['destinationName'] ??
+                  destinationInfo['business_name'] ??
+                  destinationInfo['name'],
+              destinationCategory:
+                  destinationInfo['destinationCategory'] ??
+                  destinationInfo['category'],
+              destinationType:
+                  destinationInfo['destinationType'] ?? destinationInfo['type'],
+              destinationDistrict:
+                  destinationInfo['destinationDistrict'] ??
+                  destinationInfo['district'],
+              destinationMunicipality:
+                  destinationInfo['destinationMunicipality'] ??
+                  destinationInfo['municipality'],
+              destinationImages:
+                  destinationInfo['destinationImages']?.cast<String>() ??
+                  destinationInfo['images']?.cast<String>(),
+              destinationDescription:
+                  destinationInfo['destinationDescription'] ??
+                  destinationInfo['description'],
+            );
+
+            // Optional: Show a brief notification that arrival was recorded
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    'Visited: ${destinationInfo['destinationName'] ?? destinationInfo['business_name'] ?? destinationInfo['name'] ?? 'Destination'}',
+                  ),
+                  duration: const Duration(seconds: 2),
+                  behavior: SnackBarBehavior.floating,
+                ),
+              );
+            }
+          }
+        }
+      } catch (e) {
+        // Log error but don't block location updates
+        print('Error checking/saving arrival: $e');
       }
     }
   }
@@ -344,22 +584,79 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   void _filterMarkers() {
-    if (_searchQuery.isEmpty &&
-        _selectedCategory == 'All Categories' &&
-        _selectedMunicipality == 'All Municipalities' &&
-        _selectedType == 'All Types') {
-      setState(() => _markers = _allMarkers);
+    final allMarkers = _markerManager.getAllMarkers();
+
+    // If no filters and no search, show everything.
+    if (_searchQuery.isEmpty && _selectedFilterCategory == null) {
+      setState(() => _markers = allMarkers);
       return;
     }
 
     final filtered =
-        _allMarkers.where((marker) {
+        allMarkers.where((marker) {
+          final markerData = _markerManager.getDestinationData(
+            marker.markerId.value,
+          );
+          if (markerData == null) return false;
+
+          // 1. Check search query
           final name = marker.infoWindow.title?.toLowerCase() ?? '';
           final matchesSearch =
               _searchQuery.isEmpty || name.contains(_searchQuery);
 
-          // Simple filtering based on marker title only
-          return matchesSearch;
+          // 2. Check category and sub-category filters
+          bool matchesCategoryFilter = true; // Assume it matches by default
+
+          if (_selectedFilterCategory != null) {
+            // Get the list of allowed sub-categories for the selected main filter
+            final allowedSubCategories =
+                _categories[_selectedFilterCategory]
+                    ?.map((e) => e.toLowerCase())
+                    .toList() ??
+                [];
+
+            final markerCategory =
+                (markerData['destinationCategory']?.toString() ?? '')
+                    .toLowerCase()
+                    .trim();
+            final markerType =
+                (markerData['destinationType']?.toString() ?? '')
+                    .toLowerCase()
+                    .trim();
+            final selectedSubCategory =
+                _selectedFilterSubCategory?.toLowerCase().trim();
+
+            if (selectedSubCategory != null && selectedSubCategory.isNotEmpty) {
+              // If a sub-category is also selected, check if marker type matches (with fuzzy matching)
+              matchesCategoryFilter = _matchesSubCategory(
+                markerType,
+                selectedSubCategory,
+              );
+            } else {
+              // If only a main category is selected, check if:
+              // 1. Marker's main category matches the selected main category (fuzzy match)
+              // 2. OR marker's type matches any sub-category in the selected main category
+
+              final selectedMainCategory =
+                  _selectedFilterCategory!.toLowerCase().trim();
+
+              // Check if marker category matches main category (accounting for singular/plural, variations)
+              final categoryMatches = _matchesMainCategory(
+                markerCategory,
+                selectedMainCategory,
+              );
+
+              // Check if marker type matches any sub-category
+              final typeMatches = allowedSubCategories.any(
+                (subCat) => _matchesSubCategory(markerType, subCat),
+              );
+
+              matchesCategoryFilter = categoryMatches || typeMatches;
+            }
+          }
+
+          // A marker is shown if it matches both search and active filters
+          return matchesSearch && matchesCategoryFilter;
         }).toSet();
 
     setState(() {
@@ -367,768 +664,239 @@ class _MapScreenState extends State<MapScreen> {
     });
   }
 
-  Future<void> _fetchUserRole() async {
-    try {
-      final user = FirebaseAuth.instance.currentUser;
-      if (user != null) {
-        final userDoc =
-            await FirebaseFirestore.instance
-                .collection('Users')
-                .doc(user.uid)
-                .get();
-        if (mounted) {
-          setState(() {
-            _role = userDoc.data()?['role'] ?? 'Guest';
-          });
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _role = 'Guest';
-        });
-      }
+  /// Helper to match main categories (handles singular/plural, variations)
+  bool _matchesMainCategory(String markerCategory, String selectedCategory) {
+    if (markerCategory.isEmpty || selectedCategory.isEmpty) return false;
+
+    // Normalize by removing common variations
+    String normalize(String cat) {
+      return cat
+          .replaceAll(RegExp(r'[^a-z0-9\s]'), '')
+          .replaceAll(RegExp(r'\s+'), ' ')
+          .trim();
     }
+
+    final normalizedMarker = normalize(markerCategory);
+    final normalizedSelected = normalize(selectedCategory);
+
+    // Exact match
+    if (normalizedMarker == normalizedSelected) return true;
+
+    // Handle singular/plural variations (e.g., "Natural Attraction" vs "Natural Attractions")
+    if (normalizedMarker == normalizedSelected + 's' ||
+        normalizedSelected == normalizedMarker + 's') {
+      return true;
+    }
+
+    // Check if one contains the other (for variations like "Natural Attraction" containing "Natural")
+    final markerWords = normalizedMarker.split(' ');
+    final selectedWords = normalizedSelected.split(' ');
+
+    // If first word matches (e.g., "Natural" in both "Natural Attraction" and "Natural Attractions")
+    if (markerWords.isNotEmpty &&
+        selectedWords.isNotEmpty &&
+        markerWords.first == selectedWords.first) {
+      return true;
+    }
+
+    // Check for common category mappings
+    final categoryMappings = {
+      'natural attraction': ['natural attractions'],
+      'natural attractions': ['natural attraction'],
+      'cultural site': ['cultural & historical', 'cultural', 'historical'],
+      'cultural & historical': ['cultural site', 'cultural'],
+      'recreational facility': ['recreational facilities'],
+      'recreational facilities': ['recreational facility'],
+      'agri-tourism & industrial': ['agri-tourism', 'industrial'],
+      'culinary & shopping': ['culinary', 'shopping'],
+      'events & education': ['events', 'education'],
+    };
+
+    if (categoryMappings.containsKey(normalizedMarker)) {
+      return categoryMappings[normalizedMarker]!.contains(normalizedSelected);
+    }
+    if (categoryMappings.containsKey(normalizedSelected)) {
+      return categoryMappings[normalizedSelected]!.contains(normalizedMarker);
+    }
+
+    return false;
   }
 
-  Future<void> _fetchDestinationPins() async {
-    try {
-      if (mounted) setState(() => _isLoading = true);
+  /// Helper to match sub-categories (handles variations, partial matches)
+  bool _matchesSubCategory(String markerType, String selectedSubCategory) {
+    if (markerType.isEmpty || selectedSubCategory.isEmpty) return false;
 
-      final markers = <Marker>{};
-      List<Map<String, dynamic>> rawDocs = [];
-      // bool usedOffline = false; // available if you want to display a banner
-      try {
-        final snapshot = await FirebaseFirestore.instance
-            .collection('destination')
-            .get()
-            .timeout(const Duration(seconds: 3));
-        // Preserve document ids so hotspotId is reliable downstream
-        rawDocs =
-            snapshot.docs.map((d) {
-              final m = Map<String, dynamic>.from(d.data());
-              if ((m['hotspot_id'] == null ||
-                      m['hotspot_id'].toString().isEmpty) &&
-                  (m['id'] == null || m['id'].toString().isEmpty)) {
-                m['hotspot_id'] = d.id;
-              }
-              return m;
-            }).toList();
-        // Cache for offline use
-        await OfflineCacheService.saveDestinations(rawDocs);
-        _isOfflineMode = false;
-        _cachedDestinations = rawDocs;
-      } catch (_) {
-        // Offline fallback
-        rawDocs = await OfflineCacheService.loadDestinations();
-        // usedOffline = true;
-        _isOfflineMode = rawDocs.isNotEmpty;
-        _cachedDestinations = rawDocs;
-      }
-
-      for (final data in rawDocs) {
-        final id =
-            data['hotspot_id']?.toString() ?? data['id']?.toString() ?? '';
-        final hotspot = Hotspot.fromMap(data, id);
-        final double? lat = hotspot.latitude;
-        final double? lng = hotspot.longitude;
-        final String name =
-            hotspot.name.isNotEmpty ? hotspot.name : 'Tourist Spot';
-
-        if (lat != null && lng != null) {
-          final position = LatLng(lat, lng);
-
-          // Prefer category-based icon; fallback to text marker
-          final categoryRaw =
-              hotspot.category.isNotEmpty ? hotspot.category : hotspot.type;
-          final normalizedCategory = _normalizeCategory(categoryRaw);
-          final categoryIcon = _getCategoryMarkerIcon(normalizedCategory);
-          final customIcon =
-              categoryIcon ??
-              await CustomMapMarker.createTextMarker(
-                label: name,
-                color: Colors.orange,
-              );
-
-          final marker = Marker(
-            markerId: MarkerId(
-              hotspot.hotspotId.isNotEmpty ? hotspot.hotspotId : id,
-            ),
-            position: position,
-            icon: customIcon,
-            infoWindow: InfoWindow(title: name),
-            onTap: () {
-              final dataWithId =
-                  Map<String, dynamic>.from(data)
-                    ..putIfAbsent(
-                      'hotspot_id',
-                      () =>
-                          hotspot.hotspotId.isNotEmpty ? hotspot.hotspotId : id,
-                    )
-                    ..putIfAbsent('destinationName', () => name)
-                    ..putIfAbsent('destinationCategory', () => hotspot.category)
-                    ..putIfAbsent('destinationType', () => hotspot.type)
-                    ..putIfAbsent('destinationDistrict', () => hotspot.district)
-                    ..putIfAbsent(
-                      'destinationMunicipality',
-                      () => hotspot.municipality,
-                    );
-              BusinessDetailsModal.show(
-                context: context,
-                businessData: dataWithId,
-                role: _role,
-                currentUserId: FirebaseAuth.instance.currentUser?.uid,
-                onNavigate: (lat, lng) {
-                  _showNavigationPreview(LatLng(lat, lng), dataWithId);
-                },
-              );
-            },
-          );
-
-          markers.add(marker);
-        }
-      }
-
-      setState(() {
-        _allMarkers = markers;
-        _markers = markers;
-      });
-      if (rawDocs.isEmpty) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('No cached destinations available offline.'),
-          ),
-        );
-      }
-    } catch (e) {
-      print('Error fetching destinations: $e');
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
+    // Normalize strings
+    String normalize(String str) {
+      return str.toLowerCase().trim().replaceAll(RegExp(r'[^a-z0-9\s]'), '');
     }
+
+    final normalizedMarker = normalize(markerType);
+    final normalizedSelected = normalize(selectedSubCategory);
+
+    // Exact match
+    if (normalizedMarker == normalizedSelected) return true;
+
+    // Check if marker type contains the selected sub-category or vice versa
+    if (normalizedMarker.contains(normalizedSelected) ||
+        normalizedSelected.contains(normalizedMarker)) {
+      return true;
+    }
+
+    // Handle common variations and abbreviations
+    final variations = {
+      'waterfall': ['waterfalls'],
+      'waterfalls': ['waterfall'],
+      'mountain': ['mountains', 'hill', 'hills'],
+      'mountains': ['mountain', 'hill', 'hills'],
+      'cave': ['caves'],
+      'caves': ['cave'],
+      'hot spring': ['hot springs', 'hotspring', 'hotsprings'],
+      'hot springs': ['hot spring', 'hotspring', 'hotsprings'],
+      'cold spring': ['cold springs', 'coldspring', 'coldsprings'],
+      'cold springs': ['cold spring', 'coldspring', 'coldsprings'],
+      'lake': ['lakes'],
+      'lakes': ['lake'],
+      'river': ['rivers'],
+      'rivers': ['river'],
+      'forest': ['forests', 'woodland', 'woods'],
+      'forests': ['forest', 'woodland', 'woods'],
+      'resort': ['resorts'],
+      'resorts': ['resort'],
+      'theme park': ['theme parks'],
+      'theme parks': ['theme park'],
+      'church': ['churches'],
+      'churches': ['church'],
+      'temple': ['temples'],
+      'temples': ['temple'],
+      'museum': ['museums'],
+      'museums': ['museum'],
+      'festival': ['festivals'],
+      'festivals': ['festival'],
+      'restaurant': ['restaurants', 'dining', 'eatery'],
+      'restaurants': ['restaurant', 'dining', 'eatery'],
+      'shop': ['shops', 'shopping', 'store', 'stores'],
+      'shops': ['shop', 'shopping', 'store', 'stores'],
+      'market': ['markets', 'bazaar'],
+      'markets': ['market', 'bazaar'],
+      'farm': ['farms', 'agricultural'],
+      'farms': ['farm', 'agricultural'],
+    };
+
+    if (variations.containsKey(normalizedMarker)) {
+      return variations[normalizedMarker]!.contains(normalizedSelected);
+    }
+    if (variations.containsKey(normalizedSelected)) {
+      return variations[normalizedSelected]!.contains(normalizedMarker);
+    }
+
+    return false;
   }
 
   Future<void> _goToMyLocation() async {
-    final permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      await Geolocator.requestPermission();
-    }
-
-    final position = await Geolocator.getCurrentPosition();
-    final myLocation = LatLng(position.latitude, position.longitude);
-
-    _mapController?.animateCamera(
-      CameraUpdate.newCameraPosition(
-        CameraPosition(target: myLocation, zoom: 14.5),
-      ),
-    );
-  }
-
-  Future<void> _getDirectionsTo(LatLng destination) async {
-    try {
-      setState(() {
-        _isLoadingDirections = true;
-      });
-
-      // Check connectivity first
-      final connectivityInfo = await _connectivityService.checkConnection();
-      if (connectivityInfo.status != ConnectionStatus.connected) {
-        if (mounted) {
-          _showOfflineDirectionsDialog();
-        }
-        return;
-      }
-
-      // Ensure location services and permission are enabled before starting nav
-      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
-      if (!serviceEnabled) {
-        await Geolocator.openLocationSettings();
-      }
-      var permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        permission = await Geolocator.requestPermission();
-      }
-      if (permission == LocationPermission.deniedForever ||
-          permission == LocationPermission.denied) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Location permission required for navigation'),
-            ),
-          );
-        }
-        return;
-      }
-
-      // Start navigation using the navigation service
-      final success = await _navigationService.startNavigation(destination);
-
-      if (success) {
-        // Clear existing polylines when starting navigation
-        setState(() {
-          _polylines.clear();
-        });
-      } else {
-        // Fallback to old method if navigation service fails
-        await _getDirectionsToLegacy(destination);
-      }
-    } catch (e) {
-      debugPrint('Error starting navigation: $e');
-      // Fallback to old method
-      await _getDirectionsToLegacy(destination);
-    } finally {
-      if (mounted) {
-        setState(() => _isLoadingDirections = false);
-      }
-    }
-  }
-
-  Future<void> _getDirectionsToWithDestinationInfo(
-    LatLng destination,
-    Map<String, dynamic> destinationData,
-  ) async {
-    try {
-      setState(() {
-        _isLoadingDirections = true;
-      });
-
-      // Start navigation using the navigation service with destination information
-      final success = await _navigationService.startNavigation(
-        destination,
-        destinationId:
-            destinationData['hotspot_id'] ?? destinationData['hotspotId'],
-        destinationName:
-            destinationData['destinationName'] ??
-            destinationData['businessName'] ??
-            destinationData['name'],
-        destinationCategory:
-            destinationData['destinationCategory'] ??
-            destinationData['category'],
-        destinationType:
-            destinationData['destinationType'] ?? destinationData['type'],
-        destinationDistrict:
-            destinationData['destinationDistrict'] ??
-            destinationData['district'],
-        destinationMunicipality:
-            destinationData['destinationMunicipality'] ??
-            destinationData['municipality'],
-        destinationImages:
-            destinationData['destinationImages']?.cast<String>() ??
-            destinationData['images']?.cast<String>(),
-        destinationDescription:
-            destinationData['destinationDescription'] ??
-            destinationData['description'],
+    if (_currentLatLng != null && _mapController != null) {
+      await _mapController!.animateCamera(
+        CameraUpdate.newCameraPosition(
+          CameraPosition(
+            target: _currentLatLng!,
+            zoom: 17,
+            bearing: _isNavigating ? _currentBearing : 0,
+            tilt: _isNavigating ? 45 : 0,
+          ),
+        ),
       );
-
-      if (success) {
-        // Clear existing polylines when starting navigation
-        setState(() {
-          _polylines.clear();
-        });
-      } else {
-        // Fallback to old method if navigation service fails
-        await _getDirectionsToLegacy(destination);
-      }
-    } catch (e) {
-      debugPrint('Error starting navigation: $e');
-      // Fallback to old method
-      await _getDirectionsToLegacy(destination);
-    } finally {
-      if (mounted) {
-        setState(() => _isLoadingDirections = false);
-      }
+    } else {
+      await _locationManager.requestLocationUpdate();
     }
-  }
-
-  // Legacy directions method (fallback)
-  Future<void> _getDirectionsToLegacy(LatLng destination) async {
-    try {
-      // Check location permissions first
-      final permission = await Geolocator.checkPermission();
-      if (permission == LocationPermission.denied) {
-        final requestedPermission = await Geolocator.requestPermission();
-        if (requestedPermission == LocationPermission.denied ||
-            requestedPermission == LocationPermission.deniedForever) {
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Location permission required for directions'),
-                backgroundColor: Colors.red,
-              ),
-            );
-          }
-          return;
-        }
-      }
-
-      final position = await Geolocator.getCurrentPosition();
-      final origin = LatLng(position.latitude, position.longitude);
-
-      setState(() {
-        _isLoadingDirections = true;
-        _polylines.clear();
-      });
-
-      // Try to resolve place IDs for better routing accuracy
-      final originPlaceId = await _fetchPlaceIdForLatLng(origin);
-      final destPlaceId = await _fetchPlaceIdForLatLng(destination);
-
-      final originParam =
-          originPlaceId != null
-              ? 'place_id:$originPlaceId'
-              : '${origin.latitude},${origin.longitude}';
-      final destParam =
-          destPlaceId != null
-              ? 'place_id:$destPlaceId'
-              : '${destination.latitude},${destination.longitude}';
-
-      final url = ApiEnvironment.getDirectionsUrl(originParam, destParam);
-
-      final response = await http.get(Uri.parse(url));
-      if (response.statusCode != 200) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                'Failed to get directions: HTTP ${response.statusCode}',
-              ),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-        setState(() => _isLoadingDirections = false);
-        return;
-      }
-
-      final body = json.decode(response.body);
-      if (body['status'] != 'OK' ||
-          body['routes'] == null ||
-          body['routes'].isEmpty) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                'No route found: ${body['status'] ?? 'Unknown error'}',
-              ),
-              backgroundColor: Colors.orange,
-            ),
-          );
-        }
-        setState(() => _isLoadingDirections = false);
-        return;
-      }
-
-      // Prefer detailed leg/step polylines when available for accuracy
-      List<LatLng> coords = [];
-      final routes = body['routes'] as List<dynamic>;
-      if (routes.isNotEmpty) {
-        final route = routes[0] as Map<String, dynamic>;
-        final legs = (route['legs'] as List<dynamic>?) ?? [];
-        final decoder = PolylinePoints();
-        if (legs.isNotEmpty) {
-          for (final leg in legs) {
-            final steps = (leg['steps'] as List<dynamic>?) ?? [];
-            if (steps.isNotEmpty) {
-              for (final step in steps) {
-                final polyline =
-                    (step as Map<String, dynamic>)['polyline']?['points'];
-                if (polyline != null && polyline.toString().isNotEmpty) {
-                  final decoded = decoder.decodePolyline(polyline.toString());
-                  coords.addAll(
-                    decoded.map((p) => LatLng(p.latitude, p.longitude)),
-                  );
-                }
-              }
-            }
-          }
-        }
-        // Fallback to overview polyline if step-level not present
-        if (coords.isEmpty && route['overview_polyline']?['points'] != null) {
-          final points = route['overview_polyline']['points'];
-          final decoded = decoder.decodePolyline(points.toString());
-          coords = decoded
-              .map((p) => LatLng(p.latitude, p.longitude))
-              .toList(growable: false);
-        }
-      }
-
-      // If Google stops at nearest road, extend last leg to exact destination for visual accuracy
-      if (coords.isNotEmpty) {
-        final last = coords.last;
-        final distanceToDest = _haversineDistanceMeters(last, destination);
-        if (distanceToDest > 1.0 && distanceToDest < 300.0) {
-          coords = List<LatLng>.from(coords)..add(destination);
-        }
-      }
-
-      setState(() {
-        _polylines.add(
-          Polyline(
-            polylineId: const PolylineId('route'),
-            points: coords,
-            color: Colors.blue,
-            width: 6,
-            endCap: Cap.roundCap,
-            startCap: Cap.roundCap,
-            jointType: JointType.round,
-          ),
-        );
-      });
-
-      // Fit camera
-      if (coords.isNotEmpty) {
-        double minLat = coords.first.latitude;
-        double maxLat = coords.first.latitude;
-        double minLng = coords.first.longitude;
-        double maxLng = coords.first.longitude;
-        for (final c in coords) {
-          minLat = math.min(minLat, c.latitude);
-          maxLat = math.max(maxLat, c.latitude);
-          minLng = math.min(minLng, c.longitude);
-          maxLng = math.max(maxLng, c.longitude);
-        }
-        final controller = await _controller.future;
-        await controller.animateCamera(
-          CameraUpdate.newLatLngBounds(
-            LatLngBounds(
-              southwest: LatLng(minLat, minLng),
-              northeast: LatLng(maxLat, maxLng),
-            ),
-            80,
-          ),
-        );
-      }
-    } catch (_) {
-      // no-op UI messaging kept minimal here
-    } finally {
-      if (mounted) {
-        setState(() => _isLoadingDirections = false);
-      }
-    }
-  }
-
-  // Exit navigation
-  void _exitNavigation() {
-    _navigationService.stopNavigation();
-    setState(() {
-      _polylines.clear();
-    });
-  }
-
-  // Re-center map on user location
-  void _recenterMap() {
-    if (_currentLatLng != null) {
-      if (_isNavigating) {
-        // During navigation, re-center with bearing calculation
-        final currentStep = _navigationService.getCurrentStep();
-        if (currentStep != null) {
-          final bearing = _calculateBearing(
-            _currentLatLng!,
-            currentStep.endLocation,
-          );
-          _mapController?.moveCamera(
-            CameraUpdate.newCameraPosition(
-              CameraPosition(
-                target: _currentLatLng!,
-                zoom: 18.0,
-                bearing: bearing,
-                tilt: 45.0,
-              ),
-            ),
-          );
-        }
-      } else {
-        // Normal re-center
-        _mapController?.moveCamera(
-          CameraUpdate.newCameraPosition(
-            CameraPosition(target: _currentLatLng!, zoom: 18.0, tilt: 45.0),
-          ),
-        );
-      }
-    }
-  }
-
-  // Calculate bearing between two points
-  double _calculateBearing(LatLng start, LatLng end) {
-    final lat1 = start.latitude * (math.pi / 180);
-    final lat2 = end.latitude * (math.pi / 180);
-    final dLon = (end.longitude - start.longitude) * (math.pi / 180);
-
-    final y = math.sin(dLon) * math.cos(lat2);
-    final x =
-        math.cos(lat1) * math.sin(lat2) -
-        math.sin(lat1) * math.cos(lat2) * math.cos(dLon);
-
-    double bearing = math.atan2(y, x) * (180 / math.pi);
-    bearing = (bearing + 360) % 360;
-
-    return bearing;
-  }
-
-  // Update polylines when navigation changes
-  void _onPolylinesChanged(Set<Polyline> newPolylines) {
-    setState(() {
-      _polylines.clear();
-      _polylines.addAll(newPolylines);
-    });
-  }
-
-  // Show navigation preview and start navigation
-  void _showNavigationPreview(
-    LatLng destination, [
-    Map<String, dynamic>? destinationData,
-  ]) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (context) {
-        return Container(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // Drag handle
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.grey[300],
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-
-              Text(
-                'Start Navigation',
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.textDark,
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              Text(
-                'Get turn-by-turn directions to this destination',
-                style: TextStyle(fontSize: 16, color: Colors.grey[600]),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 24),
-
-              // Start Navigation Button
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () {
-                    Navigator.pop(context);
-                    if (destinationData != null) {
-                      _getDirectionsToWithDestinationInfo(
-                        destination,
-                        destinationData,
-                      );
-                    } else {
-                      _getDirectionsTo(destination);
-                    }
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primaryTeal,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  child: const Text(
-                    'Start Navigation',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  // Simple Haversine distance utility
-  double _haversineDistanceMeters(LatLng a, LatLng b) {
-    const double earthRadius = 6371000; // meters
-    final double dLat = _degToRad(b.latitude - a.latitude);
-    final double dLon = _degToRad(b.longitude - a.longitude);
-    final double lat1 = _degToRad(a.latitude);
-    final double lat2 = _degToRad(b.latitude);
-    final double h =
-        (1 - math.cos(dLat)) / 2 +
-        math.cos(lat1) * math.cos(lat2) * (1 - math.cos(dLon)) / 2;
-    return 2 * earthRadius * math.asin(math.sqrt(h));
-  }
-
-  double _degToRad(double deg) => deg * (math.pi / 180.0);
-
-  Future<String?> _fetchPlaceIdForLatLng(LatLng latLng) async {
-    try {
-      final url = ApiEnvironment.getGeocodeUrlForLatLng(
-        '${latLng.latitude},${latLng.longitude}',
-      );
-      final response = await http.get(Uri.parse(url));
-      if (response.statusCode != 200) return null;
-      final data = json.decode(response.body) as Map<String, dynamic>;
-      final results = data['results'] as List<dynamic>?;
-      if (results == null || results.isEmpty) return null;
-      final placeId = (results.first as Map<String, dynamic>)['place_id'];
-      return placeId is String ? placeId : null;
-    } catch (_) {
-      return null;
-    }
-  }
-
-  // Category marker helpers
-  Future<void> _initializeCategoryMarkerIcons() async {
-    try {
-      for (final entry in _categoryIcons.entries) {
-        final String key = entry.key;
-        final IconData icon = entry.value;
-        final Color color = _categoryColors[key] ?? Colors.blue;
-        final bitmap = await _createCategoryMarker(icon, color);
-        _categoryMarkerIcons[key] = bitmap;
-      }
-    } catch (_) {
-      // ignore
-    } finally {
-      if (mounted) setState(() => _categoryIconsInitialized = true);
-    }
-  }
-
-  Future<BitmapDescriptor> _createCategoryMarker(
-    IconData iconData,
-    Color color,
-  ) async {
-    final ui.PictureRecorder recorder = ui.PictureRecorder();
-    final Canvas canvas = Canvas(recorder);
-    final double radius = _categoryMarkerSize / 2;
-
-    // Shadow
-    final Paint shadowPaint =
-        Paint()
-          ..color = Colors.black.withOpacity(0.2)
-          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 2);
-    canvas.drawCircle(Offset(radius + 1, radius + 1), radius - 4, shadowPaint);
-
-    // Main circle
-    final Paint mainPaint =
-        Paint()
-          ..color = color
-          ..style = PaintingStyle.fill;
-    canvas.drawCircle(Offset(radius, radius), radius - 4, mainPaint);
-
-    // Border
-    final Paint borderPaint =
-        Paint()
-          ..color = Colors.white
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 3;
-    canvas.drawCircle(Offset(radius, radius), radius - 4, borderPaint);
-
-    // Icon glyph
-    final TextPainter textPainter = TextPainter(
-      textDirection: TextDirection.ltr,
-    );
-    textPainter.text = TextSpan(
-      text: String.fromCharCode(iconData.codePoint),
-      style: TextStyle(
-        fontSize: _categoryMarkerSize * 0.4,
-        fontFamily: iconData.fontFamily,
-        package: iconData.fontPackage,
-        color: Colors.white,
-        fontWeight: FontWeight.bold,
-      ),
-    );
-    textPainter.layout();
-    final Offset iconOffset = Offset(
-      radius - textPainter.width / 2,
-      radius - textPainter.height / 2,
-    );
-    textPainter.paint(canvas, iconOffset);
-
-    final ui.Picture picture = recorder.endRecording();
-    final ui.Image image = await picture.toImage(
-      _categoryMarkerSize.toInt(),
-      _categoryMarkerSize.toInt(),
-    );
-    final ByteData? bytes = await image.toByteData(
-      format: ui.ImageByteFormat.png,
-    );
-    return BitmapDescriptor.fromBytes(bytes!.buffer.asUint8List());
-  }
-
-  String _normalizeCategory(String raw) {
-    final value = raw.trim();
-    if (value.isEmpty) return '';
-    if (value.contains('adventure')) return 'Adventure Spot';
-    if (value.contains('cultur')) return 'Cultural Site';
-    if (value.contains('natural')) return 'Natural Attraction';
-    if (value.contains('museum')) return 'Cultural Site';
-    if (value.contains('eco')) return 'Natural Attraction';
-    if (value.contains('park')) return 'Natural Attraction';
-    if (value.contains('restaurant') || value.contains('food')) {
-      return 'Restaurant';
-    }
-    if (value.contains('accommodation') || value.contains('hotel')) {
-      return 'Accommodation';
-    }
-    if (value.contains('shopping')) return 'Shopping';
-    if (value.contains('entertain')) return 'Entertainment';
-    return value;
-  }
-
-  BitmapDescriptor? _getCategoryMarkerIcon(String category) {
-    if (category.isEmpty) return null;
-    final key = category.trim();
-    if (_categoryMarkerIcons.containsKey(key)) return _categoryMarkerIcons[key];
-    // Try fuzzy
-    for (final entry in _categoryMarkerIcons.entries) {
-      if (key.contains(entry.key)) return entry.value;
-    }
-    return null;
   }
 
   void _onMapCreated(GoogleMapController controller) {
     _mapController = controller;
     _controller.complete(controller);
-    // On web, google_maps_flutter_web can throw MapStyleException for some
-    // styles. Guard and ignore failures so the map still renders.
+
     try {
       _mapController?.setMapStyle(AppConstants.kMapStyle);
-    } catch (_) {
-      // Fallback: no custom style
+    } catch (e) {
+      print('Map style error: $e');
+    }
+
+    // iOS specific: Enable compass
+    if (Platform.isIOS) {
+      controller.setMapStyle(AppConstants.kMapStyle);
     }
   }
 
-  void _showOfflineDirectionsDialog() {
-    showDialog(
-      context: context,
-      builder:
-          (context) => AlertDialog(
-            title: const Text('Offline Mode'),
-            content: const Text(
-              'Turn-by-turn directions require an internet connection. Please check your connection and try again.',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('OK'),
-              ),
-            ],
-          ),
+  void _exitNavigation() {
+    _navigationManager.exitNavigation();
+    setState(() {
+      _polylines.clear();
+      _isNavigating = false;
+    });
+  }
+
+  void _recenterMap() {
+    _navigationManager.recenterMap(
+      _mapController,
+      _currentLatLng,
+      _currentBearing,
     );
   }
 
+  /// Draw a direct straight-line route between user location and destination
+  /// NOTE: This function is no longer used - OpenRouteService provides road-based routing
+  /// Kept for reference/fallback purposes
+  /*
+  void drawDirectLineRoute(LatLng start, LatLng destination) {
+    if (!mounted) return;
+
+    setState(() {
+      // Clear any previously existing polylines
+      _polylines.clear();
+
+      // Create a new Polyline object with unique ID
+      final directRoutePolyline = Polyline(
+        polylineId: const PolylineId('direct_route'),
+        points: [start, destination], // Only two points: start and destination
+        color: Colors.blue,
+        width: 5,
+        endCap: Cap.roundCap,
+        startCap: Cap.roundCap,
+        jointType: JointType.round,
+      );
+
+      // Add the new polyline to the state's Set<Polyline>
+      _polylines.add(directRoutePolyline);
+    });
+  }
+  */
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    // Handle app lifecycle changes for proper location tracking on both platforms
+    if (state == AppLifecycleState.resumed) {
+      // App resumed: resume location tracking and check for arrivals
+      _locationManager.resumeLocationTracking();
+      // Request a location update to check proximity immediately after resume
+      _locationManager.requestLocationUpdate();
+    } else if (state == AppLifecycleState.paused) {
+      // App paused: pause location tracking to save battery
+      // Note: On iOS, location tracking may continue in background if "Always" permission is granted
+      // On Android, background location requires additional permissions
+      _locationManager.pauseLocationTracking();
+    } else if (state == AppLifecycleState.detached) {
+      // App is being terminated: location tracking will be cleaned up in dispose()
+    }
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _locationManager.dispose();
+    _navigationManager.dispose();
+    _navigationService.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -1137,6 +905,7 @@ class _MapScreenState extends State<MapScreen> {
     return Scaffold(
       body: Stack(
         children: [
+          // Google Map
           GoogleMap(
             onMapCreated: _onMapCreated,
             onCameraMove: (position) {
@@ -1149,25 +918,45 @@ class _MapScreenState extends State<MapScreen> {
             markers: _markers,
             circles: _circles,
             polylines: _polylines,
-            myLocationEnabled: true,
+            myLocationEnabled:
+                false, // We handle this manually for better control
             myLocationButtonEnabled: false,
-            compassEnabled: false,
+            compassEnabled: true, // Enable compass for iOS
             zoomControlsEnabled: false,
             mapType: MapType.normal,
             cameraTargetBounds: CameraTargetBounds(AppConstants.bukidnonBounds),
-            padding: EdgeInsets.only(bottom: 80 + bottomPadding),
+            padding: EdgeInsets.only(
+              top: MediaQuery.of(context).padding.top + 250,
+
+              bottom: 80 + bottomPadding,
+            ),
+            rotateGesturesEnabled: true,
+            tiltGesturesEnabled: true,
           ),
 
-          // Navigation Map Controller (invisible widget that controls map behavior)
+          // Navigation Map Controller
           if (_mapController != null)
             NavigationMapController(
               mapController: _mapController!,
               navigationService: _navigationService,
               polylines: _polylines,
-              onPolylinesChanged: _onPolylinesChanged,
+              onPolylinesChanged: (polylines) {
+                setState(() {
+                  _polylines.clear();
+                  _polylines.addAll(polylines);
+                });
+              },
             ),
 
-          // Search Bar at the Top
+          MapUIComponents.buildTopControls(
+            context: context,
+            isNavigating: _isNavigating,
+            topPadding: MediaQuery.of(context).padding.top,
+            // NOTE: You will need to pass the onChanged, onClear, and onFilterTap
+            // callbacks from your screen into this component.
+          ),
+
+          // Search Bar
           Positioned(
             top: 0,
             left: 0,
@@ -1175,490 +964,87 @@ class _MapScreenState extends State<MapScreen> {
             child: UniversalSearchBar(
               onChanged: _onSearchChanged,
               onClear: _onSearchCleared,
-              onFilterTap: _showFilterSheet,
+              onFilterTap: () {
+                MapUIComponents.showFilterSheet(
+                  context: context,
+                  categories: _categories,
+                  onApply: (category, subCategory) {
+                    // This code runs when the user taps "Apply" or "Clear"
+                    setState(() {
+                      _selectedFilterCategory = category;
+                      _selectedFilterSubCategory = subCategory;
+                    });
+                    // Now, trigger your filter logic
+                    _filterMarkers();
+                  },
+                );
+              },
             ),
           ),
 
+          // This will only build the bar if at least one filter is active.
+          if (_selectedFilterCategory != null ||
+              _selectedFilterSubCategory != null)
+            MapUIComponents.buildActiveFiltersBar(
+              category: _selectedFilterCategory,
+              subCategory: _selectedFilterSubCategory,
+              onClear: _clearFilters, // Pass the clear function to the button
+            ),
+
+          // Loading Indicator
           if (_isLoading) const Center(child: CircularProgressIndicator()),
 
-          // Enable location banner (web/desktop UX)
+          // Location Permission Banner
           if (_showLocationBanner)
-            Positioned(
-              top: 70,
-              left: 16,
-              right: 16,
-              child: Material(
-                elevation: 4,
-                borderRadius: BorderRadius.circular(12),
-                color: Colors.white,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.my_location, color: AppColors.primaryTeal),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Text(
-                          _locationBannerText,
-                          style: const TextStyle(fontSize: 12),
-                        ),
-                      ),
-                      TextButton(
-                        onPressed: _ensureLocationPermissionAndCenter,
-                        child: const Text('Enable'),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+            MapUIComponents.buildLocationBanner(
+              context,
+              _locationBannerText,
+              () async {
+                final hasPermission = await _locationManager
+                    .handleLocationPermission(context);
+                if (hasPermission) {
+                  await _locationManager.startLocationTracking();
+                }
+              },
             ),
 
-          // Floating "my location" button
-          Positioned(
-            right: 16,
-            bottom: 24,
-            child: Material(
-              color: Colors.white,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              elevation: 6,
-              child: InkWell(
-                borderRadius: BorderRadius.circular(16),
-                onTap: _ensureLocationPermissionAndCenter,
-                child: const Padding(
-                  padding: EdgeInsets.all(12),
-                  child: Icon(Icons.my_location, color: Colors.blue, size: 24),
-                ),
-              ),
-            ),
-          ),
-
-          // Offline guest overlay: banner + cached list
-          if (_isOfflineMode)
-            Positioned(
-              top: 70,
-              left: 16,
-              right: 16,
-              child: Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.7),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Row(
-                  children: [
-                    const Icon(
-                      Icons.offline_bolt,
-                      color: Colors.yellow,
-                      size: 18,
-                    ),
-                    const SizedBox(width: 8),
-                    const Expanded(
-                      child: Text(
-                        'Offline mode: showing cached places only',
-                        style: TextStyle(color: Colors.white),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          if (_isOfflineMode)
-            Positioned(
-              bottom: 16 + bottomPadding,
-              left: 16,
-              right: 16,
-              child: Container(
-                height: 140,
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
-                      blurRadius: 8,
-                      offset: const Offset(0, 2),
-                    ),
-                  ],
-                ),
-                child:
-                    _cachedDestinations.isEmpty
-                        ? const Center(
-                          child: Text('No cached places available'),
-                        )
-                        : ListView.builder(
-                          scrollDirection: Axis.horizontal,
-                          padding: const EdgeInsets.all(8),
-                          itemCount: _cachedDestinations.length,
-                          itemBuilder: (context, index) {
-                            final data = _cachedDestinations[index];
-                            final name =
-                                (data['business_name'] ??
-                                        data['name'] ??
-                                        'Place')
-                                    .toString();
-                            final images =
-                                (data['images'] is List)
-                                    ? data['images'] as List
-                                    : [];
-                            final imageUrl =
-                                images.isNotEmpty
-                                    ? images.first.toString()
-                                    : (data['imageUrl']?.toString());
-                            return Container(
-                              width: 220,
-                              margin: const EdgeInsets.only(right: 8),
-                              child: InkWell(
-                                onTap: () {
-                                  BusinessDetailsModal.show(
-                                    context: context,
-                                    businessData: data,
-                                    role: 'guest',
-                                    currentUserId: null,
-                                    showInteractions: false,
-                                  );
-                                },
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Expanded(
-                                      child: ClipRRect(
-                                        borderRadius: BorderRadius.circular(10),
-                                        child:
-                                            imageUrl != null
-                                                ? Image.network(
-                                                  imageUrl,
-                                                  fit: BoxFit.cover,
-                                                  width: double.infinity,
-                                                )
-                                                : Container(
-                                                  color: Colors.grey[300],
-                                                  child: const Icon(
-                                                    Icons.image,
-                                                    size: 30,
-                                                  ),
-                                                ),
-                                      ),
-                                    ),
-                                    const SizedBox(height: 6),
-                                    Text(
-                                      name,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.w600,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-              ),
+          if (_isNavigating &&
+              _navigationManager.currentDestinationName != null)
+            MapUIComponents.buildDestinationBanner(
+              destinationName: _navigationManager.currentDestinationName!,
+              topPadding: MediaQuery.of(context).padding.top,
             ),
 
-          // Navigation Overlay (disabled for guests & offline)
+          // Offline Mode Banner
+          if (_isOfflineMode) MapUIComponents.buildOfflineBanner(),
+
+          // Offline Cached Destinations List
+          if (_isOfflineMode && _cachedDestinations.isNotEmpty)
+            MapUIComponents.buildOfflineDestinationsList(
+              context,
+              _cachedDestinations,
+              bottomPadding,
+              _role,
+            ),
+
+          // Navigation Overlay
           if (_role.toLowerCase() != 'guest' && !_isOfflineMode)
             NavigationOverlay(
               navigationService: _navigationService,
               onExitNavigation: _exitNavigation,
             ),
 
-          // Removed blue arrow compass indicator
-
-          // My Location Button
           Positioned(
-            bottom: 16 + bottomPadding,
+            // A fixed position on the bottom right, which is standard for map apps.
+            bottom: 24 + bottomPadding,
             right: 16,
-            child: FloatingActionButton(
-              heroTag: 'my_location',
-              onPressed: _goToMyLocation,
-              backgroundColor: Colors.white,
-              foregroundColor: Colors.blue,
-              child: const Icon(Icons.my_location),
+            // We use the nice iOS-style button and pass our new smart function to it.
+            child: MapUIComponents.buildMyLocationButton(
+              _onMyLocationButtonPressed,
             ),
           ),
-
-          // Re-center button (bottom left)
-          if (_isNavigating)
-            Positioned(
-              bottom: 100 + bottomPadding,
-              left: 16,
-              child: GestureDetector(
-                onTap: _recenterMap,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withOpacity(0.8),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(
-                        Icons.keyboard_arrow_up,
-                        color: Colors.white,
-                        size: 24, // Increased from 16 to 24
-                      ),
-                      const SizedBox(width: 6), // Slightly wider spacing
-                      const Text(
-                        'Re-center',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 16, // Increased from 12 to 16
-                          fontWeight: FontWeight.w600, // Slightly bolder
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ),
         ],
       ),
-    );
-  }
-
-  void _showFilterSheet() {
-    // Simple filter options
-    final Set<String> categories = {'All Categories'};
-    final Set<String> municipalities = {'All Municipalities'};
-    final Set<String> types = {'All Types'};
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (context) {
-        return Container(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Drag handle
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  decoration: BoxDecoration(
-                    color: Colors.grey[300],
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 20),
-
-              Text(
-                'Filter Destinations',
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.textDark,
-                ),
-              ),
-              const SizedBox(height: 20),
-
-              // Category Filter
-              Text(
-                'Category',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textDark,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey.shade300),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: DropdownButton<String>(
-                  value: _selectedCategory,
-                  isExpanded: true,
-                  underline: Container(),
-                  items:
-                      categories
-                          .toList()
-                          .map(
-                            (category) => DropdownMenuItem(
-                              value: category,
-                              child: Row(
-                                children: [
-                                  if (category == 'All Categories')
-                                    const Icon(
-                                      Icons.category,
-                                      color: Colors.grey,
-                                      size: 20,
-                                    )
-                                  else if (_categoryIcons[category] != null)
-                                    Icon(
-                                      _categoryIcons[category],
-                                      color: AppColors.primaryTeal,
-                                      size: 20,
-                                    )
-                                  else
-                                    const Icon(
-                                      Icons.label,
-                                      color: Colors.grey,
-                                      size: 20,
-                                    ),
-                                  const SizedBox(width: 8),
-                                  Text(category),
-                                ],
-                              ),
-                            ),
-                          )
-                          .toList(),
-                  onChanged: (value) {
-                    setState(() {
-                      _selectedCategory = value!;
-                    });
-                    _filterMarkers();
-                  },
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              // Municipality Filter
-              Text(
-                'Municipality',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textDark,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey.shade300),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: DropdownButton<String>(
-                  value: _selectedMunicipality,
-                  isExpanded: true,
-                  underline: Container(),
-                  items:
-                      municipalities
-                          .toList()
-                          .map(
-                            (municipality) => DropdownMenuItem(
-                              value: municipality,
-                              child: Row(
-                                children: [
-                                  const Icon(
-                                    Icons.location_city,
-                                    color: AppColors.primaryTeal,
-                                    size: 20,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Text(municipality),
-                                ],
-                              ),
-                            ),
-                          )
-                          .toList(),
-                  onChanged: (value) {
-                    setState(() {
-                      _selectedMunicipality = value!;
-                    });
-                    _filterMarkers();
-                  },
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              // Type Filter
-              Text(
-                'Type',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                  color: AppColors.textDark,
-                ),
-              ),
-              const SizedBox(height: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12),
-                decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey.shade300),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: DropdownButton<String>(
-                  value: _selectedType,
-                  isExpanded: true,
-                  underline: Container(),
-                  items:
-                      types
-                          .toList()
-                          .map(
-                            (type) => DropdownMenuItem(
-                              value: type,
-                              child: Row(
-                                children: [
-                                  const Icon(
-                                    Icons.type_specimen,
-                                    color: AppColors.primaryTeal,
-                                    size: 20,
-                                  ),
-                                  const SizedBox(width: 8),
-                                  Text(type),
-                                ],
-                              ),
-                            ),
-                          )
-                          .toList(),
-                  onChanged: (value) {
-                    setState(() {
-                      _selectedType = value!;
-                    });
-                    _filterMarkers();
-                  },
-                ),
-              ),
-              const SizedBox(height: 24),
-
-              // Clear Filters Button
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () {
-                    setState(() {
-                      _selectedCategory = 'All Categories';
-                      _selectedMunicipality = 'All Municipalities';
-                      _selectedType = 'All Types';
-                    });
-                    _filterMarkers();
-                    Navigator.pop(context);
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primaryTeal,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  child: const Text(
-                    'Clear All Filters',
-                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-            ],
-          ),
-        );
-      },
     );
   }
 }

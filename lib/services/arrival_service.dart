@@ -168,19 +168,54 @@ class ArrivalService {
   }
 
   /// Check if the user has already recorded an arrival at this hotspot today.
+  /// Checks both Arrivals and DestinationHistory collections to prevent duplicates.
   static Future<bool> hasArrivedToday(String hotspotId) async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return false;
+    
     final now = DateTime.now();
-    final startOfDay = DateTime(now.year, now.month, now.day);
-    final snapshot =
-        await _firestore
+    final startOfDay = Timestamp.fromDate(DateTime(now.year, now.month, now.day));
+    
+    try {
+      // Check Arrivals collection
+      final arrivalsSnapshot = await _firestore
+          .collection(arrivalsCollection)
+          .where('userId', isEqualTo: user.uid)
+          .where('hotspotId', isEqualTo: hotspotId)
+          .where('timestamp', isGreaterThanOrEqualTo: startOfDay)
+          .limit(1)
+          .get();
+      
+      if (arrivalsSnapshot.docs.isNotEmpty) {
+        return true;
+      }
+      
+      // Check DestinationHistory collection (more reliable check)
+      final historySnapshot = await _firestore
+          .collection(destinationHistoryCollection)
+          .where('userId', isEqualTo: user.uid)
+          .where('hotspotId', isEqualTo: hotspotId)
+          .where('timestamp', isGreaterThanOrEqualTo: startOfDay)
+          .limit(1)
+          .get();
+      
+      return historySnapshot.docs.isNotEmpty;
+    } catch (e) {
+      // If query fails (e.g., missing index), fallback to checking Arrivals only
+      try {
+        final fallbackSnapshot = await _firestore
             .collection(arrivalsCollection)
             .where('userId', isEqualTo: user.uid)
             .where('hotspotId', isEqualTo: hotspotId)
             .where('timestamp', isGreaterThanOrEqualTo: startOfDay)
+            .limit(1)
             .get();
-    return snapshot.docs.isNotEmpty;
+        return fallbackSnapshot.docs.isNotEmpty;
+      } catch (_) {
+        // If still fails, return false to allow save (better than blocking)
+        return false;
+      }
+    }
   }
 
   /// Get unique destinations visited by the user.
