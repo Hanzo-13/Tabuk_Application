@@ -11,12 +11,12 @@ class MapMarkerManager {
   final Map<String, BitmapDescriptor> _categoryMarkerIcons = {};
   final Map<String, Map<String, dynamic>> _destinationData = {};
   Set<Marker> _allMarkers = {};
-  
+
   final Function(Map<String, dynamic> data) onMarkerTap;
   bool _iconsInitialized = false;
 
   static const double _categoryMarkerSize = 100.0; // Larger for iOS visibility
-  
+
   static const Map<String, IconData> _categoryIcons = {
     'Natural Attraction': Icons.park,
     'Cultural Site': Icons.museum,
@@ -26,7 +26,7 @@ class MapMarkerManager {
     'Shopping': Icons.shopping_cart,
     'Entertainment': Icons.theater_comedy,
   };
-  
+
   static const Map<String, Color> _categoryColors = {
     'Natural Attraction': Colors.green,
     'Cultural Site': Colors.purple,
@@ -42,7 +42,7 @@ class MapMarkerManager {
   /// Initialize category marker icons
   Future<void> initializeCategoryMarkerIcons() async {
     if (_iconsInitialized) return;
-    
+
     try {
       for (final entry in _categoryIcons.entries) {
         final String key = entry.key;
@@ -67,31 +67,36 @@ class MapMarkerManager {
     final double radius = _categoryMarkerSize / 2;
 
     // Shadow (more pronounced for iOS)
-    final Paint shadowPaint = Paint()
-      ..color = Colors.black.withOpacity(0.3)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+    final Paint shadowPaint =
+        Paint()
+          ..color = Colors.black.withOpacity(0.3)
+          ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
     canvas.drawCircle(Offset(radius + 2, radius + 2), radius - 6, shadowPaint);
 
     // Main circle with gradient effect
-    final Paint mainPaint = Paint()
-      ..shader = ui.Gradient.radial(
-        Offset(radius, radius),
-        radius - 6,
-        [color.withOpacity(0.9), color],
-        [0.0, 1.0],
-      )
-      ..style = PaintingStyle.fill;
+    final Paint mainPaint =
+        Paint()
+          ..shader = ui.Gradient.radial(
+            Offset(radius, radius),
+            radius - 6,
+            [color.withOpacity(0.9), color],
+            [0.0, 1.0],
+          )
+          ..style = PaintingStyle.fill;
     canvas.drawCircle(Offset(radius, radius), radius - 6, mainPaint);
 
     // White border (thicker for iOS)
-    final Paint borderPaint = Paint()
-      ..color = Colors.white
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 4;
+    final Paint borderPaint =
+        Paint()
+          ..color = Colors.white
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 4;
     canvas.drawCircle(Offset(radius, radius), radius - 6, borderPaint);
 
     // Icon with shadow
-    final TextPainter textPainter = TextPainter(textDirection: TextDirection.ltr);
+    final TextPainter textPainter = TextPainter(
+      textDirection: TextDirection.ltr,
+    );
     textPainter.text = TextSpan(
       text: String.fromCharCode(iconData.codePoint),
       style: TextStyle(
@@ -121,7 +126,9 @@ class MapMarkerManager {
       _categoryMarkerSize.toInt(),
       _categoryMarkerSize.toInt(),
     );
-    final ByteData? bytes = await image.toByteData(format: ui.ImageByteFormat.png);
+    final ByteData? bytes = await image.toByteData(
+      format: ui.ImageByteFormat.png,
+    );
     return BitmapDescriptor.fromBytes(bytes!.buffer.asUint8List());
   }
 
@@ -130,43 +137,51 @@ class MapMarkerManager {
     List<Map<String, dynamic>> rawDocs,
   ) async {
     final markers = <Marker>{};
-    
+
     for (final data in rawDocs) {
       final id = data['hotspot_id']?.toString() ?? data['id']?.toString() ?? '';
       final hotspot = Hotspot.fromMap(data, id);
       final double? lat = hotspot.latitude;
       final double? lng = hotspot.longitude;
-      final String name = hotspot.name.isNotEmpty ? hotspot.name : 'Tourist Spot';
+      final String name =
+          hotspot.name.isNotEmpty ? hotspot.name : 'Tourist Spot';
 
       if (lat != null && lng != null) {
         final position = LatLng(lat, lng);
 
         // Get category-based icon
-        final categoryRaw = hotspot.category.isNotEmpty ? hotspot.category : hotspot.type;
+        final categoryRaw =
+            hotspot.category.isNotEmpty ? hotspot.category : hotspot.type;
         final normalizedCategory = _normalizeCategory(categoryRaw);
         final categoryIcon = _getCategoryMarkerIcon(normalizedCategory);
-        
+
         // Fallback to text marker if no category icon
-        final customIcon = categoryIcon ??
+        final customIcon =
+            categoryIcon ??
             await CustomMapMarker.createTextMarker(
               label: name,
               color: Colors.orange,
             );
 
-        final markerIdValue = hotspot.hotspotId.isNotEmpty ? hotspot.hotspotId : id;
+        final markerIdValue =
+            hotspot.hotspotId.isNotEmpty ? hotspot.hotspotId : id;
         final markerId = MarkerId(markerIdValue);
-        
+
         // Store destination data for ALL markers (not just on tap) for filtering
-        final dataWithId = Map<String, dynamic>.from(data)
-          ..putIfAbsent('hotspot_id', () => markerIdValue)
-          ..putIfAbsent('destinationName', () => name)
-          ..putIfAbsent('destinationCategory', () => hotspot.category)
-          ..putIfAbsent('destinationType', () => hotspot.type)
-          ..putIfAbsent('destinationDistrict', () => hotspot.district)
-          ..putIfAbsent('destinationMunicipality', () => hotspot.municipality);
-        
+        final dataWithId =
+            Map<String, dynamic>.from(data)
+              ..putIfAbsent('hotspot_id', () => markerIdValue)
+              ..putIfAbsent('destinationName', () => name)
+              ..putIfAbsent('destinationCategory', () => hotspot.category)
+              ..putIfAbsent('destinationType', () => hotspot.type)
+              ..putIfAbsent('destinationDistrict', () => hotspot.district)
+              ..putIfAbsent(
+                'destinationMunicipality',
+                () => hotspot.municipality,
+              );
+
         _destinationData[markerId.value] = dataWithId;
-        
+
         final marker = Marker(
           markerId: markerId,
           position: position,
@@ -180,7 +195,7 @@ class MapMarkerManager {
         markers.add(marker);
       }
     }
-    
+
     _allMarkers = markers;
     return markers;
   }
@@ -195,8 +210,10 @@ class MapMarkerManager {
     if (value.contains('museum')) return 'Cultural Site';
     if (value.contains('eco')) return 'Natural Attraction';
     if (value.contains('park')) return 'Natural Attraction';
-    if (value.contains('restaurant') || value.contains('food')) return 'Restaurant';
-    if (value.contains('accommodation') || value.contains('hotel')) return 'Accommodation';
+    if (value.contains('restaurant') || value.contains('food'))
+      return 'Restaurant';
+    if (value.contains('accommodation') || value.contains('hotel'))
+      return 'Accommodation';
     if (value.contains('shopping')) return 'Shopping';
     if (value.contains('entertain')) return 'Entertainment';
     return raw.trim();
@@ -207,7 +224,7 @@ class MapMarkerManager {
     if (category.isEmpty) return null;
     final key = category.trim();
     if (_categoryMarkerIcons.containsKey(key)) return _categoryMarkerIcons[key];
-    
+
     // Try fuzzy matching
     for (final entry in _categoryMarkerIcons.entries) {
       if (key.toLowerCase().contains(entry.key.toLowerCase())) {
@@ -220,7 +237,7 @@ class MapMarkerManager {
   /// Filter markers by search query
   Set<Marker> filterMarkersByQuery(String query) {
     if (query.isEmpty) return _allMarkers;
-    
+
     return _allMarkers.where((marker) {
       final name = marker.infoWindow.title?.toLowerCase() ?? '';
       return name.contains(query.toLowerCase());
@@ -244,16 +261,29 @@ class MapMarkerManager {
     const double size = 100;
     const double radius = size / 2;
 
-    final Paint ripplePaint = Paint()..color = const Color(0x334285F4)..style = PaintingStyle.fill;
+    final Paint ripplePaint =
+        Paint()
+          ..color = const Color(0x334285F4)
+          ..style = PaintingStyle.fill;
     canvas.drawCircle(const Offset(radius, radius), radius, ripplePaint);
 
-    final Paint dotPaint = Paint()..color = const Color(0xFF4285F4)..style = PaintingStyle.fill;
+    final Paint dotPaint =
+        Paint()
+          ..color = const Color(0xFF4285F4)
+          ..style = PaintingStyle.fill;
     canvas.drawCircle(const Offset(radius, radius), radius * 0.45, dotPaint);
 
-    final Paint borderPaint = Paint()..color = Colors.white..style = PaintingStyle.stroke..strokeWidth = size * 0.05;
+    final Paint borderPaint =
+        Paint()
+          ..color = Colors.white
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = size * 0.05;
     canvas.drawCircle(const Offset(radius, radius), radius * 0.45, borderPaint);
 
-    final img = await pictureRecorder.endRecording().toImage(size.toInt(), size.toInt());
+    final img = await pictureRecorder.endRecording().toImage(
+      size.toInt(),
+      size.toInt(),
+    );
     final data = await img.toByteData(format: ui.ImageByteFormat.png);
     return BitmapDescriptor.fromBytes(data!.buffer.asUint8List());
   }
@@ -272,11 +302,91 @@ class MapMarkerManager {
     path.lineTo(0, size); // Bottom-left
     path.close();
 
-    canvas.drawShadow(path.shift(const Offset(0, 2)), Colors.black.withOpacity(0.5), 5.0, true);
-    final Paint chevronPaint = Paint()..color = const Color(0xFF4285F4)..style = PaintingStyle.fill;
+    canvas.drawShadow(
+      path.shift(const Offset(0, 2)),
+      Colors.black.withOpacity(0.5),
+      5.0,
+      true,
+    );
+    final Paint chevronPaint =
+        Paint()
+          ..color = const Color(0xFF4285F4)
+          ..style = PaintingStyle.fill;
     canvas.drawPath(path, chevronPaint);
 
-    final img = await pictureRecorder.endRecording().toImage(size.toInt(), size.toInt());
+    final img = await pictureRecorder.endRecording().toImage(
+      size.toInt(),
+      size.toInt(),
+    );
+    final data = await img.toByteData(format: ui.ImageByteFormat.png);
+    return BitmapDescriptor.fromBytes(data!.buffer.asUint8List());
+  }
+
+  /// Creates a custom heading marker bitmap with a clear pointer indicating direction.
+  /// This is more accurate than the chevron for compass-based navigation.
+  static Future<BitmapDescriptor> createLocationHeadingBitmap() async {
+    final ui.PictureRecorder pictureRecorder = ui.PictureRecorder();
+    final Canvas canvas = Canvas(pictureRecorder);
+    const double size = 100;
+    const double radius = size / 2;
+
+    // Draw outer circle with shadow (accuracy indicator)
+    final Paint outerCirclePaint =
+        Paint()
+          ..color = const Color(0x334285F4)
+          ..style = PaintingStyle.fill;
+    canvas.drawCircle(
+      const Offset(radius, radius),
+      radius * 0.9,
+      outerCirclePaint,
+    );
+
+    // Draw white background circle
+    final Paint bgPaint =
+        Paint()
+          ..color = Colors.white
+          ..style = PaintingStyle.fill;
+    canvas.drawCircle(const Offset(radius, radius), radius * 0.75, bgPaint);
+
+    // Draw blue border
+    final Paint borderPaint =
+        Paint()
+          ..color = const Color(0xFF4285F4)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 3;
+    canvas.drawCircle(const Offset(radius, radius), radius * 0.75, borderPaint);
+
+    // Draw the heading arrow/pointer pointing upward (north/forward)
+    final Path arrowPath = Path();
+    // Arrow head (pointing up)
+    arrowPath.moveTo(radius, radius * 0.2); // Top point
+    arrowPath.lineTo(radius - radius * 0.25, radius * 0.5); // Left edge
+    arrowPath.lineTo(radius - radius * 0.1, radius * 0.5); // Left inner edge
+    arrowPath.lineTo(radius - radius * 0.1, radius * 0.85); // Left vertical
+    arrowPath.lineTo(radius + radius * 0.1, radius * 0.85); // Bottom width
+    arrowPath.lineTo(radius + radius * 0.1, radius * 0.5); // Right vertical
+    arrowPath.lineTo(radius + radius * 0.25, radius * 0.5); // Right inner edge
+    arrowPath.close(); // Close back to top point
+
+    // Shadow for arrow
+    canvas.drawShadow(
+      arrowPath.shift(const Offset(0, 2)),
+      Colors.black.withOpacity(0.3),
+      3.0,
+      true,
+    );
+
+    // Draw the arrow
+    final Paint arrowPaint =
+        Paint()
+          ..color = const Color(0xFF4285F4)
+          ..style = PaintingStyle.fill;
+    canvas.drawPath(arrowPath, arrowPaint);
+
+    final img = await pictureRecorder.endRecording().toImage(
+      size.toInt(),
+      size.toInt(),
+    );
     final data = await img.toByteData(format: ui.ImageByteFormat.png);
     return BitmapDescriptor.fromBytes(data!.buffer.asUint8List());
   }

@@ -20,6 +20,7 @@ import 'package:capstone_app/widgets/navigation_overlay.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_compass/flutter_compass.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
@@ -34,6 +35,9 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   // Core Controllers
   final Completer<GoogleMapController> _controller = Completer();
   GoogleMapController? _mapController;
+  StreamSubscription<CompassEvent>? _compassSubscription;
+  bool _isCompassModeActive = false;
+  bool _isCameraAnimationThrottled = false;
 
   // Managers
   late MapLocationManager _locationManager;
@@ -43,6 +47,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   // In _MapScreenState
   BitmapDescriptor? _userLocationDotIcon;
   BitmapDescriptor? _userLocationChevronIcon;
+  BitmapDescriptor? _userLocationHeadingIcon;
 
   // Services
   final NavigationService _navigationService = NavigationService();
@@ -62,6 +67,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
   // Location State
   LatLng? _currentLatLng;
+  Position? _lastPosition; // Store last position for marker updates
   double _currentBearing = 0.0;
   bool _showLocationBanner = false;
   String _locationBannerText = 'Enable location to use map features.';
@@ -69,8 +75,6 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   // In _MapScreenState
   String? _selectedFilterCategory;
   String? _selectedFilterSubCategory;
-
-  
 
   final Map<String, List<String>> _categories = {
     'Natural Attractions': [
@@ -127,6 +131,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     _initializeManagers();
     _initMap();
+    _listenToCompass();
   }
 
   // In _MapScreenState
@@ -136,6 +141,91 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       _selectedFilterSubCategory = null;
     });
     _filterMarkers();
+  }
+
+  void _listenToCompass() {
+    FlutterCompass.events?.listen((CompassEvent event) {
+      if (!mounted) return;
+
+      final newHeading = event.heading;
+      if (newHeading == null) return;
+
+      // Always update the state for the UI compass icon
+      setState(() {
+        _currentBearing = newHeading;
+      });
+
+      // Update the marker rotation when in compass mode
+      if (_isCompassModeActive && _lastPosition != null) {
+        // Update marker rotation based on compass bearing
+        _updateUserLocationMarker(_lastPosition!);
+      }
+
+      // --- THROTTLING LOGIC STARTS HERE ---
+      // If compass mode is active AND our throttle is not busy...
+      if (_isCompassModeActive &&
+          !_isCameraAnimationThrottled &&
+          _mapController != null &&
+          _currentLatLng != null) {
+        // 1. Set the throttle to busy
+        setState(() {
+          _isCameraAnimationThrottled = true;
+        });
+
+        // 2. Animate the camera
+        _mapController!.animateCamera(
+          CameraUpdate.newCameraPosition(
+            CameraPosition(
+              target: _currentLatLng!,
+              zoom: 18.5,
+              bearing: newHeading,
+              tilt: 60.0,
+            ),
+          ),
+        );
+
+        // 3. Start a timer to release the throttle after a short delay
+        Timer(const Duration(milliseconds: 150), () {
+          if (mounted) {
+            setState(() {
+              _isCameraAnimationThrottled = false;
+            });
+          }
+        });
+      }
+      // --- THROTTLING LOGIC ENDS HERE ---
+    });
+  }
+
+  void _toggleCompassMode() {
+    if (!mounted) return;
+
+    setState(() {
+      _isCompassModeActive = !_isCompassModeActive;
+    });
+
+    // Update the marker to reflect the new compass mode state
+    if (_currentLatLng != null) {
+      _locationManager.requestLocationUpdate().then((_) {
+        // Marker will be updated via _handleLocationUpdate
+      });
+    }
+
+    // If we just turned compass mode OFF, reset the map's bearing to North-up (0 degrees)
+    if (!_isCompassModeActive &&
+        _mapController != null &&
+        _currentLatLng != null) {
+      _mapController!.animateCamera(
+        CameraUpdate.newCameraPosition(
+          CameraPosition(
+            target: _currentLatLng!,
+            zoom: 17, // A slightly wider zoom when not in heading-up mode
+            bearing: 0, // Reset bearing to 0
+            tilt: 0, // Reset tilt to flat
+          ),
+        ),
+      );
+    }
   }
 
   void _initializeManagers() {
@@ -171,13 +261,18 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     _navigationManager.init();
   }
 
+  @override
   void _onMyLocationButtonPressed() {
-    // Check if the user is currently navigating.
+    // If compass mode is active, a single tap should turn it off.
+    if (_isCompassModeActive) {
+      _toggleCompassMode();
+      return;
+    }
+
+    // Otherwise, perform the original recenter logic.
     if (_isNavigating) {
-      // If navigating, call the function that re-centers the map with bearing and tilt.
       _recenterMap();
     } else {
-      // If just browsing, call the function that finds the user's location and zooms in.
       _goToMyLocation();
     }
   }
@@ -187,6 +282,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     _userLocationDotIcon = await MapMarkerManager.createLocationDotBitmap();
     _userLocationChevronIcon =
         await MapMarkerManager.createLocationChevronBitmap();
+    _userLocationHeadingIcon =
+        await MapMarkerManager.createLocationHeadingBitmap();
     if (mounted) setState(() {});
   }
 
@@ -230,6 +327,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
     setState(() {
       _currentLatLng = latLng;
+      _lastPosition = position; // Store position for compass mode updates
       _currentBearing = bearing;
       _showLocationBanner = false;
     });
@@ -301,10 +399,32 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
     final latLng = LatLng(position.latitude, position.longitude);
     final bool isMoving = position.speed > 0.5;
-    final BitmapDescriptor? icon =
-        isMoving ? _userLocationChevronIcon : _userLocationDotIcon;
+
+    // Use heading marker when compass mode is active, otherwise use chevron/dot based on movement
+    BitmapDescriptor? icon;
+    double rotation = 0;
+    bool flat = false;
+
+    if (_isCompassModeActive && _userLocationHeadingIcon != null) {
+      // In compass mode: use heading marker with compass bearing
+      icon = _userLocationHeadingIcon;
+      rotation = _currentBearing; // Use compass bearing
+      flat = true; // Flat marker so it rotates properly
+    } else if (isMoving && _userLocationChevronIcon != null) {
+      // Normal moving: use chevron with GPS heading
+      icon = _userLocationChevronIcon;
+      rotation = position.heading.isFinite ? position.heading : 0;
+      flat = true;
+    } else if (_userLocationDotIcon != null) {
+      // Not moving: use dot (no rotation)
+      icon = _userLocationDotIcon;
+      rotation = 0;
+      flat = false;
+    }
 
     if (icon == null) return;
+
+    final finalIcon = icon; // Promote to non-null after check
 
     setState(() {
       _circles.clear(); // We no longer use circles for the user location
@@ -314,11 +434,10 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
         Marker(
           markerId: const MarkerId('user_location_marker'),
           position: latLng,
-          icon: icon,
-          rotation:
-              isMoving ? (position.heading.isFinite ? position.heading : 0) : 0,
+          icon: finalIcon,
+          rotation: rotation,
           anchor: const Offset(0.5, 0.5),
-          flat: isMoving,
+          flat: flat,
           zIndex: 10,
         ),
       );
@@ -892,6 +1011,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _compassSubscription?.cancel();
     _locationManager.dispose();
     _navigationManager.dispose();
     _navigationService.dispose();
@@ -1039,10 +1159,18 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
             bottom: 24 + bottomPadding,
             right: 16,
             // We use the nice iOS-style button and pass our new smart function to it.
-            child: MapUIComponents.buildMyLocationButton(
-              _onMyLocationButtonPressed,
+            child: GestureDetector(
+              onDoubleTap: _toggleCompassMode, // The magic happens here!
+              child: MapUIComponents.buildMyLocationButton(
+                _onMyLocationButtonPressed, // Single tap still works
+              ),
             ),
           ),
+          // Positioned(
+          //   bottom: 100 + bottomPadding, // Position it above the location button
+          //   right: 16,
+          //   child: MapUIComponents.buildCompass(_currentBearing),
+          // ),
         ],
       ),
     );

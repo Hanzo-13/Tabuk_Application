@@ -19,7 +19,7 @@ class _VisitedDestinationsScreenState extends State<VisitedDestinationsScreen> w
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 2, vsync: this);
     _loadStats();
   }
 
@@ -50,19 +50,28 @@ class _VisitedDestinationsScreenState extends State<VisitedDestinationsScreen> w
       appBar: AppBar(
         title: const Text(
           'Destination History',
-          style: TextStyle(color: Colors.white),
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
         backgroundColor: AppColors.primaryTeal,
         iconTheme: const IconThemeData(color: Colors.white),
+        elevation: 2,
         bottom: TabBar(
           controller: _tabController,
           indicatorColor: Colors.white,
+          indicatorWeight: 3,
           labelColor: Colors.white,
           unselectedLabelColor: Colors.white70,
+          labelStyle: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+          unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.normal, fontSize: 14),
           tabs: const [
-            Tab(text: 'Overview', icon: Icon(Icons.dashboard)),
-            Tab(text: 'All Visits', icon: Icon(Icons.history)),
-            Tab(text: 'Unique Places', icon: Icon(Icons.location_on)),
+            Tab(
+              icon: Icon(Icons.dashboard_rounded),
+              text: 'Overview',
+            ),
+            Tab(
+              icon: Icon(Icons.history_rounded),
+              text: 'All Visits',
+            ),
           ],
         ),
       ),
@@ -71,7 +80,6 @@ class _VisitedDestinationsScreenState extends State<VisitedDestinationsScreen> w
         children: [
           _buildOverviewTab(),
           _buildAllVisitsTab(),
-          _buildUniquePlacesTab(),
         ],
       ),
     );
@@ -79,11 +87,32 @@ class _VisitedDestinationsScreenState extends State<VisitedDestinationsScreen> w
 
   Widget _buildOverviewTab() {
     if (_isLoadingStats) {
-      return const Center(child: CircularProgressIndicator());
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircularProgressIndicator(
+              valueColor: AlwaysStoppedAnimation<Color>(AppColors.primaryTeal),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'Loading statistics...',
+              style: TextStyle(
+                color: AppColors.textLight,
+                fontSize: 14,
+              ),
+            ),
+          ],
+        ),
+      );
     }
 
     if (_stats.isEmpty) {
-      return _buildEmptyState('No Destinations Visited', 'Start exploring and your destination history will appear here!');
+      return _buildEmptyState(
+        'No Destinations Visited',
+        'Start exploring and your destination history will appear here!',
+        Icons.explore_off_rounded,
+      );
     }
 
     return SingleChildScrollView(
@@ -98,7 +127,7 @@ class _VisitedDestinationsScreenState extends State<VisitedDestinationsScreen> w
                 child: _buildStatCard(
                   'Total Visits',
                   '${_stats['totalVisits'] ?? 0}',
-                  Icons.place,
+                  Icons.place_rounded,
                   AppColors.primaryTeal,
                 ),
               ),
@@ -107,22 +136,28 @@ class _VisitedDestinationsScreenState extends State<VisitedDestinationsScreen> w
                 child: _buildStatCard(
                   'Unique Places',
                   '${_stats['uniqueDestinations'] ?? 0}',
-                  Icons.location_on,
+                  Icons.location_on_rounded,
                   AppColors.primaryOrange,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 24),
           
           // Category Breakdown
-          if (_stats['categoryCounts'] != null) ...[
-            const Text(
-              'Visits by Category',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-              ),
+          if (_stats['categoryCounts'] != null && (_stats['categoryCounts'] as Map).isNotEmpty) ...[
+            Row(
+              children: [
+                Icon(Icons.category_rounded, color: AppColors.primaryTeal, size: 24),
+                const SizedBox(width: 8),
+                const Text(
+                  'Visits by Category',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 16),
             _buildCategoryBreakdown(_stats['categoryCounts']),
@@ -130,13 +165,19 @@ class _VisitedDestinationsScreenState extends State<VisitedDestinationsScreen> w
           ],
 
           // Monthly Activity
-          if (_stats['monthlyVisits'] != null) ...[
-            const Text(
-              'Monthly Activity',
-              style: TextStyle(
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-              ),
+          if (_stats['monthlyVisits'] != null && (_stats['monthlyVisits'] as Map).isNotEmpty) ...[
+            Row(
+              children: [
+                Icon(Icons.calendar_month_rounded, color: AppColors.primaryTeal, size: 24),
+                const SizedBox(width: 8),
+                const Text(
+                  'Monthly Activity',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 16),
             _buildMonthlyActivity(_stats['monthlyVisits']),
@@ -150,30 +191,51 @@ class _VisitedDestinationsScreenState extends State<VisitedDestinationsScreen> w
     return Card(
       elevation: 4,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          children: [
-            Icon(icon, size: 40, color: color),
-            const SizedBox(height: 12),
-            Text(
-              value,
-              style: TextStyle(
-                fontSize: 28,
-                fontWeight: FontWeight.bold,
-                color: color,
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              color.withOpacity(0.05),
+              color.withOpacity(0.02),
+            ],
+          ),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(icon, size: 32, color: color),
               ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              title,
-              style: const TextStyle(
-                fontSize: 14,
-                color: Colors.grey,
+              const SizedBox(height: 12),
+              Text(
+                value,
+                style: TextStyle(
+                  fontSize: 32,
+                  fontWeight: FontWeight.bold,
+                  color: color,
+                ),
               ),
-              textAlign: TextAlign.center,
-            ),
-          ],
+              const SizedBox(height: 4),
+              Text(
+                title,
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey[600],
+                  fontWeight: FontWeight.w500,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -190,34 +252,61 @@ class _VisitedDestinationsScreenState extends State<VisitedDestinationsScreen> w
             : '0.0';
         
         return Card(
-          margin: const EdgeInsets.only(bottom: 8),
+          margin: const EdgeInsets.only(bottom: 12),
+          elevation: 2,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Row(
               children: [
-                Expanded(
-                  child: Text(
-                    entry.key,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w500,
-                    ),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryTeal.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
                   ),
-                ),
-                Text(
-                  '${entry.value} visits',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey[600],
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  '$percentage%',
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
+                  child: Icon(
+                    Icons.category_rounded,
                     color: AppColors.primaryTeal,
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        entry.key,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '${entry.value} visit${entry.value != 1 ? 's' : ''}',
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Colors.grey[600],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryTeal.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    '$percentage%',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.primaryTeal,
+                    ),
                   ),
                 ),
               ],
@@ -240,25 +329,48 @@ class _VisitedDestinationsScreenState extends State<VisitedDestinationsScreen> w
         final monthName = _getMonthName(month);
         
         return Card(
-          margin: const EdgeInsets.only(bottom: 8),
+          margin: const EdgeInsets.only(bottom: 12),
+          elevation: 2,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Row(
               children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryOrange.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(
+                    Icons.calendar_today_rounded,
+                    color: AppColors.primaryOrange,
+                    size: 20,
+                  ),
+                ),
+                const SizedBox(width: 12),
                 Expanded(
                   child: Text(
                     '$monthName $year',
                     style: const TextStyle(
                       fontSize: 16,
-                      fontWeight: FontWeight.w500,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ),
-                Text(
-                  '${entry.value} visits',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey[600],
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: AppColors.primaryOrange.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(
+                    '${entry.value} visit${entry.value != 1 ? 's' : ''}',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.primaryOrange,
+                    ),
                   ),
                 ),
               ],
@@ -271,8 +383,8 @@ class _VisitedDestinationsScreenState extends State<VisitedDestinationsScreen> w
 
   String _getMonthName(int month) {
     const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
     ];
     return months[month - 1];
   }
@@ -282,22 +394,38 @@ class _VisitedDestinationsScreenState extends State<VisitedDestinationsScreen> w
       stream: ArrivalService.streamUserDestinationHistory(),
       builder: (context, snapshot) {
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                CircularProgressIndicator(
+                  valueColor: AlwaysStoppedAnimation<Color>(AppColors.primaryTeal),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Loading your visits...',
+                  style: TextStyle(
+                    color: AppColors.textLight,
+                    fontSize: 14,
+                  ),
+                ),
+              ],
+            ),
+          );
         }
 
-        // Check for actual errors, but don't treat empty data as an error
         if (snapshot.hasError) {
           print('Error in streamUserDestinationHistory: ${snapshot.error}');
           return _buildErrorState();
         }
 
-        // Handle both null and empty list cases
         final arrivals = snapshot.data ?? [];
 
         if (arrivals.isEmpty) {
           return _buildEmptyState(
             'No Visits Recorded',
-            'Your visit history will appear here once you start exploring!'
+            'Your visit history will appear here once you start exploring!',
+            Icons.history_rounded,
           );
         }
 
@@ -321,41 +449,6 @@ class _VisitedDestinationsScreenState extends State<VisitedDestinationsScreen> w
                                 hotspotId;
 
             return _buildVisitCard(arrival, businessName, timestamp);
-          },
-        );
-      },
-    );
-  }
-
-  Widget _buildUniquePlacesTab() {
-    return FutureBuilder<List<Map<String, dynamic>>>(
-      future: ArrivalService.getUniqueDestinationsVisited(),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
-        }
-
-        if (snapshot.hasError) {
-          return _buildErrorState();
-        }
-
-        final uniqueDestinations = snapshot.data ?? [];
-
-        if (uniqueDestinations.isEmpty) {
-          return _buildEmptyState('No Unique Places Visited', 'Start exploring different destinations to build your unique places list!');
-        }
-
-        return ListView.builder(
-          padding: const EdgeInsets.all(16),
-          itemCount: uniqueDestinations.length,
-          itemBuilder: (context, index) {
-            final destination = uniqueDestinations[index];
-            final destinationName = destination['destinationName'] ?? destination['businessName'] ?? 'Unknown Destination';
-            final timestamp = destination['timestamp']?.toDate() ?? DateTime.now();
-            final category = destination['destinationCategory'] ?? 'Unknown';
-            final district = destination['destinationDistrict'] ?? 'Unknown';
-
-            return _buildUniqueDestinationCard(destination, destinationName, timestamp, category, district);
           },
         );
       },
@@ -386,13 +479,27 @@ class _VisitedDestinationsScreenState extends State<VisitedDestinationsScreen> w
                 width: 60,
                 height: 60,
                 decoration: BoxDecoration(
-                  color: AppColors.primaryTeal.withOpacity(0.1),
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      AppColors.primaryTeal,
+                      AppColors.primaryTeal.withOpacity(0.7),
+                    ],
+                  ),
                   borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.primaryTeal.withOpacity(0.3),
+                      blurRadius: 8,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
                 ),
-                child: Icon(
-                  Icons.location_on,
+                child: const Icon(
+                  Icons.location_on_rounded,
                   size: 30,
-                  color: AppColors.primaryTeal,
+                  color: Colors.white,
                 ),
               ),
               const SizedBox(width: 16),
@@ -403,35 +510,32 @@ class _VisitedDestinationsScreenState extends State<VisitedDestinationsScreen> w
                     Text(
                       businessName,
                       style: const TextStyle(
-                        fontSize: 18,
+                        fontSize: 16,
                         fontWeight: FontWeight.bold,
+                        color: AppColors.textDark,
                       ),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 8),
                     Row(
                       children: [
                         Icon(
-                          Icons.access_time,
+                          Icons.access_time_rounded,
                           size: 16,
                           color: Colors.grey[600],
                         ),
                         const SizedBox(width: 4),
                         Text(
-                          'Visited ${_formatDate(timestamp)}',
+                          _formatDate(timestamp),
                           style: TextStyle(
-                            fontSize: 14,
+                            fontSize: 13,
                             color: Colors.grey[600],
                           ),
                         ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
+                        const SizedBox(width: 12),
                         Icon(
-                          Icons.schedule,
+                          Icons.schedule_rounded,
                           size: 16,
                           color: Colors.grey[600],
                         ),
@@ -439,7 +543,7 @@ class _VisitedDestinationsScreenState extends State<VisitedDestinationsScreen> w
                         Text(
                           _formatTime(timestamp),
                           style: TextStyle(
-                            fontSize: 14,
+                            fontSize: 13,
                             color: Colors.grey[600],
                           ),
                         ),
@@ -448,126 +552,17 @@ class _VisitedDestinationsScreenState extends State<VisitedDestinationsScreen> w
                   ],
                 ),
               ),
-              Icon(
-                Icons.chevron_right,
-                color: Colors.grey[400],
-                size: 24,
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildUniqueDestinationCard(Map<String, dynamic> destination, String destinationName, DateTime timestamp, String category, String district) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 16),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      elevation: 3,
-      child: InkWell(
-        borderRadius: BorderRadius.circular(16),
-        onTap: () {
-          BusinessDetailsModal.show(
-            context: context,
-            businessData: destination,
-            role: 'tourist',
-            currentUserId: FirebaseAuth.instance.currentUser?.uid,
-            showInteractions: false,
-          );
-        },
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
               Container(
-                width: 60,
-                height: 60,
+                padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: AppColors.primaryOrange.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
+                  color: AppColors.primaryTeal.withOpacity(0.1),
+                  shape: BoxShape.circle,
                 ),
                 child: Icon(
-                  Icons.place,
-                  size: 30,
-                  color: AppColors.primaryOrange,
+                  Icons.chevron_right_rounded,
+                  color: AppColors.primaryTeal,
+                  size: 20,
                 ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      destinationName,
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                      ),
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.category,
-                          size: 16,
-                          color: Colors.grey[600],
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          category,
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey[600],
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.location_city,
-                          size: 16,
-                          color: Colors.grey[600],
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          district,
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey[600],
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        Icon(
-                          Icons.access_time,
-                          size: 16,
-                          color: Colors.grey[600],
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          'Last visited ${_formatDate(timestamp)}',
-                          style: TextStyle(
-                            fontSize: 14,
-                            color: Colors.grey[600],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              Icon(
-                Icons.chevron_right,
-                color: Colors.grey[400],
-                size: 24,
               ),
             ],
           ),
@@ -576,70 +571,91 @@ class _VisitedDestinationsScreenState extends State<VisitedDestinationsScreen> w
     );
   }
 
-  Widget _buildEmptyState(String title, String message) {
+  Widget _buildEmptyState(String title, String message, IconData icon) {
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.location_off,
-            size: 80,
-            color: Colors.grey.shade400,
-          ),
-          const SizedBox(height: 16),
-          Text(
-            title,
-            style: const TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              color: Colors.grey,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 32),
-            child: Text(
-              message,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontSize: 16,
-                color: Colors.grey,
+      child: Padding(
+        padding: const EdgeInsets.all(32.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: Colors.grey.shade100,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                icon,
+                size: 80,
+                color: Colors.grey.shade400,
               ),
             ),
-          ),
-        ],
+            const SizedBox(height: 24),
+            Text(
+              title,
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+                color: Colors.grey[700],
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 15,
+                color: Colors.grey[600],
+                height: 1.5,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 
   Widget _buildErrorState() {
     return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(
-            Icons.error_outline,
-            size: 80,
-            color: Colors.red.shade400,
-          ),
-          const SizedBox(height: 16),
-          const Text(
-            'Error Loading Destinations',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: Colors.red,
+      child: Padding(
+        padding: const EdgeInsets.all(32.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: Colors.red.shade50,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.error_outline_rounded,
+                size: 80,
+                color: Colors.red.shade400,
+              ),
             ),
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'Please try again later',
-            style: TextStyle(
-              fontSize: 16,
-              color: Colors.grey,
+            const SizedBox(height: 24),
+            const Text(
+              'Error Loading Data',
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+                color: Colors.red,
+              ),
             ),
-          ),
-        ],
+            const SizedBox(height: 12),
+            Text(
+              'Unable to load your destination history.\nPlease try again later.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 15,
+                color: Colors.grey[600],
+                height: 1.5,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -649,13 +665,14 @@ class _VisitedDestinationsScreenState extends State<VisitedDestinationsScreen> w
     final difference = now.difference(date);
 
     if (difference.inDays == 0) {
-      return 'today';
+      return 'Today';
     } else if (difference.inDays == 1) {
-      return 'yesterday';
+      return 'Yesterday';
     } else if (difference.inDays < 7) {
       return '${difference.inDays} days ago';
     } else if (difference.inDays < 30) {
-      return '${(difference.inDays / 7).round()} weeks ago';
+      final weeks = (difference.inDays / 7).round();
+      return '$weeks week${weeks != 1 ? 's' : ''} ago';
     } else {
       return '${date.day}/${date.month}/${date.year}';
     }
