@@ -39,8 +39,13 @@ Future<void> _initializeApp() async {
     // We can safely ignore this error.
   }
 
-  final appDir = await getApplicationDocumentsDirectory();
-  await Hive.initFlutter(appDir.path);
+  // Initialize Hive - on web, it doesn't need a path
+  if (kIsWeb) {
+    await Hive.initFlutter();
+  } else {
+    final appDir = await getApplicationDocumentsDirectory();
+    await Hive.initFlutter(appDir.path);
+  }
   
   // This can still be deferred until after the first frame for performance.
   WidgetsBinding.instance.addPostFrameCallback((_) {

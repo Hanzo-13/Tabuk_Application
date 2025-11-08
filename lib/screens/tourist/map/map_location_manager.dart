@@ -3,7 +3,7 @@ import 'dart:io' show Platform;
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show kDebugMode, debugPrint;
+import 'package:flutter/foundation.dart' show kDebugMode, debugPrint, kIsWeb;
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
@@ -129,7 +129,7 @@ class MapLocationManager {
     // Platform-specific location settings for optimal arrival detection
     final LocationSettings locationSettings;
     
-    if (Platform.isIOS) {
+    if (!kIsWeb && Platform.isIOS) {
       // iOS: bestForNavigation for accurate arrival detection, longer timeLimit
       locationSettings = const LocationSettings(
         accuracy: LocationAccuracy.bestForNavigation,
@@ -186,7 +186,7 @@ class MapLocationManager {
   /// Request a single location update with platform-appropriate accuracy
   Future<void> requestLocationUpdate() async {
     try {
-      final accuracy = Platform.isIOS 
+      final accuracy = (!kIsWeb && Platform.isIOS)
           ? LocationAccuracy.bestForNavigation 
           : LocationAccuracy.high;
       

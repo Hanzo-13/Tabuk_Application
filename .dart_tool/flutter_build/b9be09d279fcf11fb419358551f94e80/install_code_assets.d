@@ -1,1 +1,0 @@
- /Users/user/development/capstone_app/.dart_tool/flutter_build/b9be09d279fcf11fb419358551f94e80/native_assets.json: 

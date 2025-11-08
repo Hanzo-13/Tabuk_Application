@@ -38,6 +38,7 @@ class _TouristProfileScreenState extends State<TouristProfileScreen> {
   Future<void> loadUserData() async {
     final currentUser = _auth.currentUser;
     if (currentUser == null) {
+      if (!mounted) return;
       setState(() {
         isGuest = true;
         isLoading = false;
@@ -47,6 +48,8 @@ class _TouristProfileScreenState extends State<TouristProfileScreen> {
 
     // Use UserService for better data handling
     final user = await UserService.getCurrentUser();
+    if (!mounted) return;
+    
     if (user == null || !user.formCompleted) {
       setState(() {
         isGuest = true;

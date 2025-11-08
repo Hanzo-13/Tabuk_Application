@@ -4,7 +4,7 @@ import 'dart:ui' as ui;
 import 'package:capstone_app/models/destination_model.dart';
 import 'package:capstone_app/widgets/custom_map_marker.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show kDebugMode, debugPrint;
+import 'package:flutter/foundation.dart' show kDebugMode, debugPrint, kIsWeb;
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 /// Manages map markers, icons, and filtering
@@ -16,7 +16,8 @@ class MapMarkerManager {
   final Function(Map<String, dynamic> data) onMarkerTap;
   bool _iconsInitialized = false;
 
-  static const double _categoryMarkerSize = 100.0; // Larger for iOS visibility
+  // Smaller icons for web, larger for mobile
+  static double get _categoryMarkerSize => kIsWeb ? 50.0 : 100.0;
   
   static const Map<String, IconData> _categoryIcons = {
     'Natural Attraction': Icons.park,
@@ -67,10 +68,10 @@ class MapMarkerManager {
     final Canvas canvas = Canvas(recorder);
     final double radius = _categoryMarkerSize / 2;
 
-    // Shadow (more pronounced for iOS)
+    // Shadow (lighter for web, more pronounced for mobile)
     final Paint shadowPaint = Paint()
-      ..color = Colors.black.withOpacity(0.3)
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4);
+      ..color = Colors.black.withOpacity(kIsWeb ? 0.2 : 0.3)
+      ..maskFilter = MaskFilter.blur(BlurStyle.normal, kIsWeb ? 2 : 4);
     canvas.drawCircle(Offset(radius + 2, radius + 2), radius - 6, shadowPaint);
 
     // Main circle with gradient effect
@@ -84,11 +85,11 @@ class MapMarkerManager {
       ..style = PaintingStyle.fill;
     canvas.drawCircle(Offset(radius, radius), radius - 6, mainPaint);
 
-    // White border (thicker for iOS)
+    // White border (thinner for web, thicker for mobile)
     final Paint borderPaint = Paint()
       ..color = Colors.white
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 4;
+      ..strokeWidth = kIsWeb ? 2 : 4;
     canvas.drawCircle(Offset(radius, radius), radius - 6, borderPaint);
 
     // Icon with shadow
@@ -104,7 +105,7 @@ class MapMarkerManager {
         shadows: [
           Shadow(
             offset: const Offset(1, 1),
-            blurRadius: 2,
+            blurRadius: kIsWeb ? 1 : 2,
             color: Colors.black.withOpacity(0.3),
           ),
         ],

@@ -5,7 +5,7 @@ import 'dart:math' as math;
 
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/foundation.dart' show kDebugMode, debugPrint;
+import 'package:flutter/foundation.dart' show kDebugMode, debugPrint, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 
@@ -15,6 +15,7 @@ import '../../../services/content_recommender_service.dart';
 import '../../../services/location_service.dart';
 import '../../../utils/colors.dart';
 import '../../../utils/constants.dart';
+import '../../../utils/responsive.dart';
 import '../../../widgets/recommendation_section_widget.dart';
 import '../view_all_screen.dart';
 
@@ -339,21 +340,42 @@ class _TouristHomeScreenState extends State<TouristHomeScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: CustomScrollView(
-        slivers: [
-          _buildAppBar(),
-          const SliverToBoxAdapter(child: SizedBox(height: 10)),
-          _buildEventSlider(),
-          _buildRecommendations(),
-        ],
-      ),
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isWeb = kIsWeb;
+    final isDesktop = Responsive.isDesktop(screenWidth);
+    
+    // For web, add max-width constraint and center content
+    Widget content = CustomScrollView(
+      slivers: [
+        _buildAppBar(),
+        const SliverToBoxAdapter(child: SizedBox(height: 10)),
+        _buildEventSlider(),
+        _buildRecommendations(),
+      ],
     );
+
+    if (isWeb || isDesktop) {
+      return Scaffold(
+        body: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 1400),
+            child: content,
+          ),
+        ),
+      );
+    }
+
+    return Scaffold(body: content);
   }
 
   Widget _buildAppBar() {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isWeb = kIsWeb;
+    final isDesktop = Responsive.isDesktop(screenWidth);
+    final expandedHeight = (isWeb || isDesktop) ? 140.0 : 120.0;
+
     return SliverAppBar(
-      expandedHeight: 120,
+      expandedHeight: expandedHeight,
       floating: false,
       pinned: true,
       backgroundColor: Colors.transparent,
@@ -378,8 +400,8 @@ class _TouristHomeScreenState extends State<TouristHomeScreen>
                     child: SlideTransition(
                       position: _slideAnimation,
                       child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 20.0,
+                        padding: EdgeInsets.symmetric(
+                          horizontal: (isWeb || isDesktop) ? 40.0 : 20.0,
                           vertical: 12.0,
                         ),
                         child: MediaQuery(
@@ -395,8 +417,8 @@ class _TouristHomeScreenState extends State<TouristHomeScreen>
                                   _greeting,
                                   maxLines: 2,
                                   overflow: TextOverflow.ellipsis,
-                                  style: const TextStyle(
-                                    fontSize: 24,
+                                  style: TextStyle(
+                                    fontSize: (isWeb || isDesktop) ? 32 : 24,
                                     fontWeight: FontWeight.bold,
                                     color: Colors.white,
                                     height: 1.1,
@@ -404,13 +426,13 @@ class _TouristHomeScreenState extends State<TouristHomeScreen>
                                 ),
                               ),
                               const SizedBox(height: 6),
-                              const Flexible(
+                              Flexible(
                                 child: Text(
                                   'Discover amazing places around you',
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
-                                    fontSize: 16,
+                                    fontSize: (isWeb || isDesktop) ? 18 : 16,
                                     color: Colors.white70,
                                     height: 1.2,
                                   ),
@@ -434,6 +456,11 @@ class _TouristHomeScreenState extends State<TouristHomeScreen>
       return const SliverToBoxAdapter(child: SizedBox.shrink());
     }
 
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isWeb = kIsWeb;
+    final isDesktop = Responsive.isDesktop(screenWidth);
+    final sliderHeight = (isWeb || isDesktop) ? 200.0 : 160.0;
+
     return SliverToBoxAdapter(
       child: AnimatedBuilder(
         animation: _eventSliderController,
@@ -441,13 +468,19 @@ class _TouristHomeScreenState extends State<TouristHomeScreen>
             (context, child) => FadeTransition(
               opacity: _eventSliderAnimation,
               child: Container(
-                height: 160,
-                margin: const EdgeInsets.only(bottom: 16),
+                height: sliderHeight,
+                margin: EdgeInsets.only(
+                  bottom: 16,
+                  left: (isWeb || isDesktop) ? 40.0 : 0,
+                  right: (isWeb || isDesktop) ? 40.0 : 0,
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                      padding: EdgeInsets.symmetric(
+                        horizontal: (isWeb || isDesktop) ? 0.0 : 16.0,
+                      ),
                       child: Row(
                         children: [
                           Icon(
@@ -456,10 +489,10 @@ class _TouristHomeScreenState extends State<TouristHomeScreen>
                             size: 20,
                           ),
                           const SizedBox(width: 8),
-                          const Text(
+                          Text(
                             'Upcoming Events',
                             style: TextStyle(
-                              fontSize: 18,
+                              fontSize: (isWeb || isDesktop) ? 22 : 18,
                               fontWeight: FontWeight.bold,
                               color: Colors.black87,
                             ),
@@ -480,7 +513,9 @@ class _TouristHomeScreenState extends State<TouristHomeScreen>
                         itemBuilder: (context, index) {
                           final event = _events[index];
                           return Container(
-                            margin: const EdgeInsets.symmetric(horizontal: 16),
+                            margin: EdgeInsets.symmetric(
+                              horizontal: (isWeb || isDesktop) ? 8 : 16,
+                            ),
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(16),
                               gradient: LinearGradient(

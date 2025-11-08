@@ -10,6 +10,7 @@ import 'package:capstone_app/utils/constants.dart';
 import 'package:capstone_app/widgets/common_search_bar.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_compass/flutter_compass.dart';
 import 'package:geolocator/geolocator.dart';
@@ -54,7 +55,8 @@ class _ProvMapScreenState extends State<ProvMapScreen> {
 
   // Custom Category Marker Icons
   final Map<String, BitmapDescriptor> _categoryMarkerIcons = {};
-  static const double _categoryMarkerSize = 80.0;
+  // Smaller icons for web, larger for mobile
+  static double get _categoryMarkerSize => kIsWeb ? 40.0 : 80.0;
   static const Map<String, IconData> _categoryIcons = {
     'Natural Attraction': Icons.park, 'Cultural Site': Icons.museum, 'Adventure Spot': Icons.forest,
     'Restaurant': Icons.restaurant, 'Accommodation': Icons.hotel, 'Shopping': Icons.shopping_cart,

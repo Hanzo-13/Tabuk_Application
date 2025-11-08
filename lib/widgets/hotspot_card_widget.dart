@@ -63,7 +63,9 @@ class _HotspotCardWidgetState extends State<HotspotCardWidget> {
   @override
   Widget build(BuildContext context) {
     final screenWidth = MediaQuery.of(context).size.width;
-    final cardWidth = (screenWidth * 0.6).clamp(140.0, 220.0);
+    // For web/grid layouts, use full width; for mobile horizontal scroll, use fixed width
+    final isWeb = MediaQuery.of(context).size.width > 768;
+    final cardWidth = isWeb ? null : (screenWidth * 0.6).clamp(140.0, 220.0);
 
     return GestureDetector(
       onTapDown: (_) => setState(() => _isPressed = true),
@@ -74,6 +76,7 @@ class _HotspotCardWidgetState extends State<HotspotCardWidget> {
         duration: const Duration(milliseconds: 150),
         transform: Matrix4.identity()..scale(_isPressed ? 0.95 : 1.0),
         width: cardWidth,
+        height: cardWidth != null ? null : 280, // Fixed height for grid layouts
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(20),
           boxShadow: [

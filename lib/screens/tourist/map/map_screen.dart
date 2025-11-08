@@ -16,7 +16,7 @@ import 'package:capstone_app/utils/constants.dart';
 import 'package:capstone_app/widgets/business_details_modal.dart';
 import 'package:capstone_app/widgets/common_search_bar.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:flutter/foundation.dart' show kDebugMode, debugPrint;
+import 'package:flutter/foundation.dart' show kDebugMode, debugPrint, kIsWeb;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
@@ -198,24 +198,26 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   Future<void> _initMap() async {
     // 1. Fetch data first
     await _fetchAllData();
+    if (!mounted) return;
 
     // 2. Handle location permissions and start tracking
     final hasPermission = await _locationManager.handleLocationPermission(
       context,
     );
+    if (!mounted) return;
+    
     if (!hasPermission) {
-      if (mounted) {
-        setState(() {
-          _showLocationBanner = true;
-          _locationBannerText =
-              'Location permission is required to use the map features.';
-        });
-      }
+      setState(() {
+        _showLocationBanner = true;
+        _locationBannerText =
+            'Location permission is required to use the map features.';
+      });
       return;
     }
 
     // 3. Start location tracking
     await _locationManager.startLocationTracking();
+    if (!mounted) return;
 
     // Navigation listeners are initialized via MapNavigationManager
   }
@@ -389,9 +391,11 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
         rawDocs,
       );
 
-      setState(() {
-        _markers = markers;
-      });
+      if (mounted) {
+        setState(() {
+          _markers = markers;
+        });
+      }
     } catch (e) {
       if (kDebugMode) debugPrint('Error fetching destinations: $e');
     } finally {
@@ -400,12 +404,14 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   }
 
   void _handleMarkerTap(Map<String, dynamic> data) {
+    if (!mounted) return;
     BusinessDetailsModal.show(
       context: context,
       businessData: data,
       role: _role,
       currentUserId: FirebaseAuth.instance.currentUser?.uid,
       onNavigate: (lat, lng) {
+        if (!mounted) return;
         _navigationManager.showNavigationPreview(
           context,
           LatLng(lat, lng),
@@ -440,6 +446,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
     // Check location permission - works on both iOS and Android
     final permission = await Geolocator.checkPermission();
+    if (!mounted) return;
     if (permission == LocationPermission.denied ||
         permission == LocationPermission.deniedForever) {
       return;
@@ -494,8 +501,9 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       try {
         // Check if already arrived today (checks both collections)
         final hasArrived = await ArrivalService.hasArrivedToday(hotspotId);
+        if (!mounted) return;
 
-        if (!hasArrived && mounted) {
+        if (!hasArrived) {
           final destinationInfo = _markerManager.getDestinationData(hotspotId);
 
           // Only save arrival if we have valid destination data
@@ -537,19 +545,18 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
                   destinationInfo['destinationDescription'] ??
                   destinationInfo['description'],
             );
+            if (!mounted) return;
 
             // Optional: Show a brief notification that arrival was recorded
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    'Visited: ${destinationInfo['destinationName'] ?? destinationInfo['business_name'] ?? destinationInfo['name'] ?? 'Destination'}',
-                  ),
-                  duration: const Duration(seconds: 2),
-                  behavior: SnackBarBehavior.floating,
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(
+                  'Visited: ${destinationInfo['destinationName'] ?? destinationInfo['business_name'] ?? destinationInfo['name'] ?? 'Destination'}',
                 ),
-              );
-            }
+                duration: const Duration(seconds: 2),
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
           }
         }
       } catch (e) {
@@ -804,15 +811,18 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     _mapController = controller;
     _controller.complete(controller);
 
-    try {
-      _mapController?.setMapStyle(AppConstants.kMapStyle);
-    } catch (e) {
-      if (kDebugMode) debugPrint('Map style error: $e');
-    }
+    // Map style: Skip on web as it may cause issues, or handle differently
+    if (!kIsWeb) {
+      try {
+        _mapController?.setMapStyle(AppConstants.kMapStyle);
+      } catch (e) {
+        if (kDebugMode) debugPrint('Map style error: $e');
+      }
 
-    // iOS specific: Enable compass
-    if (Platform.isIOS) {
-      controller.setMapStyle(AppConstants.kMapStyle);
+      // iOS specific: Enable compass
+      if (Platform.isIOS) {
+        controller.setMapStyle(AppConstants.kMapStyle);
+      }
     }
   }
 

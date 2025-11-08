@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 import '../models/destination_model.dart';
 import '../utils/colors.dart';
+import '../utils/responsive.dart';
 import 'hotspot_card_widget.dart';
 
 class RecommendationSectionWidget extends StatefulWidget {
@@ -102,33 +104,45 @@ class _RecommendationSectionWidgetState
   }
 
   Widget _buildHeader() {
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isWeb = kIsWeb;
+    final isDesktop = Responsive.isDesktop(screenWidth);
+    final horizontalPadding = (isWeb || isDesktop) ? 40.0 : 16.0;
+
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+      padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(12),
+            padding: EdgeInsets.all((isWeb || isDesktop) ? 14 : 12),
             decoration: BoxDecoration(
               color: widget.accentColor.withOpacity(0.1),
               borderRadius: BorderRadius.circular(12),
             ),
-            child: Icon(widget.icon, color: widget.accentColor, size: 24),
+            child: Icon(
+              widget.icon,
+              color: widget.accentColor,
+              size: (isWeb || isDesktop) ? 28 : 24,
+            ),
           ),
-          const SizedBox(width: 12),
+          SizedBox(width: (isWeb || isDesktop) ? 16 : 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   widget.title,
-                  style: const TextStyle(
-                    fontSize: 20,
+                  style: TextStyle(
+                    fontSize: (isWeb || isDesktop) ? 24 : 20,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
                 Text(
                   widget.subtitle,
-                  style: const TextStyle(fontSize: 14, color: Colors.grey),
+                  style: TextStyle(
+                    fontSize: (isWeb || isDesktop) ? 16 : 14,
+                    color: Colors.grey,
+                  ),
                 ),
               ],
             ),
@@ -136,7 +150,12 @@ class _RecommendationSectionWidgetState
           if (widget.showViewAll && widget.onViewAll != null)
             TextButton(
               onPressed: widget.onViewAll,
-              child: const Text('View All'),
+              child: Text(
+                'View All',
+                style: TextStyle(
+                  fontSize: (isWeb || isDesktop) ? 16 : 14,
+                ),
+              ),
             ),
         ],
       ),
@@ -144,25 +163,81 @@ class _RecommendationSectionWidgetState
   }
 
   Widget _buildHotspotsList() {
-    final screenHeight = MediaQuery.of(context).size.height;
-    final listHeight = (screenHeight * 0.28).clamp(180.0, 260.0);
+    final screenWidth = MediaQuery.of(context).size.width;
+    final isWeb = kIsWeb;
+    final isDesktop = Responsive.isDesktop(screenWidth);
+    final isTablet = Responsive.isTablet(screenWidth);
 
-    return SizedBox(
-      height: listHeight,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
+    // Use grid layout for web/desktop, horizontal scroll for mobile
+    if (isWeb || isDesktop) {
+      // Desktop: 4-5 columns
+      final crossAxisCount = isDesktop ? 5 : 4;
+      return GridView.builder(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: crossAxisCount,
+          crossAxisSpacing: 16,
+          mainAxisSpacing: 16,
+          childAspectRatio: 0.75,
+        ),
+        padding: EdgeInsets.symmetric(
+          horizontal: (isWeb || isDesktop) ? 40.0 : 16.0,
+        ),
         itemCount: widget.hotspots.length,
-        separatorBuilder: (_, _) => const SizedBox(width: 16),
-        itemBuilder:
-            (context, index) => HotspotCardWidget(
-              hotspot: widget.hotspots[index],
-              accentColor: widget.accentColor,
-              categoryKey: widget.categoryKey,
-              userRole: widget.userRole,
-            ),
-      ),
-    );
+        itemBuilder: (context, index) => HotspotCardWidget(
+          hotspot: widget.hotspots[index],
+          accentColor: widget.accentColor,
+          categoryKey: widget.categoryKey,
+          userRole: widget.userRole,
+        ),
+      );
+    } else if (isTablet) {
+      // Tablet: 3 columns
+      return GridView.builder(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 3,
+          crossAxisSpacing: 16,
+          mainAxisSpacing: 16,
+          childAspectRatio: 0.75,
+        ),
+        padding: EdgeInsets.symmetric(
+          horizontal: (isWeb || isDesktop) ? 40.0 : 16.0,
+        ),
+        itemCount: widget.hotspots.length,
+        itemBuilder: (context, index) => HotspotCardWidget(
+          hotspot: widget.hotspots[index],
+          accentColor: widget.accentColor,
+          categoryKey: widget.categoryKey,
+          userRole: widget.userRole,
+        ),
+      );
+    } else {
+      // Mobile: horizontal scroll
+      final screenHeight = MediaQuery.of(context).size.height;
+      final listHeight = (screenHeight * 0.28).clamp(180.0, 260.0);
+
+      return SizedBox(
+        height: listHeight,
+        child: ListView.separated(
+          scrollDirection: Axis.horizontal,
+          padding: EdgeInsets.symmetric(
+          horizontal: (isWeb || isDesktop) ? 40.0 : 16.0,
+        ),
+          itemCount: widget.hotspots.length,
+          separatorBuilder: (_, _) => const SizedBox(width: 16),
+          itemBuilder:
+              (context, index) => HotspotCardWidget(
+                hotspot: widget.hotspots[index],
+                accentColor: widget.accentColor,
+                categoryKey: widget.categoryKey,
+                userRole: widget.userRole,
+              ),
+        ),
+      );
+    }
   }
 }
 

@@ -5,11 +5,9 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Replace with your actual Google Directions API key
-const GOOGLE_API_KEY = 'AIzaSyDEeIzEOXmrCFNYt7f2QHM43lcq8fZtTsE';
+const GOOGLE_API_KEY = 'AIzaSyCHDrbJrZHSeMFG40A-hQPB37nrmA6rUKE';
 
 app.use(cors());
-
-app.get('/health', (req, res) => res.json({ status: 'ok' }));
 
 // Add a root route to handle GET /
 app.get('/', (req, res) => {
@@ -21,7 +19,7 @@ app.get('/', (req, res) => {
     },
     example: {
       directions: '/directions?origin=New York&destination=Boston&mode=driving',
-      geocode: '/geocode?latlng=40.7128,-74.0060'
+      geocode: '/geocode?latlng=40.7128,-74s.0060'
     }
   });
 });
