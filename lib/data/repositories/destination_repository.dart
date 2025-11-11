@@ -8,6 +8,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart' show kDebugMode, debugPrint;
 import '../../services/offline_data_service.dart';
 import '../../services/offline_sync_service.dart';
+import '../../models/destination_model.dart';
 
 class DestinationRepository {
   final FirebaseFirestore _db;
@@ -41,7 +42,7 @@ class DestinationRepository {
       if (cachedHotspots.isNotEmpty) {
         // Filter active destinations and convert to map format
         final activeHotspots = cachedHotspots
-            .where((h) => h.isArchived != true)
+            .where((h) => h.isArchived == null || h.isArchived != true)
             .map((h) {
               final json = h.toJson();
               json['id'] = h.hotspotId;
@@ -69,7 +70,7 @@ class DestinationRepository {
         await OfflineDataService.initialize();
         final cachedHotspots = await OfflineDataService.loadHotspots();
         return cachedHotspots
-            .where((h) => h.isArchived != true)
+            .where((h) => h.isArchived == null || h.isArchived != true)
             .map((h) {
               final json = h.toJson();
               json['id'] = h.hotspotId;

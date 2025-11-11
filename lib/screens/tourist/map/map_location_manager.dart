@@ -33,7 +33,7 @@ class MapLocationManager {
   static const int _smoothingWindow = 5;
   static const double _maxJumpMeters = 100;
   static const Duration _jumpWindow = Duration(seconds: 3);
-  static const Duration _throttleInterval = Duration(milliseconds: 900);
+  static const Duration _throttleInterval = Duration(milliseconds: 300); // Reduced further for smoother updates
 
   MapLocationManager({
     required this.onLocationUpdate,
@@ -133,14 +133,14 @@ class MapLocationManager {
       // iOS: bestForNavigation for accurate arrival detection, longer timeLimit
       locationSettings = const LocationSettings(
         accuracy: LocationAccuracy.bestForNavigation,
-        distanceFilter: 5,
+        distanceFilter: 1, // Reduced to 1 meter for smoother tracking
         // Avoid timeLimit on stream to prevent auto-stop
       );
     } else {
       // Android: high accuracy is sufficient and more battery-efficient for arrival detection
       locationSettings = const LocationSettings(
         accuracy: LocationAccuracy.high,
-        distanceFilter: 5,
+        distanceFilter: 1, // Reduced to 1 meter for smoother tracking
         // No timeLimit on stream; watchdog will handle stalls
       );
     }

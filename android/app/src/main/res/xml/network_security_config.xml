@@ -6,7 +6,7 @@
             <!-- Trust system certificates -->
             <certificates src="system" />
             <!-- Optional: Add custom certificates for certificate pinning -->
-            <!-- <certificates src="@raw/custom_certificate" /> -->
+            
         </trust-anchors>
     </base-config>
     
@@ -50,6 +50,6 @@
         <domain includeSubdomains="true">localhost</domain>
         <domain includeSubdomains="true">10.0.2.2</domain>
         <!-- Additional local development domains can be added here -->
-        <!-- <domain includeSubdomains="true">127.0.0.1</domain> -->
+       
     </domain-config>
 </network-security-config>

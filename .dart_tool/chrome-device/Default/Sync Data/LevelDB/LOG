@@ -1,2 +1,8 @@
+<<<<<<< Updated upstream
 2025/11/08-19:35:58.604 7a8 Creating DB C:\Users\miguel\AppData\Local\Temp\flutter_tools.7020a02f\flutter_tools_chrome_device.8f8c1896\Default\Sync Data\LevelDB since it was missing.
 2025/11/08-19:35:58.635 7a8 Reusing MANIFEST C:\Users\miguel\AppData\Local\Temp\flutter_tools.7020a02f\flutter_tools_chrome_device.8f8c1896\Default\Sync Data\LevelDB/MANIFEST-000001
+=======
+2025/11/04-23:42:13.008 c280f Reusing MANIFEST /private/var/folders/kx/v135y1p95510b813k_bd1dlm0000gn/T/flutter_tools.kiZwqH/flutter_tools_chrome_device.mzul9Q/Default/Sync Data/LevelDB/MANIFEST-000001
+2025/11/04-23:42:13.027 c280f Recovering log #3
+2025/11/04-23:42:13.027 c280f Reusing old log /private/var/folders/kx/v135y1p95510b813k_bd1dlm0000gn/T/flutter_tools.kiZwqH/flutter_tools_chrome_device.mzul9Q/Default/Sync Data/LevelDB/000003.log 
+>>>>>>> Stashed changes

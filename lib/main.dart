@@ -30,6 +30,20 @@ final Future<void> appInitialization = _initializeApp();
 Future<void> _initializeApp() async {
   await AuthService.initializeAuthState();
 
+  FirebaseFirestore.instance.settings = const Settings(
+    persistenceEnabled: true,
+  );
+
+  if (kIsWeb) {
+    // On web, Hive uses IndexedDB and does not require a filesystem path
+    await Hive.initFlutter();
+  } else {
+    final appDir = await getApplicationDocumentsDirectory();
+    await Hive.initFlutter(appDir.path);
+  }
+  
+  // Initialize offline data service
+
   try {
     FirebaseFirestore.instance.settings = const Settings(
       persistenceEnabled: true,

@@ -1,5 +1,7 @@
 // lib/widgets/common_search_bar.dart
 
+// ignore_for_file: strict_top_level_inference, prefer_typing_uninitialized_variables
+
 import 'package:flutter/material.dart';
 import 'package:capstone_app/utils/colors.dart';
 

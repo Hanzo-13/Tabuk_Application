@@ -176,7 +176,7 @@ class _TripDetailsScreenState extends State<TripDetailsScreen> {
             final name = data['name']?.toString().toLowerCase() ?? '';
             final searchName = destinationName.toLowerCase();
 
-            if (businessName == searchName || 
+            if (businessName == searchName ||
                 name == searchName ||
                 businessName.contains(searchName) ||
                 name.contains(searchName)) {
@@ -190,11 +190,11 @@ class _TripDetailsScreenState extends State<TripDetailsScreen> {
 
       // Only save if we found valid destination data
       // Don't save with unknown/null values
-      if (destinationData != null && 
+      if (destinationData != null &&
           (destinationData['hotspot_id'] != null || destinationData['id'] != null)) {
         
         // Extract hotspot ID
-        final hotspotId = destinationData['hotspot_id']?.toString() ?? 
+        final hotspotId = destinationData['hotspot_id']?.toString() ??
                           destinationData['id']?.toString();
         
         // Get coordinates (required fields)
@@ -207,22 +207,22 @@ class _TripDetailsScreenState extends State<TripDetailsScreen> {
             hotspotId: hotspotId,
             latitude: lat,
             longitude: lng,
-            businessName: destinationData['business_name'] ?? 
-                          destinationData['name'] ?? 
+            businessName: destinationData['business_name'] ??
+                          destinationData['name'] ??
                           destinationData['destinationName'] ??
                           destinationName,
             destinationName: destinationData['destinationName'] ??
-                             destinationData['business_name'] ?? 
-                             destinationData['name'] ?? 
-                             destinationName,
+                            destinationData['business_name'] ??
+                            destinationData['name'] ??
+                            destinationName,
             destinationCategory: destinationData['destinationCategory'] ??
-                                 destinationData['category']?.toString(),
+                                destinationData['category']?.toString(),
             destinationType: destinationData['destinationType'] ??
-                             destinationData['type']?.toString(),
+                            destinationData['type']?.toString(),
             destinationDistrict: destinationData['destinationDistrict'] ??
                                 destinationData['district']?.toString(),
             destinationMunicipality: destinationData['destinationMunicipality'] ??
-                                     destinationData['municipality']?.toString(),
+                                    destinationData['municipality']?.toString(),
             destinationImages: destinationData['destinationImages'] != null
                 ? (destinationData['destinationImages'] as List).map((e) => e.toString()).toList()
                 : destinationData['images'] != null
@@ -231,7 +231,7 @@ class _TripDetailsScreenState extends State<TripDetailsScreen> {
                         ? [destinationData['imageUrl'].toString()]
                         : null,
             destinationDescription: destinationData['destinationDescription'] ??
-                                   destinationData['description']?.toString(),
+                                  destinationData['description']?.toString(),
           );
         } else {
           // Missing coordinates; skip saving visit
@@ -362,7 +362,6 @@ class _TripDetailsScreenState extends State<TripDetailsScreen> {
   }
 
   void _showSpotDetails(String spotName, int spotIndex) {
-    // Show your floating widget with spot details here
     // For now, showing a simple bottom sheet as placeholder
     showModalBottomSheet(
       context: context,
