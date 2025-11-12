@@ -1,8 +1,0 @@
-<<<<<<< Updated upstream
-2025/11/08-19:35:59.023 7b8 Creating DB C:\Users\miguel\AppData\Local\Temp\flutter_tools.7020a02f\flutter_tools_chrome_device.8f8c1896\Default\shared_proto_db\metadata since it was missing.
-2025/11/08-19:35:59.029 7b8 Reusing MANIFEST C:\Users\miguel\AppData\Local\Temp\flutter_tools.7020a02f\flutter_tools_chrome_device.8f8c1896\Default\shared_proto_db\metadata/MANIFEST-000001
-=======
-2025/11/04-23:42:15.339 c2827 Reusing MANIFEST /private/var/folders/kx/v135y1p95510b813k_bd1dlm0000gn/T/flutter_tools.kiZwqH/flutter_tools_chrome_device.mzul9Q/Default/shared_proto_db/metadata/MANIFEST-000001
-2025/11/04-23:42:15.340 c2827 Recovering log #3
-2025/11/04-23:42:15.340 c2827 Reusing old log /private/var/folders/kx/v135y1p95510b813k_bd1dlm0000gn/T/flutter_tools.kiZwqH/flutter_tools_chrome_device.mzul9Q/Default/shared_proto_db/metadata/000003.log 
->>>>>>> Stashed changes
