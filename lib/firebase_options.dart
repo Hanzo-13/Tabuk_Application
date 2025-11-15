@@ -26,13 +26,13 @@ class DefaultFirebaseOptions {
         return ios;
       case TargetPlatform.macOS:
         return macos;
-      case TargetPlatform.windows:
-        return windows;
-      case TargetPlatform.linux:
-        throw UnsupportedError(
-          'DefaultFirebaseOptions have not been configured for linux - '
-          'you can reconfigure this by running the FlutterFire CLI again.',
-        );
+      // case TargetPlatform.windows:
+      //   return windows;
+      // case TargetPlatform.linux:
+      //   throw UnsupportedError(
+      //     'DefaultFirebaseOptions have not been configured for linux - '
+      //     'you can reconfigure this by running the FlutterFire CLI again.',
+      //   );
       default:
         throw UnsupportedError(
           'DefaultFirebaseOptions are not supported for this platform.',
@@ -80,13 +80,13 @@ class DefaultFirebaseOptions {
     iosBundleId: 'com.example.capstoneApp',
   );
 
-  static const FirebaseOptions windows = FirebaseOptions(
-    apiKey: 'AIzaSyBqUNC1h2O3pseeDYdRjfYCkSfGBwbnVis',
-    appId: '1:749213753046:web:d57034830053a7d563b377',
-    messagingSenderId: '749213753046',
-    projectId: 'tabuk-ce16e',
-    authDomain: 'tabuk-ce16e.firebaseapp.com',
-    storageBucket: 'tabuk-ce16e.appspot.com',
-    measurementId: 'G-8GPLK0YKEW',
-  );
+  // static const FirebaseOptions windows = FirebaseOptions(
+  //   apiKey: 'AIzaSyBqUNC1h2O3pseeDYdRjfYCkSfGBwbnVis',
+  //   appId: '1:749213753046:web:d57034830053a7d563b377',
+  //   messagingSenderId: '749213753046',
+  //   projectId: 'tabuk-ce16e',
+  //   authDomain: 'tabuk-ce16e.firebaseapp.com',
+  //   storageBucket: 'tabuk-ce16e.appspot.com',
+  //   measurementId: 'G-8GPLK0YKEW',
+  // );
 }

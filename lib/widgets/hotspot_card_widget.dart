@@ -2,6 +2,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../models/destination_model.dart';
+import '../screens/tourist/map/map_screen.dart';
 import '../services/favorites_service.dart';
 import '../utils/constants.dart';
 import 'business_details_modal.dart';
@@ -97,6 +98,7 @@ class _HotspotCardWidgetState extends State<HotspotCardWidget> {
               // Hide favorite button in guest mode; parent widgets set showFavoriteButton=false for guests
               if (widget.showFavoriteButton) _buildFavoriteButton(),
               _buildCategoryBadge(),
+              _buildMapButton(),
             ],
           ),
         ),
@@ -247,6 +249,58 @@ class _HotspotCardWidgetState extends State<HotspotCardWidget> {
             fontWeight: FontWeight.bold,
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildMapButton() {
+    return Positioned(
+      bottom: 8,
+      right: 8,
+      child: GestureDetector(
+        onTap: () => _navigateToMap(),
+        child: Container(
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: Colors.white.withOpacity(0.9),
+            borderRadius: BorderRadius.circular(12),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.2),
+                blurRadius: 4,
+                offset: const Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.map_rounded,
+                color: widget.accentColor,
+                size: 18,
+              ),
+              const SizedBox(width: 4),
+              Text(
+                'Map',
+                style: TextStyle(
+                  color: widget.accentColor,
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _navigateToMap() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const MapScreen(),
       ),
     );
   }

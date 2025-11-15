@@ -180,18 +180,108 @@ class _TouristRegistrationFlowState extends State<TouristRegistrationFlow> {
 
   Widget _buildStepOne() {
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (_email != null)
-          TextFormField(
-            initialValue: _email,
-            readOnly: true,
-            decoration: const InputDecoration(labelText: 'Email'),
+        // Welcome Section
+        Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                AppColors.primaryTeal.withOpacity(0.1),
+                AppColors.primaryOrange.withOpacity(0.05),
+              ],
+            ),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: AppColors.primaryTeal.withOpacity(0.2),
+            ),
           ),
-        const SizedBox(height: 12),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.primaryTeal.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.person_add_rounded,
+                  color: AppColors.primaryTeal,
+                  size: 28,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Let\'s get started!',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.textDark,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Tell us about yourself',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: AppColors.textLight,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 24),
+        if (_email != null)
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.primaryTeal.withOpacity(0.2)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.email_rounded, color: AppColors.primaryTeal),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Email',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: AppColors.textLight,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        _email!,
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textDark,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        if (_email != null) const SizedBox(height: 16),
         CustomTextField(controller: _nameController, hintText: 'Full Name'),
-        const SizedBox(height: 12),
+        const SizedBox(height: 16),
         CustomTextField(controller: _usernameController, hintText: 'Username'),
-        const SizedBox(height: 12),
+        const SizedBox(height: 16),
         CustomTextField(
           controller: _passwordController,
           hintText: 'Re-enter Password',
@@ -199,7 +289,7 @@ class _TouristRegistrationFlowState extends State<TouristRegistrationFlow> {
           suffixIcon: IconButton(
             icon: Icon(
               _isPasswordVisible ? Icons.visibility : Icons.visibility_off,
-              color: Colors.grey,
+              color: AppColors.primaryTeal,
             ),
             onPressed: () {
               setState(() {
@@ -210,16 +300,30 @@ class _TouristRegistrationFlowState extends State<TouristRegistrationFlow> {
           validator: (value) =>
               value == null || value.isEmpty ? 'Please enter a password' : null,
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 16),
         CustomTextField(controller: _contactController, hintText: 'Contact Number'),
-        const SizedBox(height: 12),
-        SizedBox(
-          width: MediaQuery.of(context).size.width * 0.9,
-          child:DropdownButtonFormField<String>(
+        const SizedBox(height: 16),
+        DropdownButtonFormField<String>(
           value: _gender,
-          decoration: InputDecoration(labelText: 'Gender',
-            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
-            border: OutlineInputBorder( borderRadius: BorderRadius.circular(8),),
+          decoration: InputDecoration(
+            labelText: 'Gender',
+            labelStyle: TextStyle(color: AppColors.textLight),
+            prefixIcon: const Icon(Icons.person_outline, color: AppColors.primaryTeal),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: AppColors.primaryTeal.withOpacity(0.3)),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: AppColors.primaryTeal.withOpacity(0.3)),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: AppColors.primaryTeal, width: 2),
+            ),
+            filled: true,
+            fillColor: Colors.white,
           ),
           items: const [
             DropdownMenuItem(value: 'Male', child: Text('Male')),
@@ -228,27 +332,71 @@ class _TouristRegistrationFlowState extends State<TouristRegistrationFlow> {
           ],
           onChanged: (val) => setState(() => _gender = val),
         ),
-        ),
-        const SizedBox(height: 12),
-        TextFormField(
-          decoration: const InputDecoration(labelText: 'Date of Birth'),
-          readOnly: true,
-          controller: TextEditingController(
-            text: _dob == null ? '' : '${_dob!.toLocal()}'.split(' ')[0],
-          ),
+        const SizedBox(height: 16),
+        GestureDetector(
           onTap: () async {
             final picked = await showDatePicker(
               context: context,
-              initialDate: DateTime(2000),
+              initialDate: _dob ?? DateTime(2000),
               firstDate: DateTime(1900),
               lastDate: DateTime.now(),
+              builder: (context, child) {
+                return Theme(
+                  data: Theme.of(context).copyWith(
+                    colorScheme: ColorScheme.light(
+                      primary: AppColors.primaryTeal,
+                    ),
+                  ),
+                  child: child!,
+                );
+              },
             );
             if (picked != null) {
               setState(() => _dob = picked);
             }
           },
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.primaryTeal.withOpacity(0.3)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.calendar_today, color: AppColors.primaryTeal),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Date of Birth',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: AppColors.textLight,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        _dob == null
+                            ? 'Select your date of birth'
+                            : '${_dob!.toLocal()}'.split(' ')[0],
+                        style: TextStyle(
+                          fontSize: 16,
+                          color: _dob == null ? AppColors.textLight : AppColors.textDark,
+                          fontWeight: _dob == null ? FontWeight.normal : FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(Icons.arrow_forward_ios, size: 16, color: AppColors.textLight),
+              ],
+            ),
+          ),
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 16),
         CustomTextField(controller: _countryController, hintText: 'Nationality'),
       ],
     );
@@ -258,15 +406,86 @@ class _TouristRegistrationFlowState extends State<TouristRegistrationFlow> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        // Preferences Header
+        Container(
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                AppColors.primaryOrange.withOpacity(0.1),
+                AppColors.primaryTeal.withOpacity(0.05),
+              ],
+            ),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: AppColors.primaryOrange.withOpacity(0.2),
+            ),
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.primaryOrange.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.explore_rounded,
+                  color: AppColors.primaryOrange,
+                  size: 28,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Travel Preferences',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.textDark,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Help us personalize your experience',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: AppColors.textLight,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 24),
         CustomTextField(controller: _interestsController, hintText: 'Interests (e.g., hiking, food, adventure)'),
-        const SizedBox(height: 12),
-        SizedBox(
-          width: MediaQuery.of(context).size.width * 0.9,
-          child:DropdownButtonFormField<String>(
+        const SizedBox(height: 16),
+        DropdownButtonFormField<String>(
           value: _travelStyle,
-          decoration: InputDecoration(labelText: 'Preferred Travel Style',
-            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
-            border: OutlineInputBorder( borderRadius: BorderRadius.circular(8),),
+          decoration: InputDecoration(
+            labelText: 'Preferred Travel Style',
+            labelStyle: TextStyle(color: AppColors.textLight),
+            prefixIcon: const Icon(Icons.group, color: AppColors.primaryOrange),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: AppColors.primaryOrange.withOpacity(0.3)),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: AppColors.primaryOrange.withOpacity(0.3)),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: AppColors.primaryOrange, width: 2),
+            ),
+            filled: true,
+            fillColor: Colors.white,
           ),
           items: const [
             DropdownMenuItem(value: 'Solo', child: Text('Solo')),
@@ -276,15 +495,28 @@ class _TouristRegistrationFlowState extends State<TouristRegistrationFlow> {
           ],
           onChanged: (val) => setState(() => _travelStyle = val),
         ),
-        ),
-        const SizedBox(height: 12),
-        SizedBox(
-          width: MediaQuery.of(context).size.width * 0.9,
-          child:DropdownButtonFormField<String>(
+        const SizedBox(height: 16),
+        DropdownButtonFormField<String>(
           value: _travelFrequency,
-          decoration: InputDecoration(labelText: 'Travel Frequency',
-            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 16),
-            border: OutlineInputBorder( borderRadius: BorderRadius.circular(8),),
+          decoration: InputDecoration(
+            labelText: 'Travel Frequency',
+            labelStyle: TextStyle(color: AppColors.textLight),
+            prefixIcon: const Icon(Icons.calendar_today, color: AppColors.primaryOrange),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: AppColors.primaryOrange.withOpacity(0.3)),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: BorderSide(color: AppColors.primaryOrange.withOpacity(0.3)),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: AppColors.primaryOrange, width: 2),
+            ),
+            filled: true,
+            fillColor: Colors.white,
           ),
           items: const [
             DropdownMenuItem(value: 'Rarely', child: Text('Rarely')),
@@ -293,106 +525,218 @@ class _TouristRegistrationFlowState extends State<TouristRegistrationFlow> {
           ],
           onChanged: (val) => setState(() => _travelFrequency = val),
         ),
+        const SizedBox(height: 24),
+        const Text(
+          'Select Your Interests',
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: AppColors.textDark,
+          ),
         ),
-        const SizedBox(height: 20),
+        const SizedBox(height: 8),
+        Text(
+          'Choose all that apply to personalize your recommendations',
+          style: TextStyle(
+            fontSize: 14,
+            color: AppColors.textLight,
+          ),
+        ),
+        const SizedBox(height: 16),
         ..._categories.entries.map((entry) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(entry.key, style: const TextStyle(fontWeight: FontWeight.bold)),
-              Wrap(
-                spacing: 6,
-                children: entry.value.map((type) {
-                  final selected = _selectedPreferences[entry.key]?.contains(type) ?? false;
-                  return FilterChip(
-                    label: Text(type),
-                    selected: selected,
-                    onSelected: (_) => _togglePreference(entry.key, type),
-                    selectedColor: AppColors.primaryTeal.withOpacity(0.2),
-                    checkmarkColor: AppColors.primaryTeal,
-                  );
-                }).toList(),
-              ),
-              const SizedBox(height: 12),
-            ],
+          return Container(
+            margin: const EdgeInsets.only(bottom: 20),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.primaryOrange.withOpacity(0.2)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      _getCategoryIcon(entry.key),
+                      color: AppColors.primaryOrange,
+                      size: 20,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      entry.key,
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.textDark,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: entry.value.map((type) {
+                    final selected = _selectedPreferences[entry.key]?.contains(type) ?? false;
+                    return FilterChip(
+                      label: Text(type),
+                      selected: selected,
+                      onSelected: (_) => _togglePreference(entry.key, type),
+                      selectedColor: AppColors.primaryOrange.withOpacity(0.2),
+                      checkmarkColor: AppColors.primaryOrange,
+                      backgroundColor: Colors.grey[100],
+                      labelStyle: TextStyle(
+                        color: selected ? AppColors.primaryOrange : AppColors.textDark,
+                        fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+                      ),
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    );
+                  }).toList(),
+                ),
+              ],
+            ),
           );
         }),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            CheckboxListTile(
-              value: _agreeToTerms,
-              onChanged: (val) => setState(() {
-                _agreeToTerms = val ?? false;
-                _showTermsError = false; // clear error when toggled
-              }),
-              title: const Text('I agree to the Terms and Privacy Policy'),
-              controlAffinity: ListTileControlAffinity.leading,
+        const SizedBox(height: 16),
+        Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: _showTermsError ? Colors.red.withOpacity(0.1) : Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: _showTermsError ? Colors.red : AppColors.primaryOrange.withOpacity(0.3),
+              width: _showTermsError ? 2 : 1,
             ),
-            if (_showTermsError)
-              Padding(
-                padding: const EdgeInsets.only(left: 16.0, top: 4),
-                child: Text(
-                  '               You must agree to the Terms & Privacy Policy.',
-                  style: const TextStyle(color: Colors.red, fontSize: 13),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Checkbox(
+                value: _agreeToTerms,
+                onChanged: (val) => setState(() {
+                  _agreeToTerms = val ?? false;
+                  _showTermsError = false;
+                }),
+                activeColor: AppColors.primaryOrange,
+              ),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'I agree to the Terms and Privacy Policy',
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textDark,
+                      ),
+                    ),
+                    if (_showTermsError)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8.0),
+                        child: Text(
+                          'You must agree to the Terms & Privacy Policy to continue.',
+                          style: TextStyle(
+                            color: Colors.red[700],
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                  ],
                 ),
               ),
-          ],
+            ],
+          ),
         ),
       ],
     );
   }
 
+  IconData _getCategoryIcon(String category) {
+    switch (category) {
+      case 'Natural Attractions':
+        return Icons.landscape;
+      case 'Recreational Facilities':
+        return Icons.sports_soccer;
+      case 'Cultural & Historical':
+        return Icons.museum;
+      case 'Agri-Tourism & Industrial':
+        return Icons.agriculture;
+      case 'Culinary & Shopping':
+        return Icons.restaurant;
+      case 'Events & Education':
+        return Icons.event;
+      default:
+        return Icons.category;
+    }
+  }
+
   Widget _buildNavigationButton() {
-    return SizedBox(
-      width: double.infinity,
-      child: ElevatedButton(
-        onPressed: _isLoading
-            ? null
-            : () {
-                if (_currentStep == 0) {
-                  setState(() => _currentStep = 1);
-                } else {
-                  _submit();
-                }
-              },
-        style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.primaryTeal,
-          foregroundColor: Colors.white,
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: (_currentStep == 0 ? AppColors.primaryTeal : AppColors.primaryOrange)
+                .withOpacity(0.3),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
           ),
-          elevation: 4,
-        ),
-        child: _isLoading
-            ? const SizedBox(
-                height: 20,
-                width: 20,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                ),
-              )
-            : Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    _currentStep == 0 ? 'Continue' : 'Complete Registration',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
+        ],
+      ),
+      child: SizedBox(
+        width: double.infinity,
+        child: ElevatedButton(
+          onPressed: _isLoading
+              ? null
+              : () {
+                  if (_currentStep == 0) {
+                    setState(() => _currentStep = 1);
+                  } else {
+                    _submit();
+                  }
+                },
+          style: ElevatedButton.styleFrom(
+            backgroundColor: _currentStep == 0
+                ? AppColors.primaryTeal
+                : AppColors.primaryOrange,
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(vertical: 18),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            elevation: 0,
+          ),
+          child: _isLoading
+              ? const SizedBox(
+                  height: 20,
+                  width: 20,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                  ),
+                )
+              : Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      _currentStep == 0 ? 'Continue to Preferences' : 'Complete Registration',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  Icon(
-                    _currentStep == 0
-                        ? Icons.arrow_forward_rounded
-                        : Icons.check_circle_outline_rounded,
-                    size: 20,
-                  ),
-                ],
-              ),
+                    const SizedBox(width: 8),
+                    Icon(
+                      _currentStep == 0
+                          ? Icons.arrow_forward_rounded
+                          : Icons.check_circle_outline_rounded,
+                      size: 22,
+                    ),
+                  ],
+                ),
+        ),
       ),
     );
   }

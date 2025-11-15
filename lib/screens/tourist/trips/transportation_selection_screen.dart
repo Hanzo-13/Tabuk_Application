@@ -11,7 +11,7 @@ import 'package:capstone_app/utils/colors.dart';
 import 'destination_selection_screen.dart';
 
 /// Enum representing transportation options.
-enum TransportationType { motorcycle, walk, car, none }
+enum TransportationType { motorcycle, walk, car, commute, none }
 
 /// Screen for selecting transportation method for a trip.
 class TransportationSelectionScreen extends StatefulWidget {
@@ -67,6 +67,7 @@ class _TransportationSelectionScreenState
       if (t == 'motorcycle') _selectedTransportation = TransportationType.motorcycle;
       if (t == 'walk') _selectedTransportation = TransportationType.walk;
       if (t == 'car') _selectedTransportation = TransportationType.car;
+      if (t == 'commute') _selectedTransportation = TransportationType.commute;
     }
   }
 
@@ -303,6 +304,11 @@ class _TransportationSelectionScreenState
             type: TransportationType.car,
             icon: Icons.directions_car,
             label: 'Car',
+          ),
+          _buildTransportationOption(
+            type: TransportationType.commute,
+            icon: Icons.directions_transit,
+            label: 'Commute',
           ),
         ],
       ),
@@ -550,6 +556,8 @@ class _TransportationSelectionScreenState
         return 'Walk';
       case TransportationType.car:
         return 'Car';
+      case TransportationType.commute:
+        return 'Commute';
       case TransportationType.none:
         return 'Not specified';
     }

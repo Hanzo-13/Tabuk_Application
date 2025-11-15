@@ -62,6 +62,7 @@ class _DestinationSelectionScreenState extends State<DestinationSelectionScreen>
   final TextEditingController _placeController = TextEditingController();
   String? _currentlyEditingPlace;
   DateTime? _selectedPlaceDate;
+  TimeOfDay? _selectedPlaceTime;
   List<Hotspot> _hotspots = [];
   bool _loadingHotspots = true;
 
@@ -627,21 +628,69 @@ class _DestinationSelectionScreenState extends State<DestinationSelectionScreen>
                   fontSize: 16,
                 ),
               ),
-              subtitle: Row(
+              subtitle: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(
-                    Icons.calendar_today,
-                    size: 14,
-                    color: AppColors.textLight,
+                  // Date
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.calendar_today,
+                        size: 14,
+                        color: AppColors.textLight,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        DateFormat('MMM dd, yyyy').format(place.date),
+                        style: TextStyle(
+                          color: AppColors.textLight,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 4),
-                  Text(
-                    DateFormat('MMM dd, yyyy').format(place.date),
-                    style: TextStyle(
-                      color: AppColors.textLight,
-                      fontSize: 13,
+                  const SizedBox(height: 4),
+                  // Time (if available)
+                  if (place.visitTime != null)
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.access_time,
+                          size: 14,
+                          color: AppColors.primaryOrange,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          place.visitTime!.format(context),
+                          style: TextStyle(
+                            color: AppColors.primaryOrange,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
+                  // Commute (if available)
+                  if (place.commuteMethod != null)
+                    Row(
+                      children: [
+                        Icon(
+                          _getCommuteIcon(place.commuteMethod!),
+                          size: 14,
+                          color: AppColors.primaryTeal,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          place.commuteMethod!,
+                          style: TextStyle(
+                            color: AppColors.primaryTeal,
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ],
+                    ),
                 ],
               ),
               trailing: Row(
@@ -943,6 +992,7 @@ class _DestinationSelectionScreenState extends State<DestinationSelectionScreen>
   void _addPlace(String place) {
     _currentlyEditingPlace = place;
     _selectedPlaceDate = widget.startDate;
+    _selectedPlaceTime = null; // Reset time for new place
     _showDatePicker();
   }
 
@@ -950,6 +1000,7 @@ class _DestinationSelectionScreenState extends State<DestinationSelectionScreen>
   void _editPlace(PlaceVisit placeVisit) {
     _currentlyEditingPlace = placeVisit.place;
     _selectedPlaceDate = placeVisit.date;
+    _selectedPlaceTime = placeVisit.visitTime;
     _placesToVisit.removeWhere((p) => p.place == placeVisit.place);
     _showDatePicker();
   }
@@ -969,6 +1020,28 @@ class _DestinationSelectionScreenState extends State<DestinationSelectionScreen>
       duration,
       (index) => widget.startDate.add(Duration(days: index)),
     );
+    
+    // Predefined time options
+    final List<TimeOfDay> timeOptions = [
+      const TimeOfDay(hour: 6, minute: 0),
+      const TimeOfDay(hour: 7, minute: 0),
+      const TimeOfDay(hour: 8, minute: 0),
+      const TimeOfDay(hour: 9, minute: 0),
+      const TimeOfDay(hour: 10, minute: 0),
+      const TimeOfDay(hour: 11, minute: 0),
+      const TimeOfDay(hour: 12, minute: 0),
+      const TimeOfDay(hour: 13, minute: 0),
+      const TimeOfDay(hour: 14, minute: 0),
+      const TimeOfDay(hour: 15, minute: 0),
+      const TimeOfDay(hour: 16, minute: 0),
+      const TimeOfDay(hour: 17, minute: 0),
+      const TimeOfDay(hour: 18, minute: 0),
+      const TimeOfDay(hour: 19, minute: 0),
+      const TimeOfDay(hour: 20, minute: 0),
+    ];
+    
+    TimeOfDay? selectedTime = _selectedPlaceTime;
+    
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
@@ -978,40 +1051,106 @@ class _DestinationSelectionScreenState extends State<DestinationSelectionScreen>
               'Select Date for ${_currentlyEditingPlace ?? ''}',
               style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
             ),
-            contentPadding: const EdgeInsets.fromLTRB(16.0, 20.0, 16.0, 0.0), // Adjust padding
-            // =================== THE FIX IS HERE ===================
-            // We replace the rigid SizedBox with a properly constrained Container.
+            contentPadding: const EdgeInsets.fromLTRB(16.0, 20.0, 16.0, 0.0),
             content: SizedBox(
-              width: double.maxFinite, // Make the content use the dialog's full width
-              height: 300,             // Give it a fixed height to prevent rendering errors
-              child: ListView.builder(
-                shrinkWrap: true, // Important for lists inside constrained parents
-                itemCount: availableDates.length,
-                itemBuilder: (context, index) {
-                  final date = availableDates[index];
-                  final isSelected = _selectedPlaceDate == date;
-                  return ListTile(
-                    title: Text(DateFormat('MMMM dd, yyyy').format(date)),
-                    trailing: isSelected
-                        ? const Icon(Icons.check_circle, color: AppColors.primaryOrange)
-                        : const Icon(Icons.circle_outlined, color: Colors.grey),
-                    onTap: () {
-                      setDialogState(() {
-                        _selectedPlaceDate = date;
-                      });
-                    },
-                  );
-                },
+              width: double.maxFinite,
+              height: 400, // Reduced height since commute section is removed
+              child: Column(
+                children: [
+                  // Date Selection Section
+                  Text(
+                    'Select Date',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textDark,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Expanded(
+                    flex: 2,
+                    child: ListView.builder(
+                      shrinkWrap: true,
+                      itemCount: availableDates.length,
+                      itemBuilder: (context, index) {
+                        final date = availableDates[index];
+                        final isSelected = _selectedPlaceDate == date;
+                        return ListTile(
+                          title: Text(DateFormat('MMMM dd, yyyy').format(date)),
+                          trailing: isSelected
+                              ? const Icon(Icons.check_circle, color: AppColors.primaryOrange)
+                              : const Icon(Icons.circle_outlined, color: Colors.grey),
+                          onTap: () {
+                            setDialogState(() {
+                              _selectedPlaceDate = date;
+                            });
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                  const Divider(height: 20),
+                  
+                  // Time Selection Section
+                  Text(
+                    'Select Time',
+                    style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textDark,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Expanded(
+                    flex: 2,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        border: Border.all(color: AppColors.primaryOrange.withOpacity(0.3), width: 1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: ListView.builder(
+                        shrinkWrap: true,
+                        itemCount: timeOptions.length,
+                        itemBuilder: (context, index) {
+                          final time = timeOptions[index];
+                          final isTimeSelected = selectedTime != null &&
+                              selectedTime!.hour == time.hour &&
+                              selectedTime!.minute == time.minute;
+                          return ListTile(
+                            dense: true,
+                            title: Text(
+                              time.format(context),
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: isTimeSelected
+                                    ? AppColors.primaryOrange
+                                    : AppColors.textDark,
+                                fontWeight: isTimeSelected
+                                    ? FontWeight.w600
+                                    : FontWeight.normal,
+                              ),
+                            ),
+                            trailing: isTimeSelected
+                                ? const Icon(Icons.check_circle, color: AppColors.primaryOrange, size: 20)
+                                : const Icon(Icons.circle_outlined, color: Colors.grey, size: 20),
+                            onTap: () {
+                              setDialogState(() {
+                                selectedTime = time;
+                              });
+                            },
+                          );
+                        },
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
-            // ================= END OF FIX =======================
             actions: [
               TextButton(
                 onPressed: () {
-                   // If the user cancels an edit, add the original place back
                   if (_placesToVisit.every((p) => p.place != _currentlyEditingPlace)) {
-                       // This logic assumes you removed it before editing.
-                       // A safer pattern might be to only remove on save.
+                    // This logic assumes you removed it before editing.
                   }
                   Navigator.pop(context);
                 },
@@ -1019,6 +1158,8 @@ class _DestinationSelectionScreenState extends State<DestinationSelectionScreen>
               ),
               ElevatedButton(
                 onPressed: () {
+                  // Store time info for future use
+                  _selectedPlaceTime = selectedTime;
                   _savePlaceWithDate();
                   Navigator.pop(context);
                 },
@@ -1034,16 +1175,44 @@ class _DestinationSelectionScreenState extends State<DestinationSelectionScreen>
       ),
     );
   }
+  
+  /// Helper method to get icon for commute method
+  IconData _getCommuteIcon(String commute) {
+    switch (commute) {
+      case 'Walk':
+        return Icons.directions_walk;
+      case 'Car':
+        return Icons.directions_car;
+      case 'Motorcycle':
+        return Icons.two_wheeler;
+      case 'Bike':
+        return Icons.directions_bike;
+      case 'Public Transit':
+        return Icons.directions_bus;
+      case 'Commute':
+        return Icons.directions_transit;
+      default:
+        return Icons.directions_walk;
+    }
+  }
 
   /// Saves the place with the selected date to the itinerary
   void _savePlaceWithDate() {
     if (_currentlyEditingPlace != null && _selectedPlaceDate != null) {
       setState(() {
         _placesToVisit.add(
-          PlaceVisit(place: _currentlyEditingPlace!, date: _selectedPlaceDate!),
+          PlaceVisit(
+            place: _currentlyEditingPlace!,
+            date: _selectedPlaceDate!,
+            visitTime: _selectedPlaceTime,
+            commuteMethod: widget.transportation, // Use transportation from previous screen
+          ),
         );
         // Sort places by date
         _placesToVisit.sort((a, b) => a.date.compareTo(b.date));
+        
+        // Reset time for next place
+        _selectedPlaceTime = null;
       });
       _autosaveDraft();
     } else {
