@@ -41,8 +41,8 @@ class FlutterCompass {
 
   FlutterCompass._();
 
-  static const EventChannel _compassChannel =
-      const EventChannel('hemanthraj/flutter_compass');
+  static final EventChannel _compassChannel =
+      EventChannel('hemanthraj/flutter_compass');
   static Stream<CompassEvent>? _stream;
 
   /// Provides a [Stream] of compass events that can be listened to.
