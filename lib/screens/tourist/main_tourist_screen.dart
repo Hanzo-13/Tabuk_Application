@@ -115,30 +115,94 @@ class _MainTouristScreenState extends State<MainTouristScreen> {
   /// Bottom nav bar builder
   Widget _buildBottomNavBar() {
     if (_isGuest) {
-      return BottomNavigationBar(
-        currentIndex: _selectedIndex,
-        selectedItemColor: AppColors.primaryOrange,
-        unselectedItemColor: AppColors.textLight,
-        onTap: _onItemTapped,
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.map), label: 'Maps'),
-          BottomNavigationBarItem(icon: Icon(Icons.calendar_today), label: 'Events'),
-          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
-        ],
+      return Container(
+        decoration: BoxDecoration(
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 10,
+              offset: const Offset(0, -2),
+            ),
+          ],
+        ),
+        child: BottomNavigationBar(
+          currentIndex: _selectedIndex,
+          selectedItemColor: AppColors.primaryOrange,
+          unselectedItemColor: AppColors.textLight,
+          selectedFontSize: 12,
+          unselectedFontSize: 11,
+          type: BottomNavigationBarType.fixed,
+          elevation: 8,
+          backgroundColor: Colors.white,
+          onTap: _onItemTapped,
+          items: const [
+            BottomNavigationBarItem(
+              icon: Icon(Icons.map_rounded),
+              activeIcon: Icon(Icons.map_rounded),
+              label: 'Maps',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.calendar_today_rounded),
+              activeIcon: Icon(Icons.calendar_today_rounded),
+              label: 'Events',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.person_outline_rounded),
+              activeIcon: Icon(Icons.person_rounded),
+              label: 'Profile',
+            ),
+          ],
+        ),
       );
     } else {
-      return BottomNavigationBar(
-        currentIndex: _selectedIndex,
-        selectedItemColor: AppColors.primaryOrange,
-        unselectedItemColor: AppColors.textLight,
-        onTap: _onItemTapped,
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
-          BottomNavigationBarItem(icon: Icon(Icons.map), label: 'Maps'),
-          BottomNavigationBarItem(icon: Icon(Icons.luggage), label: 'Trips'),
-          BottomNavigationBarItem(icon: Icon(Icons.calendar_today), label: 'Calendar'),
-          BottomNavigationBarItem(icon: Icon(Icons.person), label: 'Profile'),
-        ],
+      return Container(
+        decoration: BoxDecoration(
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.1),
+              blurRadius: 10,
+              offset: const Offset(0, -2),
+            ),
+          ],
+        ),
+        child: BottomNavigationBar(
+          currentIndex: _selectedIndex,
+          selectedItemColor: AppColors.primaryOrange,
+          unselectedItemColor: AppColors.textLight,
+          selectedFontSize: 12,
+          unselectedFontSize: 11,
+          type: BottomNavigationBarType.fixed,
+          elevation: 8,
+          backgroundColor: Colors.white,
+          onTap: _onItemTapped,
+          items: const [
+            BottomNavigationBarItem(
+              icon: Icon(Icons.home_outlined),
+              activeIcon: Icon(Icons.home_rounded),
+              label: 'Home',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.map_outlined),
+              activeIcon: Icon(Icons.map_rounded),
+              label: 'Maps',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.luggage_outlined),
+              activeIcon: Icon(Icons.luggage_rounded),
+              label: 'Trips',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.calendar_today_outlined),
+              activeIcon: Icon(Icons.calendar_today_rounded),
+              label: 'Calendar',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.person_outline_rounded),
+              activeIcon: Icon(Icons.person_rounded),
+              label: 'Profile',
+            ),
+          ],
+        ),
       );
     }
   }
@@ -146,8 +210,32 @@ class _MainTouristScreenState extends State<MainTouristScreen> {
   @override
   Widget build(BuildContext context) {
     if (_userRole == null) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
+      return Scaffold(
+        body: Container(
+          decoration: const BoxDecoration(
+            gradient: AppColors.backgroundGradient,
+          ),
+          child: Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                CircularProgressIndicator(
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    AppColors.primaryTeal,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  'Loading...',
+                  style: TextStyle(
+                    color: AppColors.textLight,
+                    fontSize: 16,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
       );
     }
 

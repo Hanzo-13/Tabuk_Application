@@ -3,7 +3,7 @@ import 'package:flutter/foundation.dart';
 
 class ApiEnvironment {
   // Override at build time with: --dart-define=PROXY_BASE_URL=https://your-proxy/directions
-  static String get googleDirectionsApiKey => EnvConfig.googleMapsApiKey;
+  static String get googleDirectionsApiKey => EnvConfig.googleDirectionsApiKey;
   static const String defaultProxyBaseUrl = "https://directions-proxy-hjgo.onrender.com/directions";
   static const String proxyBaseUrl = String.fromEnvironment(
     'PROXY_BASE_URL',

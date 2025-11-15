@@ -6,6 +6,7 @@ import 'package:capstone_app/services/favorites_service.dart';
 import 'package:capstone_app/services/review_service.dart';
 import 'package:capstone_app/utils/colors.dart';
 import 'package:capstone_app/widgets/cached_image.dart';
+import 'package:capstone_app/widgets/network_image_with_timeout.dart';
 import 'package:capstone_app/widgets/review_form_modal.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart' show kDebugMode, debugPrint;
@@ -1279,10 +1280,17 @@ class _BusinessDetailsModalState extends State<BusinessDetailsModal> {
                           ),
                           child:
                               imageUrl != null
-                                  ? Image.network(
-                                    imageUrl,
+                                  ? NetworkImageWithTimeout(
+                                    imageUrl: imageUrl,
                                     fit: BoxFit.cover,
                                     width: double.infinity,
+                                    placeholder: Container(
+                                      color: Colors.grey[300],
+                                      child: const Icon(
+                                        Icons.image,
+                                        size: 30,
+                                      ),
+                                    ),
                                     errorBuilder: (context, error, stackTrace) {
                                       return Container(
                                         color: Colors.grey[300],
@@ -1647,22 +1655,14 @@ class _FullScreenImageViewState extends State<FullScreenImageView> {
             child: Center(
               child: Hero(
                 tag: 'image_$index',
-                child: Image.network(
-                  widget.allImages[index],
+                child: NetworkImageWithTimeout(
+                  imageUrl: widget.allImages[index],
                   fit: BoxFit.contain,
-                  loadingBuilder: (context, child, loadingProgress) {
-                    if (loadingProgress == null) return child;
-                    return Center(
-                      child: CircularProgressIndicator(
-                        value:
-                            loadingProgress.expectedTotalBytes != null
-                                ? loadingProgress.cumulativeBytesLoaded /
-                                    loadingProgress.expectedTotalBytes!
-                                : null,
-                        color: Colors.white,
-                      ),
-                    );
-                  },
+                  placeholder: const Center(
+                    child: CircularProgressIndicator(
+                      color: Colors.white,
+                    ),
+                  ),
                   errorBuilder: (context, error, stackTrace) {
                     return const Center(
                       child: Icon(Icons.error, size: 100, color: Colors.red),

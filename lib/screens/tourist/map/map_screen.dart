@@ -19,6 +19,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart' show kDebugMode, debugPrint, kIsWeb;
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_compass/flutter_compass.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
@@ -33,6 +34,9 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   // Core Controllers
   final Completer<GoogleMapController> _controller = Completer();
   GoogleMapController? _mapController;
+  StreamSubscription<CompassEvent>? _compassSubscription;
+  bool _isCompassModeActive = false;
+  bool _isCameraAnimationThrottled = false;
 
   // Managers
   late MapLocationManager _locationManager;
@@ -42,6 +46,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   // In _MapScreenState
   BitmapDescriptor? _userLocationDotIcon;
   BitmapDescriptor? _userLocationChevronIcon;
+  BitmapDescriptor? _userLocationHeadingIcon;
 
   // Services
   final NavigationService _navigationService = NavigationService();
@@ -60,9 +65,15 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   String _searchQuery = '';
   bool _isOfflineMode = false;
   List<Map<String, dynamic>> _cachedDestinations = [];
+  DateTime? _lastCameraUpdate; // Throttle camera updates
+  LatLng? _lastCameraUpdatePosition;
+  double _lastCameraUpdateBearing = 0.0;
+  bool _isAnimatingCamera = false;
+  MapType _mapType = MapType.normal; // Track map type for navigation
 
   // Location State
   LatLng? _currentLatLng;
+  Position? _lastPosition; // Store last position for marker updates
   double _currentBearing = 0.0;
   bool _showLocationBanner = false;
   String _locationBannerText = 'Enable location to use map features.';
@@ -126,8 +137,42 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _initializeUserLocationIconsSync();
     _initializeManagers();
-    _initMap();
+    
+    // Defer heavy operations to avoid blocking main thread
+    // This prevents ANR warnings and frame skipping
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _initializeAsync();
+    });
+    
+    _listenToCompass();
+  }
+
+  /// Initialize heavy operations asynchronously after first frame
+  /// This prevents blocking the main thread during widget build
+  Future<void> _initializeAsync() async {
+    if (!mounted) return;
+    
+    try {
+      // Add small delay to let UI render first
+      await Future.delayed(const Duration(milliseconds: 100));
+      if (!mounted) return;
+      
+      // Initialize map asynchronously
+      await _initMap();
+    } catch (e) {
+      if (kDebugMode) debugPrint('Error during async initialization: $e');
+    }
+  }
+
+  void _initializeUserLocationIconsSync() {
+    // Kick off async high-quality icons
+    _initializeUserLocationIcons();
+    // Immediate fallbacks to avoid nulls on first updates
+    _userLocationDotIcon = BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue);
+    _userLocationChevronIcon = BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue);
+    _userLocationHeadingIcon = BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue);
   }
 
   // In _MapScreenState
@@ -139,10 +184,83 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     _filterMarkers();
   }
 
+  void _listenToCompass() {
+    _compassSubscription = FlutterCompass.events?.listen((CompassEvent event) {
+      if (!mounted) return;
+      final newHeading = event.heading;
+      if (newHeading == null) return;
+
+      // Always update for potential UI compass indicator
+      setState(() {
+        _currentBearing = newHeading;
+      });
+
+      // Update marker rotation when in compass mode
+      if (_isCompassModeActive && _lastPosition != null) {
+        _updateUserLocationMarker(_lastPosition!);
+      }
+
+      // Throttle camera animation to avoid spamming updates
+      if (_isCompassModeActive &&
+          !_isCameraAnimationThrottled &&
+          _mapController != null &&
+          _currentLatLng != null) {
+        setState(() {
+          _isCameraAnimationThrottled = true;
+        });
+
+        _mapController!.animateCamera(
+          CameraUpdate.newCameraPosition(
+            CameraPosition(
+              target: _currentLatLng!,
+              zoom: 18.5,
+              bearing: newHeading,
+              tilt: 60.0,
+            ),
+          ),
+        );
+
+        Timer(const Duration(milliseconds: 150), () {
+          if (mounted) {
+            setState(() {
+              _isCameraAnimationThrottled = false;
+            });
+          }
+        });
+      }
+    });
+  }
+
+  void _toggleCompassMode() {
+    if (!mounted) return;
+    setState(() {
+      _isCompassModeActive = !_isCompassModeActive;
+    });
+
+    if (_currentLatLng != null) {
+      _locationManager.requestLocationUpdate();
+    }
+
+    // If turning off compass mode, reset camera to north-up
+    if (!_isCompassModeActive && _mapController != null && _currentLatLng != null) {
+      _mapController!.animateCamera(
+        CameraUpdate.newCameraPosition(
+          CameraPosition(
+            target: _currentLatLng!,
+            zoom: 17,
+            bearing: 0,
+            tilt: 0,
+          ),
+        ),
+      );
+    }
+  }
+
   void _initializeManagers() {
     _locationManager = MapLocationManager(
       onLocationUpdate: _handleLocationUpdate,
       onPermissionDenied: _handlePermissionDenied,
+      isNavigatingProvider: () => _isNavigating,
     );
 
     // CRITICAL: Set NavigationService to use MapLocationManager's stream (single GPS listener)
@@ -160,7 +278,32 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
         if (isNavigating) {
           _didFitRouteOnce = false;
           _isFollowingUser = true;
-          _goToMyLocation();
+          // Set default map type to hybrid when navigation starts
+          if (mounted) {
+            setState(() {
+              _mapType = MapType.hybrid;
+            });
+          }
+          // Disable compass mode to let navigation control bearing
+          if (_isCompassModeActive) {
+            setState(() {
+              _isCompassModeActive = false;
+            });
+          }
+
+          // Force an initial follow shortly after start
+          Future.delayed(const Duration(milliseconds: 500), () {
+            if (mounted) _ensureCameraFollowing();
+          });
+
+          // Periodic safeguard to ensure camera keeps following
+          Timer.periodic(const Duration(seconds: 2), (timer) {
+            if (!_isNavigating || !mounted) {
+              timer.cancel();
+              return;
+            }
+            _ensureCameraFollowing();
+          });
         }
       },
       onPolylinesChanged: (polylines) {
@@ -178,9 +321,13 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
   void _onMyLocationButtonPressed() {
     // Check if the user is currently navigating.
+    // If compass mode is active, a single tap should turn it off.
+    if (_isCompassModeActive) {
+      _toggleCompassMode();
+      return;
+    }
     if (_isNavigating) {
       // If navigating, call the function that re-centers the map with bearing and tilt.
-      _isFollowingUser = true;
       _recenterMap();
     } else {
       // If just browsing, call the function that finds the user's location and zooms in.
@@ -192,65 +339,108 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     _userLocationDotIcon = await MapMarkerManager.createLocationDotBitmap();
     _userLocationChevronIcon =
         await MapMarkerManager.createLocationChevronBitmap();
+    _userLocationHeadingIcon =
+        await MapMarkerManager.createLocationHeadingBitmap();
     if (mounted) setState(() {});
   }
 
   Future<void> _initMap() async {
-    // 1. Fetch data first
-    await _fetchAllData();
-    if (!mounted) return;
-
-    // 2. Handle location permissions and start tracking
-    final hasPermission = await _locationManager.handleLocationPermission(
-      context,
-    );
     if (!mounted) return;
     
-    if (!hasPermission) {
-      setState(() {
-        _showLocationBanner = true;
-        _locationBannerText =
-            'Location permission is required to use the map features.';
+    try {
+      // Show loading state
+      if (mounted) {
+        setState(() {
+          _isLoading = true;
+        });
+      }
+
+      // 1. Fetch data asynchronously (non-blocking)
+      // Split into smaller chunks to avoid blocking
+      await Future.wait([
+        _markerManager.initializeCategoryMarkerIcons(),
+        _initializeUserLocationIcons(),
+      ], eagerError: false);
+      
+      if (!mounted) return;
+      
+      // Fetch user role and destinations in parallel but with timeout
+      await Future.wait([
+        _fetchUserRole().timeout(const Duration(seconds: 5), onTimeout: () {
+          if (mounted) setState(() => _role = 'Guest');
+        }),
+        _fetchDestinationPins(),
+      ], eagerError: false);
+      
+      if (!mounted) return;
+
+      // 2. Handle location permissions and start tracking
+      final hasPermission = await _locationManager.handleLocationPermission(
+        context,
+      );
+      if (!mounted) return;
+      
+      if (!hasPermission) {
+        if (mounted) {
+          setState(() {
+            _showLocationBanner = true;
+            _locationBannerText =
+                'Location permission is required to use the map features.';
+            _isLoading = false;
+          });
+        }
+        return;
+      }
+
+      // 3. Start location tracking (non-blocking)
+      _locationManager.startLocationTracking().catchError((e) {
+        if (kDebugMode) debugPrint('Error starting location tracking: $e');
+        if (mounted) {
+          setState(() {
+            _showLocationBanner = true;
+            _locationBannerText = 'Unable to start location tracking.';
+            _isLoading = false;
+          });
+        }
       });
-      return;
+
+      // Navigation listeners are initialized via MapNavigationManager
+      
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (kDebugMode) debugPrint('Error initializing map: $e');
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
-
-    // 3. Start location tracking
-    await _locationManager.startLocationTracking();
-    if (!mounted) return;
-
-    // Navigation listeners are initialized via MapNavigationManager
   }
 
-  Future<void> _fetchAllData() async {
-    await Future.wait([
-      _markerManager.initializeCategoryMarkerIcons(),
-      _fetchUserRole(),
-      _fetchDestinationPins(),
-      _initializeUserLocationIcons(),
-    ]);
-  }
+  // Removed _fetchAllData - now handled in _initMap for better control
 
   void _handleLocationUpdate(Position position, LatLng latLng, double bearing) {
     if (!mounted) return;
 
     setState(() {
       _currentLatLng = latLng;
+      _lastPosition = position; // Store position for compass mode updates
       _currentBearing = bearing;
       _showLocationBanner = false;
     });
 
     _updateUserLocationMarker(position);
-    // _updateUserLocationCircle(latLng);
+    _updateUserLocationCircle(latLng, position.accuracy);
     _checkProximityAndSaveArrival(position);
 
+    // Navigation camera following with movement/heading checks
     if (_isNavigating && _isFollowingUser && _mapController != null) {
-      // We get the current step of the route from the navigation service
       final currentStep = _navigationService.getCurrentStep();
-      double targetBearing =
-          position.heading; // Default to the direction of travel
-
-      // If there's a next step, calculate the bearing towards it for a smoother turn preview
+      double targetBearing = position.heading.isFinite ? position.heading : 0;
       if (currentStep != null) {
         targetBearing = _locationManager.calculateBearing(
           latLng,
@@ -258,19 +448,66 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
         );
       }
 
-      // Animate the camera to follow the user
-      _mapController!.animateCamera(
-        CameraUpdate.newCameraPosition(
-          CameraPosition(
-            target: latLng, // Center on the new location
-            zoom: 18.5, // A close zoom level for driving
-            bearing:
-                targetBearing, // Point the camera in the direction of the route
-            tilt: 60.0, // A 3D perspective for navigation
+      bool shouldUpdateCamera = true;
+      if (_lastCameraUpdatePosition != null) {
+        final distanceMoved = _locationManager.calculateDistance(
+          _lastCameraUpdatePosition!,
+          latLng,
+        );
+        final headingChanged =
+            (_lastCameraUpdateBearing - targetBearing).abs() > 5;
+        shouldUpdateCamera = distanceMoved > 1 || headingChanged;
+      }
+
+      final now = DateTime.now();
+      if (shouldUpdateCamera &&
+          (_lastCameraUpdate == null ||
+              now.difference(_lastCameraUpdate!) >
+                  const Duration(milliseconds: 100))) {
+        _lastCameraUpdate = now;
+        _lastCameraUpdatePosition = latLng;
+        _lastCameraUpdateBearing = targetBearing;
+
+        setState(() {
+          _isAnimatingCamera = true;
+        });
+        _mapController!.animateCamera(
+          CameraUpdate.newCameraPosition(
+            CameraPosition(
+              target: latLng,
+              zoom: 18.5,
+              bearing: targetBearing,
+              tilt: 60.0,
+            ),
           ),
-        ),
+        );
+      }
+    }
+  }
+
+  void _ensureCameraFollowing() {
+    if (!_isNavigating || !_isFollowingUser) return;
+    if (_currentLatLng == null || _mapController == null) return;
+
+    final currentStep = _navigationService.getCurrentStep();
+    double targetBearing = _currentBearing;
+    if (currentStep != null) {
+      targetBearing = _locationManager.calculateBearing(
+        _currentLatLng!,
+        currentStep.endLocation,
       );
     }
+
+    _mapController!.animateCamera(
+      CameraUpdate.newCameraPosition(
+        CameraPosition(
+          target: _currentLatLng!,
+          zoom: 18.5,
+          bearing: targetBearing,
+          tilt: 60.0,
+        ),
+      ),
+    );
   }
 
   void _handlePermissionDenied() {
@@ -307,29 +544,65 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
 
     final latLng = LatLng(position.latitude, position.longitude);
     final bool isMoving = position.speed > 0.5;
-    final BitmapDescriptor? icon =
-        isMoving ? _userLocationChevronIcon : _userLocationDotIcon;
+    // Use heading marker when compass mode is active, otherwise chevron/dot
+    BitmapDescriptor? icon;
+    double rotation = 0;
+    bool flat = false;
+
+    if (_isCompassModeActive && _userLocationHeadingIcon != null) {
+      icon = _userLocationHeadingIcon;
+      rotation = _currentBearing;
+      flat = true;
+    } else if (isMoving && _userLocationChevronIcon != null) {
+      icon = _userLocationChevronIcon;
+      rotation = position.heading.isFinite ? position.heading : 0;
+      flat = true;
+    } else if (_userLocationDotIcon != null) {
+      icon = _userLocationDotIcon;
+      rotation = 0;
+      flat = false;
+    }
 
     if (icon == null) return;
-
     setState(() {
-      _circles.clear(); // We no longer use circles for the user location
+      _circles.clear();
       _markers.removeWhere((m) => m.markerId.value == 'user_location_marker');
 
       _markers.add(
         Marker(
           markerId: const MarkerId('user_location_marker'),
           position: latLng,
-          icon: icon,
-          rotation:
-              isMoving ? (position.heading.isFinite ? position.heading : 0) : 0,
+          icon: icon!,
+          rotation: rotation,
           anchor: const Offset(0.5, 0.5),
-          flat: isMoving,
+          flat: flat,
           zIndex: 10,
         ),
       );
     });
   }
+  // Draw and update the user's accuracy radius as a circle
+  void _updateUserLocationCircle(LatLng latLng, double accuracyMeters) {
+    if (!mounted) return;
+    final safeAccuracy = accuracyMeters.isFinite && accuracyMeters > 0
+        ? accuracyMeters
+        : 30.0;
+    setState(() {
+      _circles.removeWhere((c) => c.circleId.value == 'user_accuracy_circle');
+      _circles.add(
+        Circle(
+          circleId: const CircleId('user_accuracy_circle'),
+          center: latLng,
+          radius: safeAccuracy,
+          fillColor: Colors.blueAccent.withOpacity(0.12),
+          strokeColor: Colors.blueAccent.withOpacity(0.35),
+          strokeWidth: 2,
+          zIndex: 5,
+        ),
+      );
+    });
+  }
+
 
   
 
@@ -811,19 +1084,44 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
     _mapController = controller;
     _controller.complete(controller);
 
-    // Map style: Skip on web as it may cause issues, or handle differently
-    if (!kIsWeb) {
+    // Defer heavy map operations to avoid blocking main thread
+    // This prevents ANR warnings during map initialization
+    Future.microtask(() async {
+      if (!mounted || _mapController == null) return;
+      
       try {
-        _mapController?.setMapStyle(AppConstants.kMapStyle);
-      } catch (e) {
-        if (kDebugMode) debugPrint('Map style error: $e');
-      }
+        // Map style: Skip on web as it may cause issues, or handle differently
+        if (!kIsWeb) {
+          // Add small delay to let map fully initialize
+          await Future.delayed(const Duration(milliseconds: 100));
+          if (!mounted || _mapController == null) return;
+          
+          try {
+            _mapController?.setMapStyle(AppConstants.kMapStyle);
+          } catch (e) {
+            if (kDebugMode) debugPrint('Map style error: $e');
+            // Handle Google Play Services errors gracefully
+            if (e.toString().contains('SecurityException') || 
+                e.toString().contains('GoogleApiManager')) {
+              if (kDebugMode) {
+                debugPrint('Google Play Services error. Running on emulator without Play Services?');
+              }
+            }
+          }
 
-      // iOS specific: Enable compass
-      if (Platform.isIOS) {
-        controller.setMapStyle(AppConstants.kMapStyle);
+          // iOS specific: Enable compass
+          if (Platform.isIOS) {
+            try {
+              controller.setMapStyle(AppConstants.kMapStyle);
+            } catch (e) {
+              if (kDebugMode) debugPrint('iOS map style error: $e');
+            }
+          }
+        }
+      } catch (e) {
+        if (kDebugMode) debugPrint('Error in deferred map setup: $e');
       }
-    }
+    });
   }
 
   void _exitNavigation() {
@@ -833,6 +1131,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
       _isNavigating = false;
       _didFitRouteOnce = false;
       _isFollowingUser = true;
+      _mapType = MapType.normal; // Reset map type to normal when exiting navigation
     });
   }
 
@@ -901,6 +1200,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    _compassSubscription?.cancel();
     _locationManager.dispose();
     _navigationManager.dispose();
     _navigationService.dispose();
@@ -918,12 +1218,20 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
           GoogleMap(
             onMapCreated: _onMapCreated,
             onCameraMoveStarted: () {
-              if (_isNavigating) {
+              // Only break following on user gestures, not programmatic animations
+              if (_isNavigating && !_isAnimatingCamera) {
                 _isFollowingUser = false;
               }
             },
             onCameraMove: (position) {
               _navigationService.updateBearing(position.bearing);
+            },
+            onCameraIdle: () {
+              if (_isAnimatingCamera) {
+                setState(() {
+                  _isAnimatingCamera = false;
+                });
+              }
             },
             initialCameraPosition: CameraPosition(
               target: AppConstants.bukidnonCenter,
@@ -932,12 +1240,11 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
             markers: _markers,
             circles: _circles,
             polylines: _polylines,
-            myLocationEnabled:
-                false, // We handle this manually for better control
+            myLocationEnabled: false,
             myLocationButtonEnabled: false,
             compassEnabled: true, // Enable compass for iOS
             zoomControlsEnabled: false,
-            mapType: MapType.normal,
+            mapType: _isNavigating ? _mapType : MapType.normal,
             cameraTargetBounds: CameraTargetBounds(AppConstants.bukidnonBounds),
             padding: EdgeInsets.only(
               top: MediaQuery.of(context).padding.top + 250,
@@ -945,7 +1252,7 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
               bottom: 80 + bottomPadding,
             ),
             rotateGesturesEnabled: true,
-            tiltGesturesEnabled: true,
+            tiltGesturesEnabled: false,
           ),
 
           // NavigationMapController removed; MapNavigationManager handles polylines and camera
@@ -957,6 +1264,8 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
             // NOTE: You will need to pass the onChanged, onClear, and onFilterTap
             // callbacks from your screen into this component.
           ),
+
+          // Debug following banner removed
 
           // Search Bar
           Positioned(
@@ -1034,6 +1343,12 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
             NavigationOverlay(
               navigationService: _navigationService,
               onExitNavigation: _exitNavigation,
+              onMapTypeChanged: (mapType) {
+                setState(() {
+                  _mapType = mapType;
+                });
+              },
+              currentMapType: _mapType,
             ),
 
           Positioned(
@@ -1041,8 +1356,11 @@ class _MapScreenState extends State<MapScreen> with WidgetsBindingObserver {
             bottom: 24 + bottomPadding,
             right: 16,
             // We use the nice iOS-style button and pass our new smart function to it.
-            child: MapUIComponents.buildMyLocationButton(
-              _onMyLocationButtonPressed,
+            child: GestureDetector(
+              onDoubleTap: _toggleCompassMode, // Double-tap toggles compass mode
+              child: MapUIComponents.buildMyLocationButton(
+                _onMyLocationButtonPressed, // Single tap recenters
+              ),
             ),
           ),
         ],

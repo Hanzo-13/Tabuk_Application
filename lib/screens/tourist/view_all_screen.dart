@@ -93,21 +93,75 @@ class _ViewAllScreenState extends State<ViewAllScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: Text(widget.title),
-        backgroundColor: widget.accentColor,
-        foregroundColor: Colors.white,
-        elevation: 0,
-      ),
-      body: Column(
-        children: [
-          _buildSearchBar(),
-          Expanded(
-            child: _filteredHotspots.isEmpty
-                ? _buildEmptyState()
-                : _buildHotspotsList(),
+      body: Container(
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              widget.accentColor.withOpacity(0.1),
+              Colors.white,
+            ],
           ),
-        ],
+        ),
+        child: Column(
+          children: [
+            // Enhanced AppBar
+            Container(
+              padding: EdgeInsets.only(
+                top: MediaQuery.of(context).padding.top + 8,
+                bottom: 8,
+                left: 16,
+                right: 16,
+              ),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    widget.accentColor,
+                    widget.accentColor.withOpacity(0.8),
+                  ],
+                ),
+                borderRadius: const BorderRadius.only(
+                  bottomLeft: Radius.circular(24),
+                  bottomRight: Radius.circular(24),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: widget.accentColor.withOpacity(0.3),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.arrow_back, color: Colors.white),
+                    onPressed: () => Navigator.of(context).pop(),
+                  ),
+                  Expanded(
+                    child: Text(
+                      widget.title,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 22,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            _buildSearchBar(),
+            Expanded(
+              child: _filteredHotspots.isEmpty
+                  ? _buildEmptyState()
+                  : _buildHotspotsList(),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -144,9 +198,9 @@ class _ViewAllScreenState extends State<ViewAllScreen> {
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
+              color: widget.accentColor.withOpacity(0.1),
+              blurRadius: 12,
+              offset: const Offset(0, 4),
             ),
           ],
         ),

@@ -12,7 +12,6 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:capstone_app/screens/login_screen.dart';
 import 'package:capstone_app/screens/tourist/main_tourist_screen.dart';
 import 'package:capstone_app/utils/colors.dart';
-import 'package:capstone_app/widgets/custom_button.dart';
 import 'package:capstone_app/widgets/custom_text_field.dart';
 
 class TouristRegistrationFlow extends StatefulWidget {
@@ -345,13 +344,9 @@ class _TouristRegistrationFlowState extends State<TouristRegistrationFlow> {
   }
 
   Widget _buildNavigationButton() {
-    return Container(
-      decoration: BoxDecoration(
-        color: AppColors.submitbutton,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: CustomButton(
-        text: _isLoading ? 'Processing...' : (_currentStep == 0 ? 'Next' : 'Complete Registration'),
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton(
         onPressed: _isLoading
             ? null
             : () {
@@ -361,6 +356,43 @@ class _TouristRegistrationFlowState extends State<TouristRegistrationFlow> {
                   _submit();
                 }
               },
+        style: ElevatedButton.styleFrom(
+          backgroundColor: AppColors.primaryTeal,
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+          elevation: 4,
+        ),
+        child: _isLoading
+            ? const SizedBox(
+                height: 20,
+                width: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
+              )
+            : Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    _currentStep == 0 ? 'Continue' : 'Complete Registration',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Icon(
+                    _currentStep == 0
+                        ? Icons.arrow_forward_rounded
+                        : Icons.check_circle_outline_rounded,
+                    size: 20,
+                  ),
+                ],
+              ),
       ),
     );
   }
@@ -369,37 +401,131 @@ class _TouristRegistrationFlowState extends State<TouristRegistrationFlow> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.white,
-      appBar: AppBar(
-        backgroundColor: AppColors.primaryTeal,
-        foregroundColor: AppColors.white,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () {
-            if (_currentStep == 0) {
-              Navigator.pushReplacement(
-                context,
-                MaterialPageRoute(builder: (_) => const LoginScreen()),
-              );
-            } else {
-              setState(() => _currentStep = 0);
-            }
-          },
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: AppColors.backgroundGradient,
         ),
-        title: Text(_currentStep == 0 ? 'Tourist Information' : 'Travel Preferences'),
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: Form(
-          key: _formKey,
+        child: SafeArea(
           child: Column(
             children: [
-              if (_error != null) Text(_error!, style: const TextStyle(color: Colors.red)),
-              const SizedBox(height: 16),
-              _currentStep == 0 ? _buildStepOne() : _buildStepTwo(),
-              const SizedBox(height: 10),
-              _buildNavigationButton(),
-              const SizedBox(height: 40)
+              // Enhanced AppBar
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      AppColors.primaryTeal,
+                      AppColors.primaryTeal.withOpacity(0.8),
+                    ],
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 8,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
+                      onPressed: () {
+                        if (_currentStep == 0) {
+                          Navigator.pushReplacement(
+                            context,
+                            MaterialPageRoute(builder: (_) => const LoginScreen()),
+                          );
+                        } else {
+                          setState(() => _currentStep = 0);
+                        }
+                      },
+                    ),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            _currentStep == 0 ? 'Tourist Information' : 'Travel Preferences',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          // Progress indicator
+                          Row(
+                            children: [
+                              Container(
+                                width: 40,
+                                height: 4,
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(2),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Container(
+                                width: 40,
+                                height: 4,
+                                decoration: BoxDecoration(
+                                  color: _currentStep >= 1
+                                      ? Colors.white
+                                      : Colors.white.withOpacity(0.3),
+                                  borderRadius: BorderRadius.circular(2),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              // Content
+              Expanded(
+                child: SingleChildScrollView(
+                  padding: const EdgeInsets.all(24),
+                  child: Form(
+                    key: _formKey,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (_error != null)
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            margin: const EdgeInsets.only(bottom: 16),
+                            decoration: BoxDecoration(
+                              color: Colors.red.withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(color: Colors.red.withOpacity(0.3)),
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.error_outline, color: Colors.red),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Text(
+                                    _error!,
+                                    style: const TextStyle(color: Colors.red),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        _currentStep == 0 ? _buildStepOne() : _buildStepTwo(),
+                        const SizedBox(height: 24),
+                        _buildNavigationButton(),
+                        const SizedBox(height: 20),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
             ],
           ),
         ),

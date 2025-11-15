@@ -6,6 +6,7 @@ import '../../../data/repositories/destination_repository.dart';
 import '../../../models/destination_model.dart';
 import '../../../utils/colors.dart';
 import '../../../widgets/business_details_modal.dart';
+import '../../../widgets/network_image_with_timeout.dart';
 import '../map/map_screen.dart';
 
 class SearchScreen extends StatefulWidget {
@@ -405,11 +406,12 @@ class _SearchScreenState extends State<SearchScreen> {
                 borderRadius: BorderRadius.circular(12),
                 child:
                     hotspot.images.isNotEmpty
-                        ? Image.network(
-                          hotspot.images.first,
+                        ? NetworkImageWithTimeout(
+                          imageUrl: hotspot.images.first,
                           width: 80,
                           height: 80,
                           fit: BoxFit.cover,
+                          placeholder: _buildPlaceholderImage(),
                           errorBuilder: (context, error, stackTrace) {
                             return _buildPlaceholderImage();
                           },

@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart' show kDebugMode, debugPrint;
 import 'dart:async';
 import 'dart:math' as math;
 
@@ -88,6 +89,15 @@ class ArrivalService {
   }
 
   /// Save an arrival event for the current user at a hotspot with enhanced destination details.
+  /// 
+  /// COLLECTION PURPOSE:
+  /// - Arrivals: Legacy collection with minimal data (userId, hotspotId, timestamp, location, business_name)
+  ///   Kept for backward compatibility and simple arrival tracking
+  /// - DestinationHistory: Enhanced collection with complete destination details (category, type, district, 
+  ///   municipality, images, description, etc.) - This is the main collection used for visited destinations screen
+  /// 
+  /// This method fetches complete destination data from Firestore to ensure all fields are populated correctly,
+  /// including district which might be missing from cached data.
   static Future<void> saveArrival({
     required String hotspotId,
     required double latitude,
@@ -107,32 +117,79 @@ class ArrivalService {
     
     final now = DateTime.now();
     
-    // Save to Arrivals collection (existing functionality)
+    // IMPORTANT: Fetch complete destination data from Firestore to ensure all fields are populated
+    // This prevents "Unknown" values when the destination document has complete data
+    Map<String, dynamic>? destinationDoc;
+    try {
+      final doc = await _firestore.collection('destination').doc(hotspotId).get();
+      if (doc.exists) {
+        destinationDoc = doc.data();
+      }
+    } catch (e) {
+      if (kDebugMode) debugPrint('Error fetching destination document: $e');
+      // Continue with provided data if fetch fails
+    }
+    
+    // Use Firestore data to fill in missing fields
+    final finalBusinessName = businessName ?? 
+                              destinationDoc?['business_name']?.toString() ?? 
+                              destinationDoc?['name']?.toString() ?? '';
+    final finalDestinationName = destinationName ?? 
+                                  destinationDoc?['destinationName']?.toString() ??
+                                  destinationDoc?['business_name']?.toString() ?? 
+                                  destinationDoc?['name']?.toString() ?? 
+                                  finalBusinessName;
+    final finalCategory = destinationCategory ?? 
+                          destinationDoc?['destinationCategory']?.toString() ??
+                          destinationDoc?['category']?.toString() ?? 
+                          'Unknown';
+    final finalType = destinationType ?? 
+                      destinationDoc?['destinationType']?.toString() ??
+                      destinationDoc?['type']?.toString() ?? 
+                      'Unknown';
+    final finalDistrict = destinationDistrict ?? 
+                          destinationDoc?['destinationDistrict']?.toString() ??
+                          destinationDoc?['district']?.toString() ?? 
+                          'Unknown';
+    final finalMunicipality = destinationMunicipality ?? 
+                               destinationDoc?['destinationMunicipality']?.toString() ??
+                               destinationDoc?['municipality']?.toString() ?? 
+                               'Unknown';
+    final finalImages = destinationImages ?? 
+                        (destinationDoc?['destinationImages'] as List?)?.map((e) => e.toString()).toList() ??
+                        (destinationDoc?['images'] as List?)?.map((e) => e.toString()).toList() ?? 
+                        <String>[];
+    final finalDescription = destinationDescription ?? 
+                             destinationDoc?['destinationDescription']?.toString() ??
+                             destinationDoc?['description']?.toString() ?? 
+                             '';
+    
+    // Save to Arrivals collection (legacy - minimal data for backward compatibility)
     await _retry(() async {
       await _firestore.collection(arrivalsCollection).add({
         'userId': user.uid,
         'hotspotId': hotspotId,
         'timestamp': useServerTimestamp ? FieldValue.serverTimestamp() : now,
         'location': {'lat': latitude, 'lng': longitude},
-        if (businessName != null && businessName.isNotEmpty) 'business_name': businessName,
+        if (finalBusinessName.isNotEmpty) 'business_name': finalBusinessName,
       });
     });
 
-    // Save to DestinationHistory collection with enhanced details
+    // Save to DestinationHistory collection with enhanced details (main collection for visited destinations)
     await _retry(() async {
       await _firestore.collection(destinationHistoryCollection).add({
         'userId': user.uid,
         'hotspotId': hotspotId,
         'timestamp': useServerTimestamp ? FieldValue.serverTimestamp() : now,
         'location': {'lat': latitude, 'lng': longitude},
-        'destinationName': destinationName ?? businessName ?? 'Unknown Destination',
-        'destinationCategory': destinationCategory ?? 'Unknown',
-        'destinationType': destinationType ?? 'Unknown',
-        'destinationDistrict': destinationDistrict ?? 'Unknown',
-        'destinationMunicipality': destinationMunicipality ?? 'Unknown',
-        'destinationImages': destinationImages ?? [],
-        'destinationDescription': destinationDescription ?? '',
-        'businessName': businessName,
+        'destinationName': finalDestinationName,
+        'destinationCategory': finalCategory,
+        'destinationType': finalType,
+        'destinationDistrict': finalDistrict, // Now fetched from Firestore if missing
+        'destinationMunicipality': finalMunicipality, // Now fetched from Firestore if missing
+        'destinationImages': finalImages,
+        'destinationDescription': finalDescription,
+        'businessName': finalBusinessName,
         'visitDate': useServerTimestamp ? FieldValue.serverTimestamp() : now,
         'visitYear': now.year,
         'visitMonth': now.month,

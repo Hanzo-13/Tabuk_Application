@@ -2,6 +2,7 @@
 // lib/services/auth_service.dart (FIXED VERSION)
 // ===========================================
 
+import 'dart:async';
 import 'package:capstone_app/services/secure_session_service.dart';
 import 'package:capstone_app/services/session_services.dart';
 import 'package:capstone_app/utils/constants.dart';
@@ -30,26 +31,79 @@ class AuthService {
   /// Check if user is authenticated and session is valid
   static Future<bool> isUserAuthenticated() async {
     try {
-      // Wait for auth state to initialize
-      await Future.delayed(Duration(milliseconds: 100));
+      // Wait for Firebase Auth to restore session (can take up to 2 seconds on mobile)
+      // Listen to authStateChanges stream to ensure auth state is ready
+      User? user;
+      bool authReady = false;
+      
+      // Wait up to 3 seconds for auth state to restore
+      final completer = Completer<bool>();
+      final subscription = _auth.authStateChanges().listen((User? authUser) {
+        user = authUser;
+        if (!authReady) {
+          authReady = true;
+          if (!completer.isCompleted) {
+            completer.complete(true);
+          }
+        }
+      });
 
-      final user = _auth.currentUser;
-      if (user == null) return false;
+      // Wait for first auth state event or timeout after 3 seconds
+      try {
+        await completer.future.timeout(
+          const Duration(seconds: 3),
+          onTimeout: () {
+            debugPrint('Auth state initialization timeout - checking current user');
+            authReady = true;
+            user = _auth.currentUser;
+            return true; // Return value for timeout handler
+          },
+        );
+      } catch (e) {
+        debugPrint('Error waiting for auth state: $e');
+      } finally {
+        await subscription.cancel();
+      }
 
-      // Reload user to get latest auth state
-      await user.reload();
+      // Give it a bit more time for auth to fully restore
+      if (user == null) {
+        await Future.delayed(const Duration(milliseconds: 500));
+        user = _auth.currentUser;
+      }
 
-      // Check if user still exists and is valid
-      final refreshedUser = _auth.currentUser;
+      if (user == null) {
+        debugPrint('No user found after waiting for auth state');
+        return false;
+      }
 
-      if (refreshedUser != null) {
-        debugPrint('User authenticated: ${refreshedUser.email}');
+      // Try to reload user, but don't fail if it errors (network issues)
+      try {
+        await user!.reload();
+        // Get the refreshed user
+        user = _auth.currentUser;
+      } catch (e) {
+        debugPrint('Error reloading user (non-critical): $e');
+        // Continue with original user if reload fails
+        if (_auth.currentUser == null) {
+          return false;
+        }
+        user = _auth.currentUser;
+      }
+
+      if (user != null) {
+        debugPrint('User authenticated: ${user!.email ?? user!.uid}');
         return true;
       }
 
       return false;
     } catch (e) {
       debugPrint('Error checking authentication: $e');
+      // Last resort: check currentUser directly
+      final currentUser = _auth.currentUser;
+      if (currentUser != null) {
+        debugPrint('Fallback: User authenticated via currentUser: ${currentUser.email ?? currentUser.uid}');
+        return true;
+      }
       return false;
     }
   }
@@ -226,21 +280,73 @@ class AuthService {
       // Set persistence first
       await setPersistence();
 
+      // Wait for Firebase Auth to restore session (important for mobile)
+      // Listen to authStateChanges to ensure auth is fully initialized
+      User? currentUser;
+      final completer = Completer<void>();
+      bool authInitialized = false;
+      
+      final subscription = _auth.authStateChanges().listen((User? user) {
+        if (!authInitialized) {
+          authInitialized = true;
+          currentUser = user;
+          if (!completer.isCompleted) {
+            completer.complete();
+          }
+        }
+      });
+
+      // Wait for first auth state event or timeout after 2 seconds
+      try {
+        await completer.future.timeout(
+          const Duration(seconds: 2),
+          onTimeout: () {
+            debugPrint('Auth state initialization timeout - using currentUser');
+            currentUser = _auth.currentUser;
+          },
+        );
+      } catch (e) {
+        debugPrint('Error waiting for auth state initialization: $e');
+        currentUser = _auth.currentUser;
+      } finally {
+        await subscription.cancel();
+      }
+
+      // Give Firebase Auth a bit more time to fully restore
+      if (currentUser == null) {
+        await Future.delayed(const Duration(milliseconds: 500));
+        currentUser = _auth.currentUser;
+      }
+
       // Check if user should be authenticated
       final hasStoredState = await hasStoredLoginState();
-      final currentUser = _auth.currentUser;
 
       if (currentUser != null) {
         // User is authenticated, ensure document exists
-        await _ensureUserDocumentExists(currentUser);
-        debugPrint('Auth state initialized for ${currentUser.email}');
+        try {
+          await _ensureUserDocumentExists(currentUser!);
+          debugPrint('Auth state initialized for ${currentUser!.email ?? currentUser!.uid}');
+        } catch (e) {
+          debugPrint('Error ensuring user document exists: $e');
+          // Don't fail initialization if document check fails
+        }
       } else if (hasStoredState) {
-        // Had stored state but no Firebase user - clear stored state
-        await _clearLoginState();
-        debugPrint('Cleared orphaned login state');
+        // Had stored state but no Firebase user after waiting - might be clearing
+        // Wait a bit more before clearing (in case auth is still restoring)
+        await Future.delayed(const Duration(milliseconds: 500));
+        final doubleCheckUser = _auth.currentUser;
+        if (doubleCheckUser == null) {
+          await _clearLoginState();
+          debugPrint('Cleared orphaned login state');
+        } else {
+          debugPrint('User found on second check: ${doubleCheckUser.email ?? doubleCheckUser.uid}');
+        }
+      } else {
+        debugPrint('No stored login state and no current user');
       }
     } catch (e) {
       debugPrint('Error initializing auth state: $e');
+      // Don't rethrow - let the app continue even if initialization has issues
     }
   }
 

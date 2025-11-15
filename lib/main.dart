@@ -3,7 +3,7 @@
 
 import 'dart:async';
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, kDebugMode;
 import 'package:flutter/gestures.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter_web_plugins/url_strategy.dart';
@@ -28,29 +28,49 @@ import 'package:capstone_app/widgets/responsive_wrapper.dart';
 final Future<void> appInitialization = _initializeApp();
 
 Future<void> _initializeApp() async {
+  // OPTIMIZED: Split initialization to prevent blocking main thread
+  // Critical operations first, then defer non-critical ones
+  
+  // 1. Initialize auth state (required for app to function)
   await AuthService.initializeAuthState();
 
+  // 2. Configure Firestore (non-blocking, can fail gracefully)
   try {
     FirebaseFirestore.instance.settings = const Settings(
       persistenceEnabled: true,
     );
-  } catch (_) {
+  } catch (e) {
     // Firestore persistence is not supported in all web environments.
     // We can safely ignore this error.
+    if (kDebugMode) debugPrint('Firestore persistence error (non-critical): $e');
   }
 
-  // Initialize Hive - on web, it doesn't need a path
-  if (kIsWeb) {
-    await Hive.initFlutter();
-  } else {
-    final appDir = await getApplicationDocumentsDirectory();
-    await Hive.initFlutter(appDir.path);
+  // 3. Initialize Hive (can be deferred but needed early)
+  // Run in parallel with other non-critical operations
+  try {
+    if (kIsWeb) {
+      await Hive.initFlutter();
+    } else {
+      final appDir = await getApplicationDocumentsDirectory();
+      await Hive.initFlutter(appDir.path);
+    }
+  } catch (e) {
+    if (kDebugMode) debugPrint('Hive initialization error: $e');
+    // Continue even if Hive fails - app can work without it
   }
   
-  // This can still be deferred until after the first frame for performance.
+  // 4. Defer image cache initialization to avoid blocking
+  // This is non-critical and can happen after first frame
   WidgetsBinding.instance.addPostFrameCallback((_) {
     if (!kIsWeb) {
-      ImageCacheService.init();
+      // Run asynchronously to avoid blocking
+      Future.microtask(() {
+        try {
+          ImageCacheService.init();
+        } catch (e) {
+          if (kDebugMode) debugPrint('Image cache init error: $e');
+        }
+      });
     }
   });
 }
@@ -170,27 +190,122 @@ class AuthChecker extends StatelessWidget {
 
             if (user == null) return const LoginScreen();
             if (user.isAnonymous) return const MainTouristScreen();
-            if (!user.emailVerified) return const LoginScreen();
 
-            return FutureBuilder<DocumentSnapshot>(
-              future:
-                  FirebaseFirestore.instance.collection('Users').doc(user.uid).get(),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
+            // Reload user to get latest auth state (important for email verification)
+            return FutureBuilder<User>(
+              future: user.reload().then((_) => FirebaseAuth.instance.currentUser!).catchError((e) {
+                debugPrint('Error reloading user: $e');
+                return user; // Return original user if reload fails
+              }),
+              builder: (context, reloadSnapshot) {
+                if (reloadSnapshot.connectionState == ConnectionState.waiting) {
                   return const LoadingScreen();
                 }
-                if (snapshot.hasError || !snapshot.hasData || !snapshot.data!.exists) {
-                  return const LoginScreen();
-                }
 
-                final data = snapshot.data!.data() as Map<String, dynamic>;
-                final role = data['role']?.toString() ?? '';
-                final formCompleted = data['form_completed'] == true;
+                final refreshedUser = reloadSnapshot.data ?? user;
 
-                if (role.isEmpty) return const LoginScreen();
-                if (!formCompleted) return const LoginScreen();
+                // Check email verification - first from Firebase Auth, then from Firestore as fallback
+                return FutureBuilder<DocumentSnapshot?>(
+                  future: () async {
+                    try {
+                      return await FirebaseFirestore.instance
+                          .collection('Users')
+                          .doc(refreshedUser.uid)
+                          .get()
+                          .timeout(const Duration(seconds: 10));
+                    } on TimeoutException catch (e) {
+                      // If Firestore times out, try to use cached data
+                      debugPrint('Firestore fetch timeout - trying cached data: $e');
+                      try {
+                        return await FirebaseFirestore.instance
+                            .collection('Users')
+                            .doc(refreshedUser.uid)
+                            .get(const GetOptions(source: Source.cache));
+                      } catch (cacheError) {
+                        debugPrint('Error fetching cached document: $cacheError');
+                        rethrow;
+                      }
+                    } catch (e) {
+                      debugPrint('Error fetching user document: $e');
+                      // Try to use cached data as fallback
+                      try {
+                        return await FirebaseFirestore.instance
+                            .collection('Users')
+                            .doc(refreshedUser.uid)
+                            .get(const GetOptions(source: Source.cache));
+                      } catch (cacheError) {
+                        debugPrint('Error fetching cached document: $cacheError');
+                        rethrow;
+                      }
+                    }
+                  }(),
+                  builder: (context, docSnapshot) {
+                    if (docSnapshot.connectionState == ConnectionState.waiting) {
+                      return const LoadingScreen();
+                    }
 
-                return _RedirectByRole(role: role);
+                    // Handle document errors more gracefully
+                    if (docSnapshot.hasError) {
+                      debugPrint('Error fetching user document (non-critical): ${docSnapshot.error}');
+                      // Don't log out immediately - could be a network issue
+                      // Show loading and retry
+                      return const LoadingScreen();
+                    }
+
+                    // Check if document exists
+                    if (!docSnapshot.hasData || docSnapshot.data == null || !docSnapshot.data!.exists) {
+                      // If email is verified in Firebase Auth, allow through (document might be missing temporarily)
+                      if (refreshedUser.emailVerified) {
+                        debugPrint('User document missing but email verified - showing loading');
+                        return const LoadingScreen();
+                      }
+                      debugPrint('User document does not exist - redirecting to login');
+                      return const LoginScreen();
+                    }
+
+                    final userData = docSnapshot.data!.data() as Map<String, dynamic>?;
+                    if (userData == null) {
+                      debugPrint('User document data is null - redirecting to login');
+                      return const LoginScreen();
+                    }
+
+                    // Check email verification with fallback to Firestore
+                    bool isEmailVerified = refreshedUser.emailVerified;
+                    
+                    // Use Firestore app_email_verified as fallback
+                    final appEmailVerified = userData['app_email_verified'] ?? false;
+                    if (!isEmailVerified && appEmailVerified == true) {
+                      isEmailVerified = true;
+                      debugPrint('Using app_email_verified from Firestore as fallback');
+                    }
+                    
+                    // For Google users, emails are pre-verified
+                    if (!isEmailVerified && refreshedUser.providerData.any((info) => info.providerId == 'google.com')) {
+                      isEmailVerified = true;
+                      debugPrint('Google user detected - email considered verified');
+                    }
+
+                    // If still not verified, require verification
+                    if (!isEmailVerified) {
+                      debugPrint('User email not verified - redirecting to login');
+                      return const LoginScreen();
+                    }
+
+                    final role = userData['role']?.toString() ?? '';
+                    final formCompleted = userData['form_completed'] == true;
+
+                    if (role.isEmpty) {
+                      debugPrint('User role is empty - redirecting to login');
+                      return const LoginScreen();
+                    }
+                    if (!formCompleted) {
+                      debugPrint('User form not completed - redirecting to login');
+                      return const LoginScreen();
+                    }
+
+                    return _RedirectByRole(role: role);
+                  },
+                );
               },
             );
           },

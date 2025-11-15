@@ -1,9 +1,8 @@
 // ===========================================
-// lib/screens/tourist_module/trips/trips_screen.dart
+// lib/screens/tourist/trips/trips_screen.dart
 // ===========================================
 // Enhanced interactive screen for displaying and managing user trips.
 
-import 'package:capstone_app/screens/tourist/trips/trip_detailScreen.dart';
 import 'package:capstone_app/utils/colors.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
@@ -13,6 +12,10 @@ import 'package:uuid/uuid.dart';
 import '../../../models/trip_model.dart' as firestoretrip;
 import '../../../services/auth_service.dart';
 import '../../../services/trip_service.dart';
+import 'constants/trip_constants.dart';
+import 'utils/trip_helpers.dart';
+import 'widgets/trip_card.dart';
+import 'widgets/progress_statistics_view.dart';
 import 'trip_info_creation_screen.dart';
 
 /// Enhanced interactive screen for displaying and managing user trips.
@@ -25,31 +28,6 @@ class TripsScreen extends StatefulWidget {
 
 class _TripsScreenState extends State<TripsScreen>
     with SingleTickerProviderStateMixin {
-  // UI and label constants
-  static const int _tabCount = 2;
-  static const String _collectionName = 'trip_planning';
-  static const String _archivedStatus = 'Archived';
-  static const String _planningStatus = 'Planning';
-  static const String _myTripsLabel = 'My Adventures';
-  static const String _activeTabLabel = 'Trip Plans';
-  static const String _archivedTabLabel = 'Trip Completed';
-  static const String _tripAddedMsg =
-      'Trip to {destination} added successfully!';
-  static const String _tripArchivedMsg = 'Trip to {destination} is complete';
-  static const String _tripRestoredMsg = 'Trip to {destination} is restored';
-  static const String _tripDeletedMsg = 'Trip deleted';
-  static const double _snackBarMargin = 16.0;
-  static const double _snackBarBorderRadius = 8.0;
-  static const int _snackBarDurationSec = 2;
-  final List<String> _transportationOptions = [
-    'Car',
-    'Motorcycle', // Add the missing option
-    'Walk',
-    'Plane',
-    'Bus',
-    'Boat',
-    'Train',
-  ];
 
   late TabController _tabController;
   late Stream<QuerySnapshot> _tripStream;
@@ -63,12 +41,12 @@ class _TripsScreenState extends State<TripsScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: _tabCount, vsync: this);
+    _tabController = TabController(length: TripConstants.tabCount, vsync: this);
     _tabController.addListener(_handleTabChange);
     _userId = getUserId();
     _tripStream =
         FirebaseFirestore.instance
-            .collection(_collectionName)
+            .collection(TripConstants.collectionName)
             .where('user_id', isEqualTo: _userId)
             .snapshots();
   }
@@ -85,74 +63,10 @@ class _TripsScreenState extends State<TripsScreen>
     }
   }
 
-  /// Gets transportation icon based on transportation type
-  IconData _getTransportationIcon(String transportation) {
-    switch (transportation.toLowerCase()) {
-      case 'motorcycle':
-        return Icons.two_wheeler;
-      case 'walk':
-        return Icons.directions_walk;
-      case 'car':
-        return Icons.directions_car;
-      default:
-        return Icons.explore;
-    }
-  }
-
-  /// Gets status color based on trip status
-  Color _getStatusColor(String status) {
-    switch (status.toLowerCase()) {
-      case 'planning':
-        return AppColors.primaryOrange;
-      case 'active':
-        return AppColors.homeNearbyColor;
-      case 'archived':
-        return AppColors.textLight;
-      case 'completed':
-        return AppColors.primaryTeal;
-      default:
-        return AppColors.textLight;
-    }
-  }
-
-  /// Gets urgency color based on days until trip
-  Color _getUrgencyColor(int daysUntil) {
-    if (daysUntil == 0) return AppColors.errorRed;
-    if (daysUntil <= 3) return AppColors.primaryOrange;
-    if (daysUntil <= 7) return AppColors.homeTrendingColor;
-    return AppColors.homeForYouColor;
-  }
-
-  /// Calculates days until trip start
-  int _getDaysUntilTrip(DateTime startDate) {
-    final now = DateTime.now();
-    final difference = startDate.difference(now).inDays;
-    return difference;
-  }
-
-  /// Gets trip duration in days
-  int _getTripDuration(DateTime startDate, DateTime endDate) {
-    return endDate.difference(startDate).inDays + 1;
-  }
-
-  /// Calculates the progress percentage for a trip
-  double _getTripProgress(firestoretrip.Trip trip) {
-    if (trip.spots.isEmpty) return 0.0;
-    return trip.visitedSpots.length / trip.spots.length;
-  }
-
-  /// Gets progress color based on completion percentage
-  Color _getProgressColor(double progress) {
-    if (progress == 1.0) return AppColors.homeNearbyColor;
-    if (progress >= 0.7) return AppColors.primaryTeal;
-    if (progress >= 0.4) return AppColors.homeTrendingColor;
-    if (progress > 0) return AppColors.primaryOrange;
-    return Colors.grey.shade300;
-  }
-
   /// Adds a new trip to Firestore and shows a success message
   Future<void> _addNewTrip(firestoretrip.Trip trip) async {
     try {
+      final now = DateTime.now();
       final newTrip = firestoretrip.Trip(
         tripPlanId:
             trip.tripPlanId.isNotEmpty ? trip.tripPlanId : const Uuid().v4(),
@@ -163,10 +77,13 @@ class _TripsScreenState extends State<TripsScreen>
         spots: trip.spots,
         userId: _userId ?? '',
         status: trip.status,
+        createdAt: now,
+        updatedAt: now,
+        autoSaved: false,
       );
       await TripService.saveTrip(newTrip);
       _showSnackBar(
-        _tripAddedMsg.replaceFirst('{destination}', trip.title),
+        TripConstants.tripAddedMsg.replaceFirst('{destination}', trip.title),
         AppColors.homeNearbyColor,
       );
     } catch (e) {
@@ -179,6 +96,7 @@ class _TripsScreenState extends State<TripsScreen>
   /// Replace the existing _archiveTrip method
   Future<void> _archiveTrip(firestoretrip.Trip trip) async {
     try {
+      final now = DateTime.now();
       final archivedTrip = firestoretrip.Trip(
         tripPlanId: trip.tripPlanId,
         title: trip.title,
@@ -187,12 +105,16 @@ class _TripsScreenState extends State<TripsScreen>
         transportation: trip.transportation,
         spots: trip.spots,
         userId: trip.userId,
-        status: _archivedStatus,
+        status: TripConstants.archivedStatus,
         visitedSpots: trip.visitedSpots, // Preserve visited spots
+        createdAt: trip.createdAt,
+        updatedAt: now,
+        completedAt: now,
+        autoSaved: trip.autoSaved,
       );
       await TripService.saveTrip(archivedTrip);
       _showSnackBar(
-        _tripArchivedMsg.replaceFirst('{destination}', trip.title),
+        TripConstants.tripArchivedMsg.replaceFirst('{destination}', trip.title),
         AppColors.primaryTeal,
       );
     } catch (e) {
@@ -212,12 +134,12 @@ class _TripsScreenState extends State<TripsScreen>
         transportation: trip.transportation,
         spots: trip.spots,
         userId: trip.userId,
-        status: _planningStatus,
+        status: TripConstants.planningStatus,
         visitedSpots: trip.visitedSpots, // Preserve visited spots
       );
       await TripService.saveTrip(restoredTrip);
       _showSnackBar(
-        _tripRestoredMsg.replaceFirst('{destination}', trip.title),
+        TripConstants.tripRestoredMsg.replaceFirst('{destination}', trip.title),
         AppColors.homeNearbyColor,
       );
     } catch (e) {
@@ -282,7 +204,7 @@ class _TripsScreenState extends State<TripsScreen>
     if (confirmed == true) {
       try {
         await TripService.deleteTrip(tripPlanId);
-        _showSnackBar(_tripDeletedMsg, AppColors.errorRed);
+        _showSnackBar(TripConstants.tripDeletedMsg, AppColors.errorRed);
       } catch (e) {
         _showSnackBar('Failed to delete trip: $e', AppColors.errorRed);
       }
@@ -318,11 +240,11 @@ class _TripsScreenState extends State<TripsScreen>
         ),
         backgroundColor: color,
         behavior: SnackBarBehavior.floating,
-        margin: const EdgeInsets.all(_snackBarMargin),
+        margin: const EdgeInsets.all(TripConstants.snackBarMargin),
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(_snackBarBorderRadius),
+          borderRadius: BorderRadius.circular(TripConstants.snackBarBorderRadius),
         ),
-        duration: const Duration(seconds: _snackBarDurationSec),
+        duration: const Duration(seconds: TripConstants.snackBarDurationSec),
         elevation: 4,
       ),
     );
@@ -432,12 +354,12 @@ class _TripsScreenState extends State<TripsScreen>
             [];
 
         final myTrips =
-            trips.where((t) => t.status != _archivedStatus).toList();
+            trips.where((t) => t.status != TripConstants.archivedStatus).toList();
         final archivedTrips =
-            trips.where((t) => t.status == _archivedStatus).toList();
+            trips.where((t) => t.status == TripConstants.archivedStatus).toList();
 
         return DefaultTabController(
-          length: _tabCount,
+          length: TripConstants.tabCount,
           child: Scaffold(
             appBar: AppBar(
               automaticallyImplyLeading: false,
@@ -457,7 +379,7 @@ class _TripsScreenState extends State<TripsScreen>
                   ),
                   const SizedBox(width: 12),
                   Text(
-                    _myTripsLabel,
+                    TripConstants.myTripsLabel,
                     style: const TextStyle(
                       color: AppColors.white,
                       fontWeight: FontWeight.bold,
@@ -508,7 +430,7 @@ class _TripsScreenState extends State<TripsScreen>
                             const SizedBox(width: 4),
                             Flexible(
                               child: Text(
-                                _activeTabLabel,
+                                TripConstants.activeTabLabel,
                                 overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(fontSize: 13),
                               ),
@@ -546,7 +468,7 @@ class _TripsScreenState extends State<TripsScreen>
                             const SizedBox(width: 4),
                             Flexible(
                               child: Text(
-                                _archivedTabLabel,
+                                TripConstants.archivedTabLabel,
                                 overflow: TextOverflow.ellipsis,
                                 style: const TextStyle(fontSize: 13),
                               ),
@@ -575,6 +497,23 @@ class _TripsScreenState extends State<TripsScreen>
                           ],
                         ),
                       ),
+                      Tab(
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.analytics_rounded, size: 18),
+                            const SizedBox(width: 4),
+                            Flexible(
+                              child: Text(
+                                TripConstants.progressTabLabel,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(fontSize: 13),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -589,6 +528,7 @@ class _TripsScreenState extends State<TripsScreen>
                 children: [
                   _buildTripList(myTrips, false),
                   _buildTripList(archivedTrips, true),
+                  ProgressStatisticsView(allTrips: trips),
                 ],
               ),
             ),
@@ -608,7 +548,7 @@ class _TripsScreenState extends State<TripsScreen>
                   if (result['fromDestinationSelection'] == true) {
                     await TripService.saveTrip(trip);
                     _showSnackBar(
-                      _tripAddedMsg.replaceFirst('{destination}', trip.title),
+                      TripConstants.tripAddedMsg.replaceFirst('{destination}', trip.title),
                       AppColors.homeNearbyColor,
                     );
                   } else {
@@ -931,7 +871,7 @@ class _TripsScreenState extends State<TripsScreen>
                                     ),
                                     const SizedBox(width: 6),
                                     Text(
-                                      'Duration: ${_getTripDuration(startDate, endDate)} day${_getTripDuration(startDate, endDate) != 1 ? 's' : ''}',
+                                      'Duration: ${getTripDuration(startDate, endDate)} day${getTripDuration(startDate, endDate) != 1 ? 's' : ''}',
                                       style: TextStyle(
                                         color: AppColors.primaryTeal,
                                         fontWeight: FontWeight.w600,
@@ -976,14 +916,14 @@ class _TripsScreenState extends State<TripsScreen>
                                     vertical: 16,
                                   ),
                                 ),
-                                items: _transportationOptions
+                                items: TripConstants.transportationOptions
                                     .map(
                                       (t) => DropdownMenuItem(
                                         value: t,
                                         child: Row(
                                           children: [
                                             Icon(
-                                              _getTransportationIcon(t),
+                                              getTransportationIcon(t),
                                               color: AppColors.primaryTeal,
                                               size: 20,
                                             ),
@@ -1598,308 +1538,6 @@ class _TripsScreenState extends State<TripsScreen>
     );
   }
 
-
-  Widget _buildTripCard(firestoretrip.Trip trip, bool isArchived) {
-    final daysUntil = _getDaysUntilTrip(trip.startDate);
-    final duration = _getTripDuration(trip.startDate, trip.endDate);
-    final progress = _getTripProgress(trip);
-    final progressPercentage = (progress * 100).toInt();
-
-    return Card(
-      margin: const EdgeInsets.only(bottom: 16),
-      elevation: 2,
-      color: AppColors.cardBackground,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: InkWell(
-        onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => TripDetailsScreen(trip: trip),
-            ),
-          );
-        },
-        borderRadius: BorderRadius.circular(12),
-        child: Column(
-          children: [
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: AppColors.primaryTeal.withOpacity(0.08),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Icon(
-                          Icons.location_on,
-                          color: AppColors.primaryTeal,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              trip.title,
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                                color: AppColors.textDark,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Row(
-                              children: [
-                                Icon(
-                                  _getTransportationIcon(trip.transportation),
-                                  size: 16,
-                                  color: AppColors.textLight,
-                                ),
-                                const SizedBox(width: 4),
-                                Text(
-                                  trip.transportation,
-                                  style: TextStyle(
-                                    color: AppColors.textLight,
-                                    fontSize: 14,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 8,
-                          vertical: 4,
-                        ),
-                        decoration: BoxDecoration(
-                          color: _getStatusColor(trip.status).withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(
-                          trip.status,
-                          style: TextStyle(
-                            color: _getStatusColor(trip.status),
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.calendar_today,
-                        size: 16,
-                        color: AppColors.textLight,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        '${DateFormat('MMM dd').format(trip.startDate)} - ${DateFormat('MMM dd, yyyy').format(trip.endDate)}',
-                        style: TextStyle(color: AppColors.textLight),
-                      ),
-                      const Spacer(),
-                      if (!isArchived && daysUntil >= 0)
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
-                          ),
-                          decoration: BoxDecoration(
-                            color: _getUrgencyColor(daysUntil).withOpacity(0.1),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Text(
-                            daysUntil == 0
-                                ? 'Today!'
-                                : daysUntil == 1
-                                ? 'Tomorrow'
-                                : '$daysUntil days to go',
-                            style: TextStyle(
-                              color: _getUrgencyColor(daysUntil),
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Icon(
-                        Icons.schedule,
-                        size: 16,
-                        color: AppColors.textLight,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        '$duration day${duration != 1 ? 's' : ''}',
-                        style: TextStyle(color: AppColors.textLight),
-                      ),
-                      const SizedBox(width: 16),
-                      Icon(
-                        Icons.place,
-                        size: 16,
-                        color: AppColors.textLight,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                        '${trip.spots.length} spot${trip.spots.length != 1 ? 's' : ''}',
-                        style: TextStyle(color: AppColors.textLight),
-                      ),
-                    ],
-                  ),
-                  if (trip.spots.isNotEmpty) ...[
-                    const SizedBox(height: 16),
-                    // Progress Section
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: _getProgressColor(progress).withOpacity(0.05),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(
-                          color: _getProgressColor(progress).withOpacity(0.2),
-                          width: 1,
-                        ),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Row(
-                                children: [
-                                  Icon(
-                                    progress == 1.0
-                                        ? Icons.check_circle
-                                        : Icons.route,
-                                    size: 16,
-                                    color: _getProgressColor(progress),
-                                  ),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    progress == 1.0
-                                        ? 'Trip Completed!'
-                                        : 'Trip Progress',
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.w600,
-                                      color: _getProgressColor(progress),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              Row(
-                                children: [
-                                  Text(
-                                    '${trip.visitedSpots.length}/${trip.spots.length}',
-                                    style: TextStyle(
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.bold,
-                                      color: _getProgressColor(progress),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    '($progressPercentage%)',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      color: AppColors.textLight,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
-                            child: LinearProgressIndicator(
-                              value: progress,
-                              minHeight: 6,
-                              backgroundColor: Colors.grey.shade200,
-                              valueColor: AlwaysStoppedAnimation<Color>(
-                                _getProgressColor(progress),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
-                  const SizedBox(height: 12),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      if (!isArchived) ...[
-                        IconButton(
-                          icon: const Icon(Icons.edit_outlined),
-                          onPressed: () => _editTrip(trip),
-                          tooltip: 'Edit Trip',
-                          style: IconButton.styleFrom(
-                            backgroundColor: AppColors.homeForYouColor
-                                .withOpacity(0.1),
-                            foregroundColor: AppColors.homeForYouColor,
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        IconButton(
-                          icon: const Icon(Icons.archive_outlined),
-                          onPressed: () => _archiveTrip(trip),
-                          tooltip: 'Complete Trip',
-                          style: IconButton.styleFrom(
-                            backgroundColor: AppColors.primaryOrange
-                                .withOpacity(0.1),
-                            foregroundColor: AppColors.primaryOrange,
-                          ),
-                        ),
-                      ] else ...[
-                        IconButton(
-                          icon: const Icon(Icons.restore_outlined),
-                          onPressed: () => _restoreTrip(trip),
-                          tooltip: 'Restore Trip',
-                          style: IconButton.styleFrom(
-                            backgroundColor: AppColors.homeNearbyColor
-                                .withOpacity(0.1),
-                            foregroundColor: AppColors.homeNearbyColor,
-                          ),
-                        ),
-                      ],
-                      const SizedBox(width: 8),
-                      IconButton(
-                        icon: const Icon(Icons.delete_outline),
-                        onPressed:
-                            () => _deleteTrip(trip.tripPlanId, trip.title),
-                        tooltip: 'Delete Trip',
-                        style: IconButton.styleFrom(
-                          backgroundColor: AppColors.errorRed.withOpacity(0.1),
-                          foregroundColor: AppColors.errorRed,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
 // Update the _buildTripList method to use the new card builder:
   Widget _buildTripList(List<firestoretrip.Trip> trips, bool isArchived) {
     if (trips.isEmpty) {
@@ -1949,282 +1587,15 @@ class _TripsScreenState extends State<TripsScreen>
       itemCount: trips.length,
       itemBuilder: (context, index) {
         final trip = trips[index];
-        return _buildTripCard(trip, isArchived);
+        return TripCard(
+          trip: trip,
+          isArchived: isArchived,
+          onEdit: () => _editTrip(trip),
+          onArchive: () => _archiveTrip(trip),
+          onRestore: () => _restoreTrip(trip),
+          onDelete: () => _deleteTrip(trip.tripPlanId, trip.title),
+        );
       },
     );
   }
-
-  /// Legacy alternative list builder removed during cleanup
-//   Widget _buildTripList(List<firestoretrip.Trip> trips, bool isArchived) {
-//     if (trips.isEmpty) {
-//       return Center(
-//         child: Column(
-//           mainAxisAlignment: MainAxisAlignment.center,
-//           children: [
-//             Container(
-//               padding: const EdgeInsets.all(24),
-//               decoration: BoxDecoration(
-//                 color: AppColors.white.withOpacity(0.7),
-//                 borderRadius: BorderRadius.circular(20),
-//               ),
-//               child: Icon(
-//                 isArchived ? Icons.archive_outlined : Icons.explore_outlined,
-//                 size: 64,
-//                 color: AppColors.textLight,
-//               ),
-//             ),
-//             const SizedBox(height: 16),
-//             Text(
-//               isArchived ? 'No completed trips' : 'No active trips',
-//               style: TextStyle(
-//                 fontSize: 18,
-//                 color: AppColors.textLight,
-//                 fontWeight: FontWeight.w600,
-//               ),
-//             ),
-//             const SizedBox(height: 8),
-//             Text(
-//               isArchived
-//                   ? 'Your completed trips will appear here.'
-//                   : 'Start planning your next adventure!',
-//               style: TextStyle(
-//                 color: AppColors.textLight.withOpacity(0.8),
-//                 fontSize: 15,
-//               ),
-//               textAlign: TextAlign.center,
-//             ),
-//           ],
-//         ),
-//       );
-//     }
-
-//     return ListView.builder(
-//       padding: const EdgeInsets.all(16),
-//       itemCount: trips.length,
-//       itemBuilder: (context, index) {
-//         final trip = trips[index];
-//         final daysUntil = _getDaysUntilTrip(trip.startDate);
-//         final duration = _getTripDuration(trip.startDate, trip.endDate);
-
-//         return Card(
-//           margin: const EdgeInsets.only(bottom: 16),
-//           elevation: 2,
-//           color: AppColors.cardBackground,
-//           shape: RoundedRectangleBorder(
-//             borderRadius: BorderRadius.circular(12),
-//           ),
-//           child: InkWell(
-//             onTap: () {
-//               Navigator.push(
-//                 context,
-//                 MaterialPageRoute(
-//                   builder: (context) => TripDetailsScreen(trip: trip),
-//                 ),
-//               );
-//             },
-//             borderRadius: BorderRadius.circular(12),
-//             child: Padding(
-//               padding: const EdgeInsets.all(16),
-//               child: Column(
-//                 crossAxisAlignment: CrossAxisAlignment.start,
-//                 children: [
-//                   Row(
-//                     children: [
-//                       Container(
-//                         padding: const EdgeInsets.all(8),
-//                         decoration: BoxDecoration(
-//                           color: AppColors.primaryTeal.withOpacity(0.08),
-//                           borderRadius: BorderRadius.circular(8),
-//                         ),
-//                         child: Icon(
-//                           Icons.location_on,
-//                           color: AppColors.primaryTeal,
-//                         ),
-//                       ),
-//                       const SizedBox(width: 12),
-//                       Expanded(
-//                         child: Column(
-//                           crossAxisAlignment: CrossAxisAlignment.start,
-//                           children: [
-//                             Text(
-//                               trip.title,
-//                               style: TextStyle(
-//                                 fontSize: 18,
-//                                 fontWeight: FontWeight.bold,
-//                                 color: AppColors.textDark,
-//                               ),
-//                             ),
-//                             const SizedBox(height: 4),
-//                             Row(
-//                               children: [
-//                                 Icon(
-//                                   _getTransportationIcon(trip.transportation),
-//                                   size: 16,
-//                                   color: AppColors.textLight,
-//                                 ),
-//                                 const SizedBox(width: 4),
-//                                 Text(
-//                                   trip.transportation,
-//                                   style: TextStyle(
-//                                     color: AppColors.textLight,
-//                                     fontSize: 14,
-//                                   ),
-//                                 ),
-//                               ],
-//                             ),
-//                           ],
-//                         ),
-//                       ),
-//                       Container(
-//                         padding: const EdgeInsets.symmetric(
-//                           horizontal: 8,
-//                           vertical: 4,
-//                         ),
-//                         decoration: BoxDecoration(
-//                           color: _getStatusColor(trip.status).withOpacity(0.1),
-//                           borderRadius: BorderRadius.circular(12),
-//                         ),
-//                         child: Text(
-//                           trip.status,
-//                           style: TextStyle(
-//                             color: _getStatusColor(trip.status),
-//                             fontSize: 12,
-//                             fontWeight: FontWeight.w600,
-//                           ),
-//                         ),
-//                       ),
-//                     ],
-//                   ),
-//                   const SizedBox(height: 12),
-//                   Row(
-//                     children: [
-//                       Icon(
-//                         Icons.calendar_today,
-//                         size: 16,
-//                         color: AppColors.textLight,
-//                       ),
-//                       const SizedBox(width: 4),
-//                       Text(
-//                         '${DateFormat('MMM dd').format(trip.startDate)} - ${DateFormat('MMM dd, yyyy').format(trip.endDate)}',
-//                         style: TextStyle(color: AppColors.textLight),
-//                       ),
-//                       const Spacer(),
-//                       if (!isArchived && daysUntil >= 0)
-//                         Container(
-//                           padding: const EdgeInsets.symmetric(
-//                             horizontal: 8,
-//                             vertical: 4,
-//                           ),
-//                           decoration: BoxDecoration(
-//                             color: _getUrgencyColor(daysUntil).withOpacity(0.1),
-//                             borderRadius: BorderRadius.circular(12),
-//                           ),
-//                           child: Text(
-//                             daysUntil == 0
-//                                 ? 'Today!'
-//                                 : daysUntil == 1
-//                                 ? 'Tomorrow'
-//                                 : '$daysUntil days to go',
-//                             style: TextStyle(
-//                               color: _getUrgencyColor(daysUntil),
-//                               fontSize: 12,
-//                               fontWeight: FontWeight.w600,
-//                             ),
-//                           ),
-//                         ),
-//                     ],
-//                   ),
-//                   const SizedBox(height: 8),
-//                   Row(
-//                     children: [
-//                       Icon(
-//                         Icons.schedule,
-//                         size: 16,
-//                         color: AppColors.textLight,
-//                       ),
-//                       const SizedBox(width: 4),
-//                       Text(
-//                         '$duration day${duration != 1 ? 's' : ''}',
-//                         style: TextStyle(color: AppColors.textLight),
-//                       ),
-//                     ],
-//                   ),
-//                   if (trip.spots.isNotEmpty) ...[
-//                     const SizedBox(height: 8),
-//                     Wrap(
-//                       spacing: 8,
-//                       runSpacing: 8,
-//                       children: [
-//                         for (final spot in trip.spots.take(5))
-//                           Chip(
-//                             label: Text(spot, overflow: TextOverflow.ellipsis),
-//                             backgroundColor: AppColors.white.withOpacity(0.9),
-//                           ),
-//                         if (trip.spots.length > 5)
-//                           Chip(
-//                             label: Text('+${trip.spots.length - 5} more'),
-//                             backgroundColor: AppColors.white.withOpacity(0.8),
-//                           ),
-//                       ],
-//                     ),
-//                   ],
-//                   const SizedBox(height: 12),
-//                   Row(
-//                     mainAxisAlignment: MainAxisAlignment.end,
-//                     children: [
-//                       if (!isArchived) ...[
-//                         IconButton(
-//                           icon: const Icon(Icons.edit_outlined),
-//                           onPressed: () => _editTrip(trip),
-//                           tooltip: 'Edit Trip',
-//                           style: IconButton.styleFrom(
-//                             backgroundColor: AppColors.homeForYouColor
-//                                 .withOpacity(0.1),
-//                             foregroundColor: AppColors.homeForYouColor,
-//                           ),
-//                         ),
-//                         const SizedBox(width: 8),
-//                         IconButton(
-//                           icon: const Icon(Icons.archive_outlined),
-//                           onPressed: () => _archiveTrip(trip),
-//                           tooltip: 'Complete Trip',
-//                           style: IconButton.styleFrom(
-//                             backgroundColor: AppColors.primaryOrange
-//                                 .withOpacity(0.1),
-//                             foregroundColor: AppColors.primaryOrange,
-//                           ),
-//                         ),
-//                       ] else ...[
-//                         IconButton(
-//                           icon: const Icon(Icons.restore_outlined),
-//                           onPressed: () => _restoreTrip(trip),
-//                           tooltip: 'Restore Trip',
-//                           style: IconButton.styleFrom(
-//                             backgroundColor: AppColors.homeNearbyColor
-//                                 .withOpacity(0.1),
-//                             foregroundColor: AppColors.homeNearbyColor,
-//                           ),
-//                         ),
-//                       ],
-//                       const SizedBox(width: 8),
-//                       IconButton(
-//                         icon: const Icon(Icons.delete_outline),
-//                         onPressed:
-//                             () => _deleteTrip(trip.tripPlanId, trip.title),
-//                         tooltip: 'Delete Trip',
-//                         style: IconButton.styleFrom(
-//                           backgroundColor: AppColors.errorRed.withOpacity(0.1),
-//                           foregroundColor: AppColors.errorRed,
-//                         ),
-//                       ),
-//                     ],
-//                   ),
-//                 ],
-//               ),
-//             ),
-//           ),
-//         );
-//       },
-//     );
-//   }
 }

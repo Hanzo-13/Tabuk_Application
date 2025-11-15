@@ -23,13 +23,32 @@ class Trip {
   /// List of spots/places included in the trip.
   List<String> spots;
 
-  /// Status of the trip (e.g., Planning, Completed).
+  /// Status of the trip (e.g., Planning, Archived, Completed).
   final String status;
 
   /// User ID of the trip owner.
   final String userId;
 
+  /// List of indices of visited spots.
   final List<int> visitedSpots;
+
+  /// Timestamp when trip was created.
+  DateTime? createdAt;
+
+  /// Timestamp when trip was last updated.
+  DateTime? updatedAt;
+
+  /// Timestamp when trip was completed/archived.
+  DateTime? completedAt;
+
+  /// Whether the itinerary was automatically saved.
+  bool autoSaved;
+
+  /// Progress percentage (0.0 to 1.0).
+  double get progress {
+    if (spots.isEmpty) return 0.0;
+    return visitedSpots.length / spots.length;
+  }
 
   /// Creates a [Trip] instance.
   Trip({
@@ -42,6 +61,10 @@ class Trip {
     required this.userId,
     this.status = 'Planning',
     this.visitedSpots = const [],
+    this.createdAt,
+    this.updatedAt,
+    this.completedAt,
+    this.autoSaved = false,
   });
 
   /// Converts [Trip] to a map for Firestore.
@@ -55,6 +78,10 @@ class Trip {
     'user_id': userId,
     'status': status,
     'visited_spots': visitedSpots,
+    'created_at': createdAt?.toIso8601String(),
+    'updated_at': updatedAt?.toIso8601String(),
+    'completed_at': completedAt?.toIso8601String(),
+    'auto_saved': autoSaved,
   };
 
   /// Creates a [Trip] from a Firestore map.
@@ -68,6 +95,16 @@ class Trip {
     userId: map['user_id'] ?? '',
     status: map['status'] ?? 'Planning',
     visitedSpots: List<int>.from(map['visited_spots'] ?? []),
+    createdAt: map['created_at'] != null
+        ? DateTime.parse(map['created_at'])
+        : null,
+    updatedAt: map['updated_at'] != null
+        ? DateTime.parse(map['updated_at'])
+        : null,
+    completedAt: map['completed_at'] != null
+        ? DateTime.parse(map['completed_at'])
+        : null,
+    autoSaved: map['auto_saved'] ?? false,
   );
 
     // Copy with method for easy updates
@@ -81,6 +118,10 @@ class Trip {
     String? userId,
     String? status,
     List<int>? visitedSpots,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    DateTime? completedAt,
+    bool? autoSaved,
   }) {
     return Trip(
       tripPlanId: tripPlanId ?? this.tripPlanId,
@@ -92,6 +133,10 @@ class Trip {
       userId: userId ?? this.userId,
       status: status ?? this.status,
       visitedSpots: visitedSpots ?? this.visitedSpots,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      completedAt: completedAt ?? this.completedAt,
+      autoSaved: autoSaved ?? this.autoSaved,
     );
   }
 

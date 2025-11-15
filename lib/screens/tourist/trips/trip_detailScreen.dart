@@ -1,9 +1,11 @@
 // ignore_for_file: file_names
 
+import 'dart:async';
 import 'package:capstone_app/services/trip_service.dart';
 import 'package:capstone_app/services/arrival_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:intl/intl.dart';
 import '../../../models/trip_model.dart' as firestoretrip;
 import '../../../utils/colors.dart';
@@ -20,6 +22,10 @@ class TripDetailsScreen extends StatefulWidget {
 class _TripDetailsScreenState extends State<TripDetailsScreen> {
   // Track visited spots (persisted to Firestore)
   late Set<int> visitedSpots;
+  bool _isSaving = false;
+  bool _hasUnsavedChanges = false;
+  Timer? _autoSaveTimer;
+  int? _lastVisitedIndex; // Track the last spot that was marked as visited
 
   @override
   void initState() {
@@ -28,35 +34,57 @@ class _TripDetailsScreenState extends State<TripDetailsScreen> {
     visitedSpots = widget.trip.visitedSpots.toSet();
   }
 
+  @override
+  void dispose() {
+    _autoSaveTimer?.cancel();
+    super.dispose();
+  }
+
   void _toggleVisited(int index) async {
-    final wasChecked = visitedSpots.contains(index);
-    final spotName = widget.trip.spots[index];
-    
     setState(() {
       if (visitedSpots.contains(index)) {
         visitedSpots.remove(index);
+        _lastVisitedIndex = null; // Unchecking, don't save to history
       } else {
         visitedSpots.add(index);
+        _lastVisitedIndex = index; // Marking as visited, save to history
       }
+      _hasUnsavedChanges = true;
     });
 
-    // Determine new status based on completion
-    final isComplete = visitedSpots.length == widget.trip.spots.length;
-    final wasComplete = widget.trip.status == 'Archived';
-    
-    String newStatus = widget.trip.status;
-    
-    // Auto-archive when 100% complete
-    if (isComplete && !wasComplete) {
-      newStatus = 'Archived';
-    }
-    // Auto-restore when unchecking from a completed trip
-    else if (!isComplete && wasComplete) {
-      newStatus = 'Planning';
-    }
+    // Auto-save after 2 seconds of inactivity (debounce)
+    _autoSaveTimer?.cancel();
+    _autoSaveTimer = Timer(const Duration(seconds: 2), () {
+      _saveTrip(autoSave: true, newlyVisitedIndex: _lastVisitedIndex);
+      _lastVisitedIndex = null; // Reset after saving
+    });
+  }
 
-    // Save to Firestore
+  /// Save trip to Firestore (automatic or manual)
+  Future<void> _saveTrip({bool autoSave = false, int? newlyVisitedIndex}) async {
+    if (_isSaving) return;
+
+    setState(() {
+      _isSaving = true;
+    });
+
     try {
+      // Determine new status based on completion
+      final isComplete = visitedSpots.length == widget.trip.spots.length;
+      final wasComplete = widget.trip.status == 'Archived';
+      
+      String newStatus = widget.trip.status;
+      
+      // Auto-archive when 100% complete
+      if (isComplete && !wasComplete) {
+        newStatus = 'Archived';
+      }
+      // Auto-restore when unchecking from a completed trip
+      else if (!isComplete && wasComplete) {
+        newStatus = 'Planning';
+      }
+
+      final now = DateTime.now();
       final updatedTrip = firestoretrip.Trip(
         tripPlanId: widget.trip.tripPlanId,
         title: widget.trip.title,
@@ -67,16 +95,62 @@ class _TripDetailsScreenState extends State<TripDetailsScreen> {
         userId: widget.trip.userId,
         status: newStatus,
         visitedSpots: visitedSpots.toList(),
+        createdAt: widget.trip.createdAt ?? now,
+        updatedAt: now,
+        completedAt: isComplete ? (widget.trip.completedAt ?? now) : widget.trip.completedAt,
+        autoSaved: autoSave || widget.trip.autoSaved,
       );
-      await TripService.saveTrip(updatedTrip);
+      
+      await TripService.saveTrip(updatedTrip, autoSave: autoSave);
 
       // If marking as visited (not unchecking), save to ArrivalService/DestinationHistory
-      if (!wasChecked) {
-        await _saveVisitToDestinationHistory(spotName);
+      if (newlyVisitedIndex != null && newlyVisitedIndex < widget.trip.spots.length) {
+        final spotName = widget.trip.spots[newlyVisitedIndex];
+        // Save to destination history in background (don't await to keep UI responsive)
+        _saveVisitToDestinationHistory(spotName).catchError((e) {
+          // Silently handle errors - this is a background operation
+        });
+      }
+
+      setState(() {
+        _hasUnsavedChanges = false;
+        _isSaving = false;
+      });
+
+      // Show success message for manual saves
+      if (!autoSave && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle, color: Colors.white, size: 20),
+                const SizedBox(width: 12),
+                const Expanded(
+                  child: Text(
+                    'Itinerary saved successfully!',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            backgroundColor: AppColors.primaryTeal,
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.all(16),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
+            duration: const Duration(seconds: 2),
+          ),
+        );
       }
 
       if (mounted) {
         // Show celebration when completing
+        final isComplete = visitedSpots.length == widget.trip.spots.length;
+        final wasComplete = widget.trip.status == 'Archived';
         if (isComplete && !wasComplete) {
           _showCompletionDialog();
         }
@@ -115,20 +189,28 @@ class _TripDetailsScreenState extends State<TripDetailsScreen> {
         }
       }
     } catch (e) {
-      // Revert on error
       setState(() {
-        if (wasChecked) {
-          visitedSpots.add(index);
-        } else {
-          visitedSpots.remove(index);
-        }
+        _isSaving = false;
       });
       
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to update: $e'),
+            content: Row(
+              children: [
+                const Icon(Icons.error, color: Colors.white, size: 20),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text('Failed to save: $e'),
+                ),
+              ],
+            ),
             backgroundColor: AppColors.errorRed,
+            behavior: SnackBarBehavior.floating,
+            margin: const EdgeInsets.all(16),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(8),
+            ),
           ),
         );
       }
@@ -136,8 +218,29 @@ class _TripDetailsScreenState extends State<TripDetailsScreen> {
   }
 
   /// Fetch destination details from Firestore and save visit to DestinationHistory
+  /// ONLY saves if user is actually at the location (within proximity threshold)
   Future<void> _saveVisitToDestinationHistory(String destinationName) async {
     try {
+      // IMPORTANT: Check if user is actually at the location before saving
+      // This prevents saving visits when user is just reviewing/checking spots
+      // Get current user position to verify they're actually at the location
+      Position currentPosition;
+      try {
+        currentPosition = await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.medium,
+        ).timeout(
+          const Duration(seconds: 5),
+          onTimeout: () {
+            // Throw exception to be caught by outer catch
+            throw TimeoutException('Location request timed out');
+          },
+        );
+      } catch (e) {
+        // If we can't get location (timeout or permission denied), don't save the visit
+        // User must be physically present to record a visit
+        return;
+      }
+
       // Search for destination in Firestore by name
       final destinationSnapshot = await FirebaseFirestore.instance
           .collection('destination')
@@ -201,38 +304,53 @@ class _TripDetailsScreenState extends State<TripDetailsScreen> {
         final lat = (destinationData['latitude'] as num?)?.toDouble();
         final lng = (destinationData['longitude'] as num?)?.toDouble();
         
-        // Only save if we have valid coordinates
+        // Only save if we have valid coordinates AND user is at the location
         if (hotspotId != null && lat != null && lng != null) {
-          await ArrivalService.saveArrival(
-            hotspotId: hotspotId,
-            latitude: lat,
-            longitude: lng,
-            businessName: destinationData['business_name'] ?? 
-                          destinationData['name'] ?? 
-                          destinationData['destinationName'] ??
-                          destinationName,
-            destinationName: destinationData['destinationName'] ??
-                             destinationData['business_name'] ?? 
-                             destinationData['name'] ?? 
-                             destinationName,
-            destinationCategory: destinationData['destinationCategory'] ??
-                                 destinationData['category']?.toString(),
-            destinationType: destinationData['destinationType'] ??
-                             destinationData['type']?.toString(),
-            destinationDistrict: destinationData['destinationDistrict'] ??
-                                destinationData['district']?.toString(),
-            destinationMunicipality: destinationData['destinationMunicipality'] ??
-                                     destinationData['municipality']?.toString(),
-            destinationImages: destinationData['destinationImages'] != null
-                ? (destinationData['destinationImages'] as List).map((e) => e.toString()).toList()
-                : destinationData['images'] != null
-                    ? (destinationData['images'] as List).map((e) => e.toString()).toList()
-                    : destinationData['imageUrl'] != null
-                        ? [destinationData['imageUrl'].toString()]
-                        : null,
-            destinationDescription: destinationData['destinationDescription'] ??
-                                   destinationData['description']?.toString(),
+          // Calculate distance to destination
+          final distance = Geolocator.distanceBetween(
+            currentPosition.latitude,
+            currentPosition.longitude,
+            lat,
+            lng,
           );
+
+          // Only save if user is within 100 meters of the destination
+          // This ensures they're actually visiting, not just reviewing
+          if (distance <= 100) {
+            // ArrivalService.saveArrival will fetch complete destination data from Firestore
+            // to ensure all fields (including district) are populated correctly
+            await ArrivalService.saveArrival(
+              hotspotId: hotspotId,
+              latitude: currentPosition.latitude, // Use actual user location
+              longitude: currentPosition.longitude, // Use actual user location
+              businessName: destinationData['business_name'] ?? 
+                            destinationData['name'] ?? 
+                            destinationData['destinationName'] ??
+                            destinationName,
+              destinationName: destinationData['destinationName'] ??
+                               destinationData['business_name'] ?? 
+                               destinationData['name'] ??
+                               destinationName,
+              destinationCategory: destinationData['destinationCategory'] ??
+                                   destinationData['category']?.toString(),
+              destinationType: destinationData['destinationType'] ??
+                               destinationData['type']?.toString(),
+              destinationDistrict: destinationData['destinationDistrict'] ??
+                                  destinationData['district']?.toString(),
+              destinationMunicipality: destinationData['destinationMunicipality'] ??
+                                      destinationData['municipality']?.toString(),
+              destinationImages: destinationData['destinationImages'] != null
+                  ? (destinationData['destinationImages'] as List).map((e) => e.toString()).toList()
+                  : destinationData['images'] != null
+                      ? (destinationData['images'] as List).map((e) => e.toString()).toList()
+                      : destinationData['imageUrl'] != null
+                          ? [destinationData['imageUrl'].toString()]
+                          : null,
+              destinationDescription: destinationData['destinationDescription'] ??
+                                     destinationData['description']?.toString(),
+            );
+          }
+          // If user is too far away, don't save - they're just reviewing, not visiting
         } else {
           // Missing coordinates; skip saving visit
         }
@@ -429,16 +547,79 @@ class _TripDetailsScreenState extends State<TripDetailsScreen> {
         backgroundColor: AppColors.primaryTeal,
         foregroundColor: Colors.white,
         actions: [
+          // Save button with auto-save indicator
+          if (_hasUnsavedChanges)
+            Stack(
+              children: [
+                IconButton(
+                  icon: _isSaving
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                          ),
+                        )
+                      : const Icon(Icons.save_rounded),
+                  onPressed: _isSaving
+                      ? null
+                      : () => _saveTrip(
+                            autoSave: false,
+                            newlyVisitedIndex: _lastVisitedIndex,
+                          ),
+                  tooltip: 'Save itinerary manually',
+                ),
+                // Auto-save indicator
+                if (!_isSaving)
+                  Positioned(
+                    right: 8,
+                    top: 8,
+                    child: Container(
+                      width: 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                        color: Colors.orange,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: Colors.white, width: 1),
+                      ),
+                    ),
+                  ),
+              ],
+            )
+          else if (widget.trip.autoSaved)
+            IconButton(
+              icon: const Icon(Icons.cloud_done_rounded),
+              onPressed: null,
+              tooltip: 'Auto-saved',
+              color: Colors.white70,
+            ),
           // Progress indicator in app bar
           Center(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Text(
-                '${visitedSpots.length}/${widget.trip.spots.length}',
-                style: const TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                ),
+            child: Container(
+              margin: const EdgeInsets.symmetric(horizontal: 8),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.check_circle_outline,
+                    size: 16,
+                    color: Colors.white,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    '${visitedSpots.length}/${widget.trip.spots.length}',
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -469,41 +650,153 @@ class _TripDetailsScreenState extends State<TripDetailsScreen> {
                       widget.trip.transportation,
                     ),
                     const Divider(height: 24),
-                    // Progress Bar
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              'Trip Progress',
-                              style: TextStyle(
-                                color: AppColors.textLight,
-                                fontSize: 14,
-                              ),
-                            ),
-                            Text(
-                              '${(_progressPercentage * 100).toInt()}%',
-                              style: TextStyle(
-                                color: AppColors.primaryTeal,
-                                fontSize: 14,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
+                    // Enhanced Progress Bar
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            AppColors.primaryTeal.withOpacity(0.1),
+                            AppColors.primaryTeal.withOpacity(0.05),
                           ],
                         ),
-                        const SizedBox(height: 8),
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(10),
-                          child: LinearProgressIndicator(
-                            value: _progressPercentage,
-                            minHeight: 8,
-                            backgroundColor: Colors.grey[200],
-                            valueColor: AlwaysStoppedAnimation<Color>(AppColors.primaryTeal),
-                          ),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: AppColors.primaryTeal.withOpacity(0.3),
+                          width: 1.5,
                         ),
-                      ],
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.primaryTeal.withOpacity(0.1),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(6),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.primaryTeal.withOpacity(0.2),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Icon(
+                                      _progressPercentage == 100
+                                          ? Icons.check_circle_rounded
+                                          : _progressPercentage > 0
+                                              ? Icons.trending_up_rounded
+                                              : Icons.route_rounded,
+                                      size: 20,
+                                      color: AppColors.primaryTeal,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Text(
+                                    _progressPercentage == 100
+                                        ? 'Trip Completed! 🎉'
+                                        : 'Trip Progress',
+                                    style: TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.bold,
+                                      color: AppColors.primaryTeal,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 6,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: AppColors.primaryTeal.withOpacity(0.2),
+                                  borderRadius: BorderRadius.circular(20),
+                                ),
+                                child: Text(
+                                  '${(_progressPercentage * 100).toInt()}%',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                    color: AppColors.primaryTeal,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          // Prominent Progress Bar
+                          Stack(
+                            children: [
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(12),
+                                child: Container(
+                                  height: 20,
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey.shade200,
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                              ),
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(12),
+                                child: TweenAnimationBuilder<double>(
+                                  tween: Tween(begin: 0.0, end: _progressPercentage),
+                                  duration: const Duration(milliseconds: 800),
+                                  curve: Curves.easeOutCubic,
+                                  builder: (context, value, child) {
+                                    return Container(
+                                      height: 20,
+                                      width: MediaQuery.of(context).size.width *
+                                          (value / 100) *
+                                          0.75,
+                                      decoration: BoxDecoration(
+                                        gradient: LinearGradient(
+                                          colors: [
+                                            AppColors.primaryTeal,
+                                            AppColors.primaryTeal.withOpacity(0.8),
+                                          ],
+                                        ),
+                                        borderRadius: BorderRadius.circular(12),
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: AppColors.primaryTeal.withOpacity(0.4),
+                                            blurRadius: 8,
+                                            offset: const Offset(0, 2),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
+                              // Progress text overlay
+                              Positioned.fill(
+                                child: Center(
+                                  child: Text(
+                                    '${visitedSpots.length} of ${widget.trip.spots.length} spots visited',
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: _progressPercentage > 50
+                                          ? Colors.white
+                                          : AppColors.textDark,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),

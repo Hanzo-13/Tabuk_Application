@@ -3,11 +3,11 @@ import 'dart:io';
 import 'dart:convert';
 import 'dart:math' as math;
 
+import 'package:capstone_app/config/env_config.dart';
 import 'package:capstone_app/models/connectivity_info.dart';
 import 'package:capstone_app/services/connectivity_service.dart';
 import 'package:capstone_app/services/navigation_service.dart';
 import 'package:capstone_app/utils/colors.dart';
-// Optional: API key can be provided via --dart-define=GOOGLE_MAPS_API_KEY=...
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -502,8 +502,8 @@ class MapNavigationManager {
   // ---- Google Directions Fallback ----
   Future<Set<Polyline>?> _tryGoogleDirections(LatLng origin, LatLng dest, {required String mode}) async {
     try {
-      // API key configured in AppConstants.googleDirectionsApiKey
-      final key = const String.fromEnvironment('GOOGLE_MAPS_API_KEY');
+      // API key configured in EnvConfig.googleDirectionsApiKey
+      final key = EnvConfig.googleDirectionsApiKey;
       if (key.isEmpty) return null;
 
       final googleMode = _toGoogleMode(mode);

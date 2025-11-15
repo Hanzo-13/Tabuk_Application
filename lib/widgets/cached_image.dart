@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:path_provider/path_provider.dart';
 import 'package:http/http.dart' as http;
+import 'network_image_with_timeout.dart';
 
 class ImageCacheService {
   static Future<File> _downloadImage(String url, String filename) async {
@@ -60,11 +61,14 @@ class CachedImage extends StatelessWidget {
         if (snapshot.hasData) {
           final pathOrUrl = snapshot.data!;
           if (kIsWeb) {
-            return Image.network(
-              pathOrUrl,
+            // Use NetworkImageWithTimeout for web to handle connection timeouts
+            return NetworkImageWithTimeout(
+              imageUrl: pathOrUrl,
               fit: fit,
               width: double.infinity,
               height: double.infinity,
+              placeholder: placeholderBuilder(context),
+              errorBuilder: errorBuilder,
             );
           } else {
             return Image.file(
@@ -72,6 +76,7 @@ class CachedImage extends StatelessWidget {
               fit: fit,
               width: double.infinity,
               height: double.infinity,
+              errorBuilder: (context, error, stackTrace) => errorBuilder(context, error, stackTrace),
             );
           }
         }

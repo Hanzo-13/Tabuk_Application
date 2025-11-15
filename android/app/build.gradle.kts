@@ -52,6 +52,7 @@ android {
         multiDexEnabled = true
         
         // Add manifest placeholders for API keys
+        // Note: This is overridden by buildTypes, but kept for consistency
         manifestPlaceholders["GOOGLE_MAPS_API_KEY"] = project.findProperty("GOOGLE_MAPS_API_KEY")
             ?: System.getenv("GOOGLE_MAPS_API_KEY")
             ?: ""
@@ -98,7 +99,7 @@ android {
                 ?: System.getenv("ANDROID_GOOGLE_MAPS_API_KEY")
                 ?: project.findProperty("GOOGLE_MAPS_API_KEY")
                 ?: System.getenv("GOOGLE_MAPS_API_KEY")
-                ?: "AIzaSyDEeIzEOXmrCFNYt7f2QHM43lcq8fZtTsE" // Debug API key - matches debug SHA-1
+                ?: "AIzaSyDEeIzEOXmrCFNYt7f2QHM43lcq8fZtTsE" // Android key (auto created by Firebase)
 
             buildConfigField("String", "GOOGLE_MAPS_API_KEY", "\"$googleMapsKey\"")
             manifestPlaceholders["GOOGLE_MAPS_API_KEY"] = googleMapsKey

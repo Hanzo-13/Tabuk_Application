@@ -29,13 +29,10 @@ class _TripBasicInfoScreenState extends State<TripBasicInfoScreen> {
   // Layout and label constants
   static const int _totalSteps = 3;
   static const int _currentStep = 1;
-  static const double _sectionSpacing = 16.0;
   static const double _fieldSpacing = 24.0;
   static const double _buttonSpacing = 32.0;
   static const double _progressIndicatorHeight = 6.0;
   static const double _progressIndicatorMargin = 4.0;
-  static const double _dateFieldWidth = 160.0;
-  static const double _dateFieldSpacing = 16.0;
   static const double _nextButtonHeight = 50.0;
   static const double _bottomSpacing = 20.0;
   static const String _tripDetailsLabel = 'Trip Details';
@@ -90,53 +87,126 @@ class _TripBasicInfoScreenState extends State<TripBasicInfoScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: _buildAppBar(),
-      body: Column(
-        children: [
-          _buildProgressIndicator(),
-          Expanded(child: _buildBasicInfoContent()),
-        ],
+      body: Container(
+        decoration: const BoxDecoration(gradient: AppColors.backgroundGradient),
+        child: Column(
+          children: [
+            _buildCustomAppBar(),
+            _buildProgressIndicator(),
+            Expanded(child: _buildBasicInfoContent()),
+          ],
+        ),
       ),
     );
   }
 
-  /// Builds the app bar with trip destination title
-  PreferredSizeWidget _buildAppBar() {
-    return AppBar(
-      backgroundColor: Colors.white,
-      foregroundColor: Colors.black,
-      elevation: 0,
-      leading: IconButton(
-        icon: const Icon(Icons.arrow_back),
-        onPressed: () => Navigator.pop(context),
+  /// Builds a custom gradient app bar
+  Widget _buildCustomAppBar() {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AppColors.primaryTeal,
+            AppColors.primaryTeal.withOpacity(0.8),
+          ],
+        ),
       ),
-      title: Text(
-        'Trip to ${widget.destination}',
-        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            children: [
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: IconButton(
+                  icon: const Icon(Icons.arrow_back, color: Colors.white),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Trip Details',
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.9),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    Text(
+                      'Trip to ${widget.destination}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
-      centerTitle: true,
     );
   }
 
   /// Builds the progress indicator showing current step
   Widget _buildProgressIndicator() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
-      child: Row(
-        children: List.generate(_totalSteps, (index) {
-          return Expanded(
-            child: Container(
-              height: _progressIndicatorHeight,
-              margin: const EdgeInsets.symmetric(horizontal: _progressIndicatorMargin),
-              decoration: BoxDecoration(
-                color: index < _currentStep
-                    ? AppColors.primaryOrange
-                    : AppColors.textLight.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(3),
-              ),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
+      child: Column(
+        children: [
+          Row(
+            children: List.generate(_totalSteps, (index) {
+              final isActive = index < _currentStep;
+              return Expanded(
+                child: Container(
+                  height: _progressIndicatorHeight,
+                  margin: const EdgeInsets.symmetric(horizontal: _progressIndicatorMargin),
+                  decoration: BoxDecoration(
+                    gradient: isActive
+                        ? LinearGradient(
+                            colors: [
+                              AppColors.primaryOrange,
+                              AppColors.primaryOrange.withOpacity(0.8),
+                            ],
+                          )
+                        : null,
+                    color: isActive ? null : AppColors.textLight.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(3),
+                    boxShadow: isActive
+                        ? [
+                            BoxShadow(
+                              color: AppColors.primaryOrange.withOpacity(0.3),
+                              blurRadius: 4,
+                              offset: const Offset(0, 2),
+                            ),
+                          ]
+                        : null,
+                  ),
+                ),
+              );
+            }),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Step 1 of 3',
+            style: TextStyle(
+              color: AppColors.textLight,
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
             ),
-          );
-        }),
+          ),
+        ],
       ),
     );
   }
@@ -149,16 +219,70 @@ class _TripBasicInfoScreenState extends State<TripBasicInfoScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              _tripDetailsLabel,
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    AppColors.primaryTeal.withOpacity(0.1),
+                    AppColors.primaryOrange.withOpacity(0.05),
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(
+                  color: AppColors.primaryTeal.withOpacity(0.2),
+                  width: 1,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryTeal.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(
+                      Icons.info_rounded,
+                      color: AppColors.primaryTeal,
+                      size: 24,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _tripDetailsLabel,
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.textDark,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Enter your trip information',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: AppColors.textLight,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
-            const SizedBox(height: _sectionSpacing),
+            const SizedBox(height: 24),
             _buildTripNameField(),
             const SizedBox(height: _fieldSpacing),
             _buildTripDatesSection(),
-          const SizedBox(height: 12),
-          _buildQuickPresets(),
+            const SizedBox(height: 16),
+            _buildQuickPresets(),
             const SizedBox(height: _buttonSpacing),
             _buildNextButton(),
             const SizedBox(height: _bottomSpacing),
@@ -170,63 +294,157 @@ class _TripBasicInfoScreenState extends State<TripBasicInfoScreen> {
 
   /// Builds the trip name input field
   Widget _buildTripNameField() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          _tripNameLabel,
-          style: TextStyle(color: AppColors.textLight),
-        ),
-        const SizedBox(height: 8),
-        TextField(
-          controller: _tripNameController,
-          decoration: InputDecoration(
-            hintText: _tripNameHint,
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(color: AppColors.primaryOrange),
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                Icons.title_rounded,
+                color: AppColors.primaryTeal,
+                size: 20,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                _tripNameLabel,
+                style: TextStyle(
+                  color: AppColors.textDark,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Container(
+            decoration: BoxDecoration(
+              color: AppColors.backgroundColor,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: AppColors.primaryOrange.withOpacity(0.2),
+              ),
             ),
-            focusedBorder: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(8),
-              borderSide: const BorderSide(
-                color: AppColors.primaryOrange,
-                width: 2,
+            child: TextField(
+              controller: _tripNameController,
+              decoration: InputDecoration(
+                hintText: _tripNameHint,
+                hintStyle: TextStyle(color: AppColors.textLight),
+                prefixIcon: Icon(
+                  Icons.edit_rounded,
+                  color: AppColors.primaryOrange,
+                ),
+                border: InputBorder.none,
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 14,
+                ),
+              ),
+              style: TextStyle(
+                fontSize: 16,
+                color: AppColors.textDark,
               ),
             ),
           ),
-          style: const TextStyle(fontSize: 16),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
   /// Builds the trip dates section with start and end date pickers
   Widget _buildTripDatesSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(_tripDatesLabel, style: TextStyle(color: AppColors.textLight)),
-        const SizedBox(height: 8),
-        SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: Row(
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
             children: [
-              SizedBox(width: _dateFieldWidth, child: _buildDateField(isStartDate: true)),
-              const SizedBox(width: _dateFieldSpacing),
-              SizedBox(width: _dateFieldWidth, child: _buildDateField(isStartDate: false)),
+              Icon(
+                Icons.calendar_today_rounded,
+                color: AppColors.primaryTeal,
+                size: 20,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                _tripDatesLabel,
+                style: TextStyle(
+                  color: AppColors.textDark,
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ],
           ),
-        ),
-        const SizedBox(height: 8),
-        if (_startDate != null && _endDate != null)
-          Text(
-            '${_calculateTripDuration()} days',
-            style: const TextStyle(
-              color: AppColors.primaryTeal,
-              fontWeight: FontWeight.w500,
-            ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(child: _buildDateField(isStartDate: true)),
+              const SizedBox(width: 12),
+              Expanded(child: _buildDateField(isStartDate: false)),
+            ],
           ),
-      ],
+          if (_startDate != null && _endDate != null) ...[
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    AppColors.primaryTeal.withOpacity(0.1),
+                    AppColors.primaryOrange.withOpacity(0.05),
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: AppColors.primaryTeal.withOpacity(0.2),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.schedule_rounded,
+                    color: AppColors.primaryTeal,
+                    size: 18,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Duration: ${_calculateTripDuration()} day${_calculateTripDuration() != 1 ? 's' : ''}',
+                    style: TextStyle(
+                      color: AppColors.primaryTeal,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 
@@ -255,16 +473,55 @@ class _TripBasicInfoScreenState extends State<TripBasicInfoScreen> {
   }
 
   Widget _buildPresetChip(String label, {required int days}) {
-    return ActionChip(
-      label: Text(label),
-      onPressed: () {
-        final now = DateTime.now();
-        setState(() {
-          _startDate = DateTime(now.year, now.month, now.day).add(const Duration(days: 1));
-          _endDate = _startDate!.add(Duration(days: days - 1));
-        });
-        _recomputeValidity();
-      },
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            AppColors.primaryTeal.withOpacity(0.1),
+            AppColors.primaryOrange.withOpacity(0.05),
+          ],
+        ),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: AppColors.primaryTeal.withOpacity(0.3),
+        ),
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () {
+            final now = DateTime.now();
+            setState(() {
+              _startDate = DateTime(now.year, now.month, now.day).add(const Duration(days: 1));
+              _endDate = _startDate!.add(Duration(days: days - 1));
+            });
+            _recomputeValidity();
+          },
+          borderRadius: BorderRadius.circular(20),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  Icons.access_time_rounded,
+                  size: 16,
+                  color: AppColors.primaryTeal,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  label,
+                  style: TextStyle(
+                    color: AppColors.primaryTeal,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -291,26 +548,60 @@ class _TripBasicInfoScreenState extends State<TripBasicInfoScreen> {
     return GestureDetector(
       onTap: () => _selectDate(isStartDate),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
         decoration: BoxDecoration(
-          border: Border.all(color: AppColors.primaryOrange),
-          borderRadius: BorderRadius.circular(8),
+          color: AppColors.backgroundColor,
+          border: Border.all(
+            color: AppColors.primaryOrange.withOpacity(0.3),
+            width: 1.5,
+          ),
+          borderRadius: BorderRadius.circular(12),
         ),
         child: Row(
           children: [
-            const Icon(
-              Icons.calendar_today,
-              size: 16,
-              color: AppColors.primaryOrange,
-            ),
-            const SizedBox(width: 8),
-            Flexible(
-              child: Text(
-                formattedDate,
-                style: const TextStyle(fontSize: 14),
-                overflow: TextOverflow.ellipsis,
-                maxLines: 1,
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: AppColors.primaryOrange.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
               ),
+              child: Icon(
+                isStartDate ? Icons.flight_takeoff_rounded : Icons.flight_land_rounded,
+                size: 18,
+                color: AppColors.primaryOrange,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    isStartDate ? 'Start' : 'End',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: AppColors.textLight,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    formattedDate,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: AppColors.textDark,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                  ),
+                ],
+              ),
+            ),
+            Icon(
+              Icons.arrow_drop_down_rounded,
+              color: AppColors.primaryOrange,
+              size: 20,
             ),
           ],
         ),
@@ -320,19 +611,58 @@ class _TripBasicInfoScreenState extends State<TripBasicInfoScreen> {
 
   /// Builds the next button to continue to transportation selection
   Widget _buildNextButton() {
-    return SizedBox(
+    return Container(
       width: double.infinity,
       height: _nextButtonHeight,
-      child: ElevatedButton(
-        onPressed: _isValid ? _continueToTransportation : null,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.primaryOrange,
-          foregroundColor: Colors.white,
-          elevation: 0,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: _isValid
+              ? [
+                  AppColors.primaryOrange,
+                  AppColors.primaryOrange.withOpacity(0.8),
+                ]
+              : [
+                  Colors.grey.shade300,
+                  Colors.grey.shade300,
+                ],
         ),
-        child: const Text(
-          _nextButtonLabel,
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: _isValid
+            ? [
+                BoxShadow(
+                  color: AppColors.primaryOrange.withOpacity(0.4),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ]
+            : null,
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: _isValid ? _continueToTransportation : null,
+          borderRadius: BorderRadius.circular(16),
+          child: Center(
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  _nextButtonLabel,
+                  style: TextStyle(
+                    color: _isValid ? Colors.white : Colors.grey.shade600,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Icon(
+                  Icons.arrow_forward_rounded,
+                  color: _isValid ? Colors.white : Colors.grey.shade600,
+                  size: 24,
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );

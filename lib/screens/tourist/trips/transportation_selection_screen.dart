@@ -73,53 +73,126 @@ class _TransportationSelectionScreenState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: _buildAppBar(),
-      body: Column(
-        children: [
-          _buildProgressIndicator(),
-          Expanded(child: _buildTransportationContent()),
-        ],
+      body: Container(
+        decoration: const BoxDecoration(gradient: AppColors.backgroundGradient),
+        child: Column(
+          children: [
+            _buildCustomAppBar(),
+            _buildProgressIndicator(),
+            Expanded(child: _buildTransportationContent()),
+          ],
+        ),
       ),
     );
   }
 
-  /// Builds the app bar with trip destination title
-  PreferredSizeWidget _buildAppBar() {
-    return AppBar(
-      backgroundColor: Colors.white,
-      foregroundColor: Colors.black,
-      elevation: 0,
-      leading: IconButton(
-        icon: const Icon(Icons.arrow_back),
-        onPressed: () => Navigator.pop(context),
+  /// Builds a custom gradient app bar
+  Widget _buildCustomAppBar() {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AppColors.primaryTeal,
+            AppColors.primaryTeal.withOpacity(0.8),
+          ],
+        ),
       ),
-      title: Text(
-        'Trip to ${widget.destination}',
-        style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          child: Row(
+            children: [
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: IconButton(
+                  icon: const Icon(Icons.arrow_back, color: Colors.white),
+                  onPressed: () => Navigator.pop(context),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Transportation',
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.9),
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    Text(
+                      'Trip to ${widget.destination}',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
-      centerTitle: true,
     );
   }
 
   /// Builds the progress indicator showing current step
   Widget _buildProgressIndicator() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
-      child: Row(
-        children: List.generate(_totalSteps, (index) {
-          return Expanded(
-            child: Container(
-              height: _progressIndicatorHeight,
-              margin: const EdgeInsets.symmetric(horizontal: _progressIndicatorMargin),
-              decoration: BoxDecoration(
-                color: index < _currentStep
-                    ? AppColors.primaryOrange
-                    : AppColors.textLight.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(3),
-              ),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
+      child: Column(
+        children: [
+          Row(
+            children: List.generate(_totalSteps, (index) {
+              final isActive = index < _currentStep;
+              return Expanded(
+                child: Container(
+                  height: _progressIndicatorHeight,
+                  margin: const EdgeInsets.symmetric(horizontal: _progressIndicatorMargin),
+                  decoration: BoxDecoration(
+                    gradient: isActive
+                        ? LinearGradient(
+                            colors: [
+                              AppColors.primaryOrange,
+                              AppColors.primaryOrange.withOpacity(0.8),
+                            ],
+                          )
+                        : null,
+                    color: isActive ? null : AppColors.textLight.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(3),
+                    boxShadow: isActive
+                        ? [
+                            BoxShadow(
+                              color: AppColors.primaryOrange.withOpacity(0.3),
+                              blurRadius: 4,
+                              offset: const Offset(0, 2),
+                            ),
+                          ]
+                        : null,
+                  ),
+                ),
+              );
+            }),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Step 2 of 3',
+            style: TextStyle(
+              color: AppColors.textLight,
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
             ),
-          );
-        }),
+          ),
+        ],
       ),
     );
   }
@@ -143,19 +216,68 @@ class _TransportationSelectionScreenState
 
   /// Builds the header section with title and description
   Widget _buildHeaderSection() {
-    return const Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          _headerTitle,
-          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            AppColors.primaryTeal.withOpacity(0.1),
+            AppColors.primaryOrange.withOpacity(0.05),
+          ],
         ),
-        SizedBox(height: 8),
-        Text(
-          _headerSubtitle,
-          style: TextStyle(fontSize: 14, color: Colors.grey),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: AppColors.primaryTeal.withOpacity(0.2),
+          width: 1,
         ),
-      ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: AppColors.primaryTeal.withOpacity(0.2),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(
+                  Icons.directions_rounded,
+                  color: AppColors.primaryTeal,
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      _headerTitle,
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.textDark,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      _headerSubtitle,
+                      style: TextStyle(
+                        fontSize: 13,
+                        color: AppColors.textLight,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 
@@ -188,103 +310,217 @@ class _TransportationSelectionScreenState
   }
 
   /// Fixed version - builds a single transportation option card
-Widget _buildTransportationOption({
-  required TransportationType type,
-  required IconData icon,
-  required String label,
-}) {
-  final bool isSelected = _selectedTransportation == type;
-  return GestureDetector(
-    onTap: () => _selectTransportation(type),
-    child: Container(
-      padding: const EdgeInsets.all(_optionPadding),
-      decoration: BoxDecoration(
-        color: isSelected
-            ? AppColors.primaryOrange.withOpacity(0.1)
-            : Colors.white,
-        border: Border.all(
-          color: isSelected
-              ? AppColors.primaryOrange
-              : AppColors.textLight.withOpacity(0.2),
-          width: isSelected ? 2 : 1,
-        ),
-        borderRadius: BorderRadius.circular(_optionBorderRadius),
-        boxShadow: [
-          if (isSelected)
-            BoxShadow(
-              color: AppColors.primaryOrange.withOpacity(0.15),
-              blurRadius: _optionBoxShadowBlur,
-              offset: const Offset(0, _optionBoxShadowOffsetY),
-            ),
-        ],
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        mainAxisSize: MainAxisSize.min, // Add this to minimize space
-        children: [
-          Icon(
-            icon,
-            size: _optionIconSize,
-            color: isSelected ? AppColors.primaryOrange : AppColors.textLight,
+  Widget _buildTransportationOption({
+    required TransportationType type,
+    required IconData icon,
+    required String label,
+  }) {
+    final bool isSelected = _selectedTransportation == type;
+    return GestureDetector(
+      onTap: () => _selectTransportation(type),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        curve: Curves.easeInOut,
+        padding: const EdgeInsets.all(_optionPadding),
+        decoration: BoxDecoration(
+          gradient: isSelected
+              ? LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    AppColors.primaryOrange.withOpacity(0.15),
+                    AppColors.primaryOrange.withOpacity(0.05),
+                  ],
+                )
+              : null,
+          color: isSelected ? null : Colors.white,
+          border: Border.all(
+            color: isSelected
+                ? AppColors.primaryOrange
+                : AppColors.textLight.withOpacity(0.2),
+            width: isSelected ? 2.5 : 1.5,
           ),
-          const SizedBox(height: 8), // Reduced from 12
-          Flexible( // Wrap text in Flexible
-            child: Text(
+          borderRadius: BorderRadius.circular(_optionBorderRadius),
+          boxShadow: [
+            if (isSelected)
+              BoxShadow(
+                color: AppColors.primaryOrange.withOpacity(0.3),
+                blurRadius: _optionBoxShadowBlur,
+                offset: const Offset(0, _optionBoxShadowOffsetY),
+              )
+            else
+              BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 4,
+                offset: const Offset(0, 2),
+              ),
+          ],
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                gradient: isSelected
+                    ? LinearGradient(
+                        colors: [
+                          AppColors.primaryOrange,
+                          AppColors.primaryOrange.withOpacity(0.8),
+                        ],
+                      )
+                    : null,
+                color: isSelected ? null : AppColors.primaryOrange.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                icon,
+                size: _optionIconSize,
+                color: isSelected ? Colors.white : AppColors.primaryOrange,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
               label,
               style: TextStyle(
                 color: isSelected ? AppColors.primaryOrange : AppColors.textDark,
-                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                fontSize: 15,
               ),
               textAlign: TextAlign.center,
             ),
-          ),
-          if (isSelected) ...[
-            const SizedBox(height: 4), // Reduced from 6
-            Flexible( // Wrap hint text in Flexible
-              child: Text(
-                _selectedHint,
-                style: const TextStyle(
-                  fontSize: 10, // Reduced from 11
-                  color: AppColors.textLight,
+            if (isSelected) ...[
+              const SizedBox(height: 4),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Text(
+                  _selectedHint,
+                  style: TextStyle(
+                    fontSize: 9,
+                    color: AppColors.primaryOrange,
+                    fontWeight: FontWeight.w500,
+                  ),
+                  textAlign: TextAlign.center,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
-                textAlign: TextAlign.center,
-                maxLines: 2, // Allow text wrapping
-                overflow: TextOverflow.ellipsis,
               ),
-            ),
+            ],
           ],
-        ],
+        ),
       ),
-    ),
-  );
-}
+    );
+  }
 
   /// Builds the navigation buttons (back and next)
   Widget _buildNavigationButtons() {
-    return Row(
-      children: [
-        Expanded(
-          child: OutlinedButton(
-            onPressed: () => Navigator.pop(context),
-            style: OutlinedButton.styleFrom(
-              foregroundColor: AppColors.primaryOrange,
-              side: const BorderSide(color: AppColors.primaryOrange),
-            ),
-            child: const Text(_backButtonLabel),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, -2),
           ),
-        ),
-        const SizedBox(width: _buttonSpacing),
-        Expanded(
-          child: ElevatedButton(
-            onPressed: _isTransportationSelected() ? _continueToDestinations : null,
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.primaryOrange,
-              foregroundColor: Colors.white,
+        ],
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Container(
+              height: 52,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: AppColors.primaryOrange,
+                  width: 2,
+                ),
+              ),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: () => Navigator.pop(context),
+                  borderRadius: BorderRadius.circular(14),
+                  child: Center(
+                    child: Text(
+                      _backButtonLabel,
+                      style: TextStyle(
+                        color: AppColors.primaryOrange,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             ),
-            child: const Text(_nextButtonLabel),
           ),
-        ),
-      ],
+          const SizedBox(width: _buttonSpacing),
+          Expanded(
+            child: Container(
+              height: 52,
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: _isTransportationSelected()
+                      ? [
+                          AppColors.primaryOrange,
+                          AppColors.primaryOrange.withOpacity(0.8),
+                        ]
+                      : [
+                          Colors.grey.shade300,
+                          Colors.grey.shade300,
+                        ],
+                ),
+                borderRadius: BorderRadius.circular(14),
+                boxShadow: _isTransportationSelected()
+                    ? [
+                        BoxShadow(
+                          color: AppColors.primaryOrange.withOpacity(0.4),
+                          blurRadius: 12,
+                          offset: const Offset(0, 4),
+                        ),
+                      ]
+                    : null,
+              ),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: _isTransportationSelected() ? _continueToDestinations : null,
+                  borderRadius: BorderRadius.circular(14),
+                  child: Center(
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Text(
+                          _nextButtonLabel,
+                          style: TextStyle(
+                            color: _isTransportationSelected()
+                                ? Colors.white
+                                : Colors.grey.shade600,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Icon(
+                          Icons.arrow_forward_rounded,
+                          color: _isTransportationSelected()
+                              ? Colors.white
+                              : Colors.grey.shade600,
+                          size: 20,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 

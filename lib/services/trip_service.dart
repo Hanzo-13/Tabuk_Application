@@ -6,16 +6,43 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/trip_model.dart';
 import '../utils/constants.dart';
+import 'trip_statistics_service.dart';
 
 /// Service for saving, retrieving, and deleting trips in Firestore.
 class TripService {
   /// Saves a trip to Firestore.
-  static Future<void> saveTrip(Trip trip) async {
+  static Future<void> saveTrip(Trip trip, {bool autoSave = false}) async {
     try {
+      final now = DateTime.now();
+      final tripToSave = trip.copyWith(
+        updatedAt: now,
+        createdAt: trip.createdAt ?? now,
+        completedAt: trip.status.toLowerCase() == 'archived' ||
+                trip.status.toLowerCase() == 'completed'
+            ? (trip.completedAt ?? now)
+            : trip.completedAt,
+        autoSaved: autoSave || trip.autoSaved,
+      );
+
+      final tripMap = tripToSave.toMap();
+      // Add server timestamps if not present
+      if (tripMap['created_at'] == null) {
+        tripMap['created_at'] = FieldValue.serverTimestamp();
+      }
+      if (tripMap['updated_at'] == null) {
+        tripMap['updated_at'] = FieldValue.serverTimestamp();
+      }
+
       await FirebaseFirestore.instance
           .collection(AppConstants.tripPlanningCollection)
           .doc(trip.tripPlanId)
-          .set(trip.toMap());
+          .set(tripMap, SetOptions(merge: true));
+
+      // Save statistics if trip is archived/completed
+      if (tripToSave.status.toLowerCase() == 'archived' ||
+          tripToSave.status.toLowerCase() == 'completed') {
+        await TripStatisticsService.saveTripStatistics(tripToSave);
+      }
     } catch (e) {
       throw Exception('${AppConstants.errorSavingTrip}: $e');
     }

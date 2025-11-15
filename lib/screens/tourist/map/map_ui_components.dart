@@ -5,6 +5,7 @@ import 'package:capstone_app/services/navigation_service.dart';
 import 'package:capstone_app/widgets/business_details_modal.dart';
 // import 'package:capstone_app/widgets/common_search_bar.dart';
 import 'package:flutter/material.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 /// Reusable UI components for the map screen
 class MapUIComponents {
@@ -526,11 +527,15 @@ class _FilterSheet extends StatefulWidget {
 class NavigationOverlay extends StatefulWidget {
   final NavigationService navigationService;
   final VoidCallback onExitNavigation;
+  final Function(MapType) onMapTypeChanged;
+  final MapType currentMapType;
 
   const NavigationOverlay({
     super.key,
     required this.navigationService,
     required this.onExitNavigation,
+    required this.onMapTypeChanged,
+    required this.currentMapType,
   });
 
   @override
@@ -631,6 +636,89 @@ class _NavigationOverlayState extends State<NavigationOverlay> {
           right: 16,
           child: Column(
             children: [
+              // Map Type Toggle Buttons
+              Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Satellite Button
+                    Material(
+                      color: widget.currentMapType == MapType.hybrid
+                          ? AppColors.primaryTeal.withOpacity(0.1)
+                          : Colors.transparent,
+                      borderRadius: const BorderRadius.only(
+                        topLeft: Radius.circular(12),
+                        topRight: Radius.circular(12),
+                      ),
+                      child: InkWell(
+                        borderRadius: const BorderRadius.only(
+                          topLeft: Radius.circular(12),
+                          topRight: Radius.circular(12),
+                        ),
+                        onTap: () {
+                          widget.onMapTypeChanged(MapType.hybrid);
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          child: Icon(
+                            Icons.satellite,
+                            color: widget.currentMapType == MapType.hybrid
+                                ? AppColors.primaryTeal
+                                : Colors.grey[600],
+                            size: 24,
+                          ),
+                        ),
+                      ),
+                    ),
+                    // Divider
+                    Container(
+                      height: 1,
+                      color: Colors.grey[300],
+                    ),
+                    // Normal/Map Button
+                    Material(
+                      color: widget.currentMapType == MapType.normal
+                          ? AppColors.primaryTeal.withOpacity(0.1)
+                          : Colors.transparent,
+                      borderRadius: const BorderRadius.only(
+                        bottomLeft: Radius.circular(12),
+                        bottomRight: Radius.circular(12),
+                      ),
+                      child: InkWell(
+                        borderRadius: const BorderRadius.only(
+                          bottomLeft: Radius.circular(12),
+                          bottomRight: Radius.circular(12),
+                        ),
+                        onTap: () {
+                          widget.onMapTypeChanged(MapType.normal);
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.all(12),
+                          child: Icon(
+                            Icons.map,
+                            color: widget.currentMapType == MapType.normal
+                                ? AppColors.primaryTeal
+                                : Colors.grey[600],
+                            size: 24,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
               Container(
                 margin: const EdgeInsets.only(bottom: 12),
                 child: FloatingActionButton(
